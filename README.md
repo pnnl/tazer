@@ -1,26 +1,22 @@
 -*-Mode: markdown;-*-
 =============================================================================
 
-Requirements: 
-  1. g++ that supports c++11
-  2. cmake (minimum version 2.6)
+Requirements:
+  1. C++11 compiler, GCC preferred
+  2. Cmake (>= version 2.6)
 
-To build:
-  1. Create a build directory
-  2. Call cmake from new directory on the root of the source directory
-  3. Call make
-
-Example:
+To build within directory <build>:
   ```sh
   mkdir <build> && cd <build>
   cmake \
     -DCMAKE_INSTALL_PREFIX=<install> \
-    <path-to-pkg-root>
+    <path-to-tazer-root>
   make install
   ```
 
-  `-DCMAKE_C_COMPILER=...`
-  `-DCMAKE_CXX_COMPILER=...`
+You may also wish to use:
+- `-DCMAKE_C_COMPILER=...`
+- `-DCMAKE_CXX_COMPILER=...`
 
 =============================================================================
 Server
@@ -93,7 +89,7 @@ Default: `IPPD_LOG_PATH=./`
 Tazer_cp
 =============================================================================
 
-`ippd_cp` is a very simplistic utility used to emulate the unix "cp/scp" utilities.
+`ippd_cp` is a simple utility used to emulate the unix "cp/scp" utilities.
 
 usage: `ippd_cp src dst`
 This will copy file at "src" to "dst"
