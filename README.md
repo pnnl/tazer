@@ -6,13 +6,13 @@ TAZeR (Transparent Asynchronous Zero-copy Remote I/O)
 * URL:
   - https://github.com/pnnl/tazer/
 
-* People (best contacts indicated with a +)
+* People
   - Joshua Suetterlein
-  - Ryan D. Friese (+)
-  - Nathan R. Tallent (+)
+  - Ryan D. Friese
+  - Nathan R. Tallent
 
 * Contacting:
-  firstname.lastname@pnnl.gov
+  <firstname>.<lastname>@pnnl.gov
 
 Description:
 ------------
