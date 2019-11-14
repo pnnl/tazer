@@ -46,9 +46,9 @@ Two versions of loads are calculated.
 Debug logging:
 To ease debugging, the stdout/stderr associated with each connection
 can be saved into individual files setting the environment variable
-`IPPD_LOG=1` enables this feature. Setting `IPPD_LOG_PATH` sets where
+`TAZER_LOG=1` enables this feature. Setting `TAZER_LOG_PATH` sets where
 these debug logs should be saved.
-Default: `IPPD_LOG_PATH=./`
+Default: `TAZER_LOG_PATH=./`
 
 
 Client_lib
@@ -78,9 +78,9 @@ initiated, and data will begin to be transfered.
 Debug logging:
 To ease debugging, the stdout/stderr associated with each connection
 can be saved into individual files setting the environment variable
-`IPPD_LOG=1` enables this feature. Setting `IPPD_LOG_PATH` sets where
+`TAZER_LOG=1` enables this feature. Setting `TAZER_LOG_PATH` sets where
 these debug logs should be saved.
-Default: `IPPD_LOG_PATH=./`
+Default: `TAZER_LOG_PATH=./`
 
 
 Tazer_cp

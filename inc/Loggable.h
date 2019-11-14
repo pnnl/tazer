@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #ifndef LOGGABLE_H
@@ -118,12 +118,12 @@ class Loggable {
     static std::mutex *mtx_cout;
 
     Loggable(bool log, std::string fileName) : _log(log), _o(NULL) {
-        if(!mtx_cout){
+        if (!mtx_cout) {
             Loggable::mtx_cout = new std::mutex();
         }
         if (log && Config::WriteFileLog) {
             std::stringstream ss;
-            const char *env_p = std::getenv("IPPD_LOG_PATH");
+            const char *env_p = std::getenv("TAZER_LOG_PATH");
             if (env_p == NULL) {
                 ss << "./";
             }
@@ -132,11 +132,11 @@ class Loggable {
             }
 
             if (fileName.size()) {
-                ss << fileName << ".ippdlog";
+                ss << fileName << ".tzrlog";
                 std::string tstr;
                 std::stringstream tss;
                 while (getline(ss, tstr, '/')) { //construct results path if not exists
-                    if (tstr.find(".ippdlog") == std::string::npos) {
+                    if (tstr.find(".tzrlog") == std::string::npos) {
                         tss << tstr << "/";
                         mkdir(tss.str().c_str(), 0777);
                     }

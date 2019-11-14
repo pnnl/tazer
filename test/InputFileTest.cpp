@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #include "InputFile.h"
@@ -109,15 +109,15 @@ int main(int argc, char **argv) {
     //Close and delete file
     delete file;
 
-    TazerFile *ippdFile = TazerFile::addNewTazerFile(TazerFile::Input, name, name, -1, false);
+    TazerFile *tazerFile = TazerFile::addNewTazerFile(TazerFile::Input, name, name, -1, false);
 
-    uint64_t size2 = ippdFile->fileSize();
+    uint64_t size2 = tazerFile->fileSize();
     char *data2 = new char[size2];
-    ippdFile->read(data2, size2);
+    tazerFile->read(data2, size2);
     std::string strData2(data2, size2);
     //    std::cout << strData2 << std::endl;
 
-    TazerFile::removeTazerFile(ippdFile);
+    TazerFile::removeTazerFile(tazerFile);
 
     return 0;
 }

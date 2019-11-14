@@ -1,11 +1,9 @@
 set(COMMON_HEADERS
     ${CMAKE_SOURCE_DIR}/inc/ServeFile.h
-    ${CMAKE_SOURCE_DIR}/inc/CounterData.h
 )
 
 set(SERVER_FILES
     ServeFile.cpp
-    CounterData.cpp
 )
 
 add_library(serverLib ${SERVER_FILES} $<TARGET_OBJECTS:common>)
