@@ -3,9 +3,9 @@
 
 Requirements:
   1. C++11 compiler, GCC preferred
-  2. Cmake (>= version 2.6)
+  2. CMake (>= version 2.6)
 
-To build within directory <build>:
+To build within directory _build_:
   ```sh
   mkdir <build> && cd <build>
   cmake \
@@ -14,11 +14,10 @@ To build within directory <build>:
   make install
   ```
 
-You may also wish to use:
-- `-DCMAKE_C_COMPILER=...`
+To supply a compiler path, use:
 - `-DCMAKE_CXX_COMPILER=...`
 
-=============================================================================
+
 Server
 =============================================================================
 
@@ -52,7 +51,6 @@ these debug logs should be saved.
 Default: `IPPD_LOG_PATH=./`
 
 
-=============================================================================
 Client_lib
 =============================================================================
 
@@ -85,7 +83,6 @@ these debug logs should be saved.
 Default: `IPPD_LOG_PATH=./`
 
 
-=============================================================================
 Tazer_cp
 =============================================================================
 
