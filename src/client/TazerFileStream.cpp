@@ -95,7 +95,7 @@ int TazerFileStream::lookupStream(FILE *fp, ReaderWriterLock *&lock) {
     TazerFileStream *v = Trackable<FILE *, TazerFileStream *>::LookupTrackable(fp);
     if (v) {
         lock = &v->lock;
-        return v->tazerdFileDescriptor;
+        return v->tazerFileDescriptor;
     }
     lock = NULL;
     return -1;
