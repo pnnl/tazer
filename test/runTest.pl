@@ -113,13 +113,13 @@ my $pingServerPath = "@PING_SERVER_PATH@";
         print "$shutdownCommand\n";
         print `$shutdownCommand`;
 
-        foreach my $deleteFile (@fileArgs)
-        {
-            if($deleteFile =~ /meta/) {
-                my $deleteCommand = "rm $deleteFile";
-                print "$deleteCommand\n";
-                `$deleteCommand`;
-            }
-        }
+        # foreach my $deleteFile (@fileArgs)
+        # {
+        #     if($deleteFile =~ /meta/) {
+        #         my $deleteCommand = "rm $deleteFile";
+        #         print "$deleteCommand\n";
+        #         `$deleteCommand`;
+        #     }
+        # }
     }
 #}

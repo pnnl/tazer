@@ -364,7 +364,12 @@ inline void removeFromSet(std::unordered_set<FILE *> &set, FILE *value, unixfclo
 }
 
 template <typename FileId, typename Func, typename FuncPosix, typename... Args>
-auto outerWrapper(FileId fileId, Timer::Metric metric, Func tazerFun, FuncPosix posixFun, Args... args) {
+auto outerWrapper(const char * name, FileId fileId, Timer::Metric metric, Func tazerFun, FuncPosix posixFun, Args... args) {
+    if(!init) {
+        posixFun = (FuncPosix)dlsym(RTLD_NEXT, name);
+        return posixFun(args...);
+    }
+    
     timer.start();
 
     //Check if this is a special file to track (from environment variable)
@@ -419,7 +424,7 @@ int open(const char *pathname, int flags, ...) {
     va_end(arg);
 
     Timer::Metric metric = (flags & O_WRONLY || flags & O_RDWR) ? Timer::Metric::out_open : Timer::Metric::in_open;
-    return outerWrapper(pathname, metric, tazerOpen, unixopen, pathname, flags, mode);
+    return outerWrapper("open", pathname, metric, tazerOpen, unixopen, pathname, flags, mode);
 }
 
 int open64(const char *pathname, int flags, ...) {
@@ -430,7 +435,7 @@ int open64(const char *pathname, int flags, ...) {
     va_end(arg);
 
     Timer::Metric metric = (flags & O_WRONLY || flags & O_RDWR) ? Timer::Metric::out_open : Timer::Metric::in_open;
-    return outerWrapper(pathname, metric, tazerOpen, unixopen64, pathname, flags, mode);
+    return outerWrapper("open64", pathname, metric, tazerOpen, unixopen64, pathname, flags, mode);
 }
 
 int tazerClose(TazerFile *file, unsigned int fp, int fd) {
@@ -440,7 +445,7 @@ int tazerClose(TazerFile *file, unsigned int fp, int fd) {
 }
 
 int close(int fd) {
-    return outerWrapper(fd, Timer::Metric::close, tazerClose, unixclose, fd);
+    return outerWrapper("close", fd, Timer::Metric::close, tazerClose, unixclose, fd);
 }
 
 ssize_t tazerRead(TazerFile *file, unsigned int fp, int fd, void *buf, size_t count) {
@@ -451,7 +456,7 @@ ssize_t tazerRead(TazerFile *file, unsigned int fp, int fd, void *buf, size_t co
 
 ssize_t read(int fd, void *buf, size_t count) {
     vLock.readerLock();
-    auto ret = outerWrapper(fd, Timer::Metric::read, tazerRead, unixread, fd, buf, count);
+    auto ret = outerWrapper("read", fd, Timer::Metric::read, tazerRead, unixread, fd, buf, count);
     vLock.readerUnlock();
     return ret;
 }
@@ -464,7 +469,7 @@ ssize_t tazerWrite(TazerFile *file, unsigned int fp, int fd, const void *buf, si
 
 ssize_t write(int fd, const void *buf, size_t count) {
     vLock.readerLock();
-    auto ret = outerWrapper(fd, Timer::Metric::write, tazerWrite, unixwrite, fd, buf, count);
+    auto ret = outerWrapper("write", fd, Timer::Metric::write, tazerWrite, unixwrite, fd, buf, count);
     vLock.readerUnlock();
     return ret;
 }
@@ -476,14 +481,14 @@ T tazerLseek(TazerFile *file, unsigned int fp, int fd, T offset, int whence) {
 
 off_t lseek(int fd, off_t offset, int whence) {
     vLock.readerLock();
-    auto ret = outerWrapper(fd, Timer::Metric::seek, tazerLseek<off_t>, unixlseek, fd, offset, whence);
+    auto ret = outerWrapper("lseek", fd, Timer::Metric::seek, tazerLseek<off_t>, unixlseek, fd, offset, whence);
     vLock.readerUnlock();
     return ret;
 }
 
 off64_t lseek64(int fd, off64_t offset, int whence) {
     vLock.readerLock();
-    auto ret = outerWrapper(fd, Timer::Metric::seek, tazerLseek<off64_t>, unixlseek64, fd, offset, whence);
+    auto ret = outerWrapper("lseek64", fd, Timer::Metric::seek, tazerLseek<off64_t>, unixlseek64, fd, offset, whence);
     vLock.readerUnlock();
     return ret;
 }
@@ -511,22 +516,22 @@ int tazerStat(std::string name, std::string metaName, TazerFile::Type type, int 
 
 int __xstat(int version, const char *filename, struct stat *buf) {
     whichStat = unixxstat;
-    return outerWrapper(filename, Timer::Metric::stat, tazerStat<struct stat>, unixxstat, version, filename, buf);
+    return outerWrapper("__xstat", filename, Timer::Metric::stat, tazerStat<struct stat>, unixxstat, version, filename, buf);
 }
 
 int __xstat64(int version, const char *filename, struct stat64 *buf) {
     whichStat64 = unixxstat64;
-    return outerWrapper(filename, Timer::Metric::stat, tazerStat<struct stat64>, unixxstat64, version, filename, buf);
+    return outerWrapper("__xstat64", filename, Timer::Metric::stat, tazerStat<struct stat64>, unixxstat64, version, filename, buf);
 }
 
 int __lxstat(int version, const char *filename, struct stat *buf) {
     whichStat = unixxstat;
-    return outerWrapper(filename, Timer::Metric::stat, tazerStat<struct stat>, unixlxstat, version, filename, buf);
+    return outerWrapper("__lxstat", filename, Timer::Metric::stat, tazerStat<struct stat>, unixlxstat, version, filename, buf);
 }
 
 int __lxstat64(int version, const char *filename, struct stat64 *buf) {
     whichStat64 = unixlxstat64;
-    return outerWrapper(filename, Timer::Metric::stat, tazerStat<struct stat64>, unixlxstat64, version, filename, buf);
+    return outerWrapper("__lxstat64", filename, Timer::Metric::stat, tazerStat<struct stat64>, unixlxstat64, version, filename, buf);
 }
 
 int tazerFsync(TazerFile *file, unsigned int fp, int fd) {
@@ -535,17 +540,17 @@ int tazerFsync(TazerFile *file, unsigned int fp, int fd) {
 
 int fsync(int fd) {
     vLock.readerLock();
-    auto ret = outerWrapper(fd, Timer::Metric::stat, tazerFsync, unixfsync, fd);
+    auto ret = outerWrapper("fsync", fd, Timer::Metric::stat, tazerFsync, unixfsync, fd);
     vLock.readerUnlock();
     return ret;
 }
 
 template <typename Func, typename FuncLocal>
-ssize_t tazerVector(Timer::Metric metric, Func tazerFun, FuncLocal localFun, int fd, const struct iovec *iov, int iovcnt) {
+ssize_t tazerVector(const char * name, Timer::Metric metric, Func tazerFun, FuncLocal localFun, int fd, const struct iovec *iov, int iovcnt) {
     ssize_t ret = 0;
     vLock.writerLock();
     for (int i = 0; i < iovcnt && ret < iovcnt; i++) {
-        size_t temp = outerWrapper(fd, metric, tazerFun, localFun, fd, iov[i].iov_base, iov[i].iov_len);
+        size_t temp = outerWrapper(name, fd, metric, tazerFun, localFun, fd, iov[i].iov_base, iov[i].iov_len);
         if (temp == (ssize_t)-1) {
             ret = -1;
             break;
@@ -558,11 +563,11 @@ ssize_t tazerVector(Timer::Metric metric, Func tazerFun, FuncLocal localFun, int
 }
 
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt) {
-    return tazerVector(Timer::Metric::readv, tazerRead, unixread, fd, iov, iovcnt);
+    return tazerVector("read", Timer::Metric::readv, tazerRead, unixread, fd, iov, iovcnt);
 }
 
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt) {
-    return tazerVector(Timer::Metric::writev, tazerWrite, unixwrite, fd, iov, iovcnt);
+    return tazerVector("write", Timer::Metric::writev, tazerWrite, unixwrite, fd, iov, iovcnt);
 }
 
 /*Streaming**************************************************************************************************/
@@ -584,12 +589,12 @@ FILE *tazerFopen(std::string name, std::string metaName, TazerFile::Type type, c
 
 FILE *fopen(const char *__restrict fileName, const char *__restrict modes) {
     Timer::Metric metric = (modes[0] == 'r') ? Timer::Metric::in_fopen : Timer::Metric::out_fopen;
-    return outerWrapper(fileName, metric, tazerFopen, unixfopen, fileName, modes);
+    return outerWrapper("fopen", fileName, metric, tazerFopen, unixfopen, fileName, modes);
 }
 
 FILE *fopen64(const char *__restrict fileName, const char *__restrict modes) {
     Timer::Metric metric = (modes[0] == 'r') ? Timer::Metric::in_fopen : Timer::Metric::out_fopen;
-    return outerWrapper(fileName, metric, tazerFopen, unixfopen64, fileName, modes);
+    return outerWrapper("fopen64", fileName, metric, tazerFopen, unixfopen64, fileName, modes);
 }
 
 int tazerFclose(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
@@ -599,7 +604,7 @@ int tazerFclose(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
 }
 
 int fclose(FILE *fp) {
-    return outerWrapper(fp, Timer::Metric::close, tazerFclose, unixfclose, fp);
+    return outerWrapper("fclose", fp, Timer::Metric::close, tazerFclose, unixfclose, fp);
 }
 
 size_t tazerFread(TazerFile *file, unsigned int pos, int fd, void *__restrict ptr, size_t size, size_t n, FILE *__restrict fp) {
@@ -607,7 +612,7 @@ size_t tazerFread(TazerFile *file, unsigned int pos, int fd, void *__restrict pt
 }
 
 size_t fread(void *__restrict ptr, size_t size, size_t n, FILE *__restrict fp) {
-    return outerWrapper(fp, Timer::Metric::read, tazerFread, unixfread, ptr, size, n, fp);
+    return outerWrapper("fread", fp, Timer::Metric::read, tazerFread, unixfread, ptr, size, n, fp);
 }
 
 size_t tazerFwrite(TazerFile *file, unsigned int pos, int fd, const void *__restrict ptr, size_t size, size_t n, FILE *__restrict fp) {
@@ -615,7 +620,7 @@ size_t tazerFwrite(TazerFile *file, unsigned int pos, int fd, const void *__rest
 }
 
 size_t fwrite(const void *__restrict ptr, size_t size, size_t n, FILE *__restrict fp) {
-    return outerWrapper(fp, Timer::Metric::read, tazerFwrite, unixfwrite, ptr, size, n, fp);
+    return outerWrapper("fwrite", fp, Timer::Metric::read, tazerFwrite, unixfwrite, ptr, size, n, fp);
 }
 
 long int tazerFtell(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
@@ -623,7 +628,7 @@ long int tazerFtell(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
 }
 
 long int ftell(FILE *fp) {
-    return outerWrapper(fp, Timer::Metric::ftell, tazerFtell, unixftell, fp);
+    return outerWrapper("ftell", fp, Timer::Metric::ftell, tazerFtell, unixftell, fp);
 }
 
 int tazerFseek(TazerFile *file, unsigned int pos, int fd, FILE *fp, long int off, int whence) {
@@ -631,7 +636,7 @@ int tazerFseek(TazerFile *file, unsigned int pos, int fd, FILE *fp, long int off
 }
 
 int fseek(FILE *fp, long int off, int whence) {
-    return outerWrapper(fp, Timer::Metric::seek, tazerFseek, unixfseek, fp, off, whence);
+    return outerWrapper("fseek", fp, Timer::Metric::seek, tazerFseek, unixfseek, fp, off, whence);
 }
 
 int tazerFgetc(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
@@ -644,7 +649,7 @@ int tazerFgetc(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
 }
 
 int fgetc(FILE *fp) {
-    return outerWrapper(fp, Timer::Metric::fgetc, tazerFgetc, unixfgetc, fp);
+    return outerWrapper("fgetc", fp, Timer::Metric::fgetc, tazerFgetc, unixfgetc, fp);
 }
 
 char *tazerFgets(TazerFile *file, unsigned int pos, int fd, char *__restrict s, int n, FILE *__restrict fp) {
@@ -673,7 +678,7 @@ char *tazerFgets(TazerFile *file, unsigned int pos, int fd, char *__restrict s, 
 }
 
 char *fgets(char *__restrict s, int n, FILE *__restrict fp) {
-    return outerWrapper(fp, Timer::Metric::fgets, tazerFgets, unixfgets, s, n, fp);
+    return outerWrapper("fgets", fp, Timer::Metric::fgets, tazerFgets, unixfgets, s, n, fp);
 }
 
 int tazerFputc(TazerFile *file, unsigned int pos, int fd, int c, FILE *fp) {
@@ -682,7 +687,7 @@ int tazerFputc(TazerFile *file, unsigned int pos, int fd, int c, FILE *fp) {
 }
 
 int fputc(int c, FILE *fp) {
-    return outerWrapper(fp, Timer::Metric::fputc, tazerFputc, unixfputc, c, fp);
+    return outerWrapper("fputc", fp, Timer::Metric::fputc, tazerFputc, unixfputc, c, fp);
 }
 
 int tazerFputs(TazerFile *file, unsigned int pos, int fd, const char *__restrict s, FILE *__restrict fp) {
@@ -703,7 +708,7 @@ int tazerFputs(TazerFile *file, unsigned int pos, int fd, const char *__restrict
 }
 
 int fputs(const char *__restrict s, FILE *__restrict fp) {
-    return outerWrapper(fp, Timer::Metric::fputs, tazerFputs, unixfputs, s, fp);
+    return outerWrapper("fputs", fp, Timer::Metric::fputs, tazerFputs, unixfputs, s, fp);
 }
 
 int tazerFeof(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
@@ -711,7 +716,7 @@ int tazerFeof(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
 }
 
 int feof(FILE *fp) {
-    return outerWrapper(fp, Timer::Metric::feof, tazerFeof, unixfeof, fp);
+    return outerWrapper("feof", fp, Timer::Metric::feof, tazerFeof, unixfeof, fp);
 }
 
 off_t tazerRewind(TazerFile *file, unsigned int pos, int fd, int fd2, off_t offset, int whence) {

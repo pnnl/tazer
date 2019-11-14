@@ -236,7 +236,7 @@ bool ConnectionPool::removeConnectionPool(std::string filename, unsigned int dec
 bool ConnectionPool::openFileOnServer(Connection *server) {
     server->lock();
     uint64_t fileSize = 0;
-    // std::cout << std::this_thread::get_id() << " Opening file on server: " << server->addrport() << " name: " << _name << " blkSize: " << Config::networkBlockSize << " compress: " << _compress << std::endl;
+    std::cout << std::this_thread::get_id() << " Opening file on server: " << server->addrport() << " name: " << _name << " blkSize: " << Config::networkBlockSize << " compress: " << _compress << std::endl;
     for (uint32_t i = 0; i < Config::socketRetry; i++) {
         if (sendOpenFileMsg(server, _name, Config::networkBlockSize, _compress, false)) {
             if (recFileSizeMsg(server, fileSize))
@@ -264,7 +264,7 @@ bool ConnectionPool::openFileOnServer(Connection *server) {
 
 void ConnectionPool::addOpenFileTask(Connection *server) {
     //if (_prefetchLock.tryReaderLock()) { //This makes sure the file isn't deleted
-    // *this << "adding open file task " << server->addrport() << std::endl;
+    std::cout << "adding open file task " << server->addrport() << std::endl;
     std::thread t = std::thread([this, server] {
         //if (_active) {
         if (openFileOnServer(server)) {
@@ -283,6 +283,7 @@ void ConnectionPool::addOpenFileTask(Connection *server) {
 
 uint64_t ConnectionPool::openFileOnAllServers() {
     if (!_valid_server) {
+        std::cout << "valid server!!! " << _connections.size() << std::endl;
         for (uint32_t i = 0; i < _connections.size(); i++) {
             _servers_requested++;
             addOpenFileTask(_connections[i]);

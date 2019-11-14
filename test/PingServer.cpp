@@ -81,16 +81,24 @@
 #include "Message.h"
 
 int main(int argc, char **argv) {
-    std::string name(argv[1]);
-    Connection *connection = Connection::addNewClientConnection(name, Config::serverPort, 1);
-    if (connection) {
-        connection->lock();
-        std::cout << "<<<<<<<<<<<<<<<<<<Sending Ping>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
-        while (!sendPingMsg(connection))
-            ;
-        recAckMsg(connection, PING_MSG);
-        std::cout << "<<<<<<<<<<<<<<<<<<Recieved Ping>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
-        connection->unlock();
+    std::string name((argc > 1) ? argv[1] : "127.0.0.1");
+    int port = (argc > 2) ? atoi(argv[2]) : Config::serverPort;
+    unsigned int attempts = (argc > 3) ? atoi(argv[3]) : 10;
+    unsigned int sleepTime = (argc > 4) ? atoi(argv[4]) : 10;
+
+    while(attempts) {
+        Connection *connection = Connection::addNewClientConnection(name, Config::serverPort, 1);
+        if (connection) {
+            connection->lock();
+            std::cout << "<<<<<<<<<<<<<<<<<<Sending Ping>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
+            while (!sendPingMsg(connection));
+            recAckMsg(connection, PING_MSG);
+            std::cout << "<<<<<<<<<<<<<<<<<<Recieved Ping>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
+            connection->unlock();
+            return 0;
+        }
+        attempts--;
+        sleep(sleepTime);
     }
     return 0;
 }
