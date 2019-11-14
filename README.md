@@ -12,7 +12,7 @@ TAZeR (Transparent Asynchronous Zero-copy Remote I/O)
   - Nathan R. Tallent
 
 * Contacting:
-  <firstname>.<lastname>@pnnl.gov
+  _firstname_._lastname_@pnnl.gov
 
 Description:
 ------------
