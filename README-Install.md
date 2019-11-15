@@ -83,29 +83,29 @@ these debug logs should be saved.
 Default: `TAZER_LOG_PATH=./`
 
 
-Tazer_cp
+TazerCp
 =============================================================================
 
-`ippd_cp` is a simple utility used to emulate the unix "cp/scp" utilities.
+`TazerCp` is a simple utility used to emulate the unix "cp/scp" utilities.
 
-usage: `ippd_cp src dst`
+usage: `TazerCp src dst`
 This will copy file at "src" to "dst"
 
 examples:
 * Copy local file to local destination
-  `./ippd_cp client_test_file.txt client_test_file.txt.temp`
-  (in `ippd_cp` dir) `client_test_file.txt.temp` should contain "client test file"*
+  `./TazerCp client_test_file.txt client_test_file.txt.temp`
+  (in `TazerCp` dir) `client_test_file.txt.temp` should contain "client test file"*
 
 * Copy remote file to local destination
-  `LD_PRELOAD=../client_lib/lib.so ./ippd_cp server_test_file.txt.meta.in server_test_file.txt`
-  (in `ippd_cp` dir) `server_test_file.txt` should contain "server test file"*
+  `LD_PRELOAD=../client_lib/lib.so ./TazerCp server_test_file.txt.meta.in server_test_file.txt`
+  (in `TazerCp` dir) `server_test_file.txt` should contain "server test file"*
 
 * Copy local file to remote destination
-  `LD_PRELOAD=../client_lib/lib.so ./ippd_cp client_test_file.txt client_test_file.txt.meta.out`
+  `LD_PRELOAD=../client_lib/lib.so ./TazerCp client_test_file.txt client_test_file.txt.meta.out`
   (in server dir) `client_test_file.txt.temp` should contain "client test file"*
 
 * Copy remote file to remote destination
-  `LD_PRELOAD=../client_lib/lib.so ./ippd_cp server_test_file.txt.meta.in client_test_file.txt.meta.out`
+  `LD_PRELOAD=../client_lib/lib.so ./TazerCp server_test_file.txt.meta.in client_test_file.txt.meta.out`
   (in server dir) `client_test_file.txt.temp` should contain "server test file"*
 
 

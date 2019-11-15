@@ -473,7 +473,6 @@ uint64_t InputFile::fileSizeFromServer() {
     bool created;
     ConnectionPool *pool = ConnectionPool::addNewConnectionPool(_name, _compress, _connections, created);
     fileSize = pool->openFileOnAllServers();
-    std::cout << "fileSizeFromServer: " << fileSize << std::endl;
     return fileSize;
 }
 
