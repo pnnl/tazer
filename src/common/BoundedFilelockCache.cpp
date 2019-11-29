@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #include "BoundedFilelockCache.h"
@@ -107,7 +107,7 @@ BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, uint64_t cache
     stats.start();
     std::error_code err;
     std::experimental::filesystem::create_directories(_cachePath, err);
-    int ret = mkdir((_cachePath + "/init_"+std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity)+"/").c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH); //if -1 means another process has already reserved
+    int ret = mkdir((_cachePath + "/init_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + "/").c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH); //if -1 means another process has already reserved
     if (ret == 0) {
         // _shmLock->writerLock();
         int fd = (*_open)((_cachePath + "/lock_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
@@ -141,7 +141,7 @@ BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, uint64_t cache
         while (!std::experimental::filesystem::exists(_cachePath + "/lock" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity))) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             if (cnt++ > 100) {
-                std::cout << _name << " ERROR: waiting for lock to appear!!!" << strerror(errno) <<_cachePath + "/data" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc" << std::endl;
+                std::cout << _name << " ERROR: waiting for lock to appear!!!" << strerror(errno) << _cachePath + "/data" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc" << std::endl;
                 exit(1);
             }
         }
@@ -149,7 +149,7 @@ BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, uint64_t cache
         while (!std::experimental::filesystem::exists(_cachePath + "/data" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc")) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             if (cnt++ > 100) {
-                std::cout << _name << " ERROR: waiting for data to appear!!!" << strerror(errno)<<_cachePath + "/data" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc" << std::endl;
+                std::cout << _name << " ERROR: waiting for data to appear!!!" << strerror(errno) << _cachePath + "/data" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc" << std::endl;
                 exit(1);
             }
         }
@@ -169,7 +169,7 @@ BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, uint64_t cache
     _writePool->initiate();
 
     // does implementing a lock around disk ops improve i/o performance?
-    // std::string shmPath("/" + std::string(getenv("USER")) + "_fcntlbnded_shm.lck");
+    // std::string shmPath("/" + Config::tazer_id  + "_fcntlbnded_shm.lck");
     // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
     // if (shmFd == -1) {
     //     shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
@@ -215,7 +215,7 @@ BoundedFilelockCache::~BoundedFilelockCache() {
     (*close)(_blkFd);
     delete _binLock;
     delete _blkLock;
-    std::string shmPath("/" + std::string(getenv("USER")) + "_fcntlbnded_shm.lck");
+    std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
     shm_unlink(shmPath.c_str());
     stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
