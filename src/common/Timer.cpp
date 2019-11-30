@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,10 +69,11 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #include "Timer.h"
+#include "Config.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -134,14 +135,16 @@ Timer::Timer() {
 }
 
 Timer::~Timer() {
-    std::stringstream ss;
-    ss << std::fixed;
-    for (int i = 0; i < lastMetric; i++) {
-        for (int j = 0; j < last; j++) {
-            ss << "[TAZER] " << metricTypeName[i] << " " << metricName[j] << " " << _time[i][j] / billion << " " << _cnt[i][j] << " " << _amt[i][j] << std::endl;
+    if (Config::printStats) {
+        std::stringstream ss;
+        ss << std::fixed;
+        for (int i = 0; i < lastMetric; i++) {
+            for (int j = 0; j < last; j++) {
+                ss << "[TAZER] " << metricTypeName[i] << " " << metricName[j] << " " << _time[i][j] / billion << " " << _cnt[i][j] << " " << _amt[i][j] << std::endl;
+            }
         }
+        dprintf(stdoutcp, "[TAZER] %s\n%s\n", myprogname.c_str(), ss.str().c_str());
     }
-    dprintf(stdoutcp, "[TAZER] %s\n%s\n", myprogname.c_str(), ss.str().c_str());
 }
 
 uint64_t Timer::getCurrentTime() {

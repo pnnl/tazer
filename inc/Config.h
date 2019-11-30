@@ -129,9 +129,9 @@ const bool enableSharedMem = getenv("TAZER_ENABLE_SHARED_MEMORY") ? atoi(getenv(
 
 //----------------------cache parameters-----------------------------------
 
-const std::string tazer_id(getenv("USER") ? getenv("USER") : "tazer");
+const std::string tazer_id(getenv("USER") ? "tazer" + std::string(getenv("USER")) : "tazer");
 
-const uint64_t maxBlockSize = 1 * 1024UL * 1024UL;
+const uint64_t maxBlockSize = getenv("TAZER_BLOCKSIZE") ? atol(getenv("TAZER_BLOCKSIZE")) : 1 * 1024UL * 1024UL;
 #define BOUNDEDCACHENAME "boundedcache"
 #define NETWORKCACHENAME "network"
 
@@ -187,6 +187,7 @@ const bool timerOn = true;
 const bool printThreadMetric = false;
 const bool printNodeMetric = true;
 const bool printHits = true;
+const int printStats = getenv("TAZER_PRINT_STATS") ? atoi(getenv("TAZER_PRINT_STATS")) : 1;
 
 //-----------------------------------------------------
 

@@ -204,11 +204,10 @@ Cache::~Cache() {
         // delete _fm_lock;
         stats.end(false, CacheStats::Metric::destructor);
         stats.print(_name);
-        std::cout << std::endl;
     }
 
     if (_nextLevel) {
-        std::cout << "going to delete next level" << std::endl;
+        log(this) << "going to delete next level" << std::endl;
         delete _nextLevel;
     }
     std::string shmPath("/" + Config::tazer_id + _name + "_stats.lck");
