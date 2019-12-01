@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #ifndef CONFIG_H
@@ -124,13 +124,14 @@ const unsigned int fileOpenRetry = 1;
 const unsigned int numCompressTask = 0;
 const unsigned int removeOutput = 1;
 
-
 //architecure Parameters
 const bool enableSharedMem = getenv("TAZER_ENABLE_SHARED_MEMORY") ? atoi(getenv("TAZER_ENABLE_SHARED_MEMORY")) : 1;
 
 //----------------------cache parameters-----------------------------------
 
-const uint64_t maxBlockSize = 1 * 1024UL * 1024UL;
+const std::string tazer_id(getenv("USER") ? "tazer" + std::string(getenv("USER")) : "tazer");
+
+const uint64_t maxBlockSize = getenv("TAZER_BLOCKSIZE") ? atol(getenv("TAZER_BLOCKSIZE")) : 1 * 1024UL * 1024UL;
 #define BOUNDEDCACHENAME "boundedcache"
 #define NETWORKCACHENAME "network"
 
@@ -151,26 +152,26 @@ const bool useBurstBufferCache = getenv("TAZER_BB_CACHE") ? atoi(getenv("TAZER_B
 static uint64_t burstBufferCacheSize = getenv("TAZER_BB_CACHE_SIZE") ? atol(getenv("TAZER_BB_CACHE_SIZE")) : 1 * 1024 * 1024 * 1024UL;
 const uint32_t burstBufferCacheAssociativity = 16UL;
 const uint64_t burstBufferCacheBlocksize = maxBlockSize;
-const std::string burstBufferCacheFilePath("/tmp/" + std::string(getenv("USER")) + "/tazer_cache/bbc"); // TODO: have option to pass from environment variable
+const std::string burstBufferCacheFilePath("/tmp/" + tazer_id + "/tazer_cache/bbc"); // TODO: have option to pass from environment variable
 
 //File Cache Parameters
 const bool useFileCache = getenv("TAZER_FILE_CACHE") ? atoi(getenv("TAZER_FILE_CACHE")) : 0;
 static uint64_t fileCacheSize = getenv("TAZER_FILE_CACHE_SIZE") ? atol(getenv("TAZER_FILE_CACHE_SIZE")) : 1 * 1024 * 1024 * 1024UL;
 const uint32_t fileCacheAssociativity = 16UL;
 const uint64_t fileCacheBlocksize = maxBlockSize;
-const std::string fileCacheFilePath("/tmp/" + std::string(getenv("USER")) + "/tazer_cache/fc"); // TODO: have option to pass from environment variable
+const std::string fileCacheFilePath("/tmp/" + tazer_id + "/tazer_cache/fc"); // TODO: have option to pass from environment variable
 
 //Bounded Filelock Cache Parameters
 const bool useBoundedFilelockCache = getenv("TAZER_BOUNDED_FILELOCK_CACHE") ? atoi(getenv("TAZER_BOUNDED_FILELOCK_CACHE")) : 0;
 static uint64_t boundedFilelockCacheSize = getenv("TAZER_BOUNDED_FILELOCK_CACHE_SIZE") ? atol(getenv("TAZER_BOUNDED_FILELOCK_CACHE_SIZE")) : 1 * 1024 * 1024 * 1024UL;
 const uint32_t boundedFilelockCacheAssociativity = 16UL;
 const uint64_t boundedFilelockCacheBlocksize = maxBlockSize;
-const std::string boundedFilelockCacheFilePath("/tmp/" + std::string(getenv("USER")) + "/tazer_cache/gc"); // TODO: have option to pass from environment variable
+const std::string boundedFilelockCacheFilePath("/tmp/" + tazer_id + "/tazer_cache/gc"); // TODO: have option to pass from environment variable
 
 //Filelock Cache Parameters
 const bool useFilelockCache = getenv("TAZER_FILELOCK_CACHE") ? atoi(getenv("TAZER_FILELOCK_CACHE")) : 0;
 const uint64_t filelockCacheBlocksize = maxBlockSize;
-const std::string filelockCacheFilePath("/tmp/" + std::string(getenv("USER")) + "/tazer_cache/gc"); // TODO: have option to pass from environment variable
+const std::string filelockCacheFilePath("/tmp/" + tazer_id + "/tazer_cache/gc"); // TODO: have option to pass from environment variable
 
 //Network Cache Parameters
 const bool useNetworkCache = getenv("TAZER_NETWORK_CACHE") ? atoi(getenv("TAZER_NETWORK_CACHE")) : 1;
@@ -186,6 +187,7 @@ const bool timerOn = true;
 const bool printThreadMetric = false;
 const bool printNodeMetric = true;
 const bool printHits = true;
+const int printStats = getenv("TAZER_PRINT_STATS") ? atoi(getenv("TAZER_PRINT_STATS")) : 1;
 
 //-----------------------------------------------------
 
@@ -205,15 +207,12 @@ const unsigned int numPrefetchBlks = getenv("TAZER_PREFETCH_NUM_BLKS") ? atoi(ge
 const int prefetchDelta = getenv("TAZER_PREFETCH_DELTA") ? atoi(getenv("TAZER_PREFETCH_DELTA")) : 1;
 const std::string prefetchFileDir = getenv("TAZER_PREFETCH_FILEDIR") ? getenv("TAZER_PREFETCH_FILEDIR") : "./";
 
-
-
 //const bool prefetchGlobal = getenv("TAZER_PREFETCH_GLOBAL") ? atoi(getenv("TAZER_PREFETCH_GLOBAL")) : 1;
 //const unsigned int prefetchGap = getenv("TAZER_PREFETCH_GAP") ? atoi(getenv("TAZER_PREFETCH_GAP")) : 0;
 //const bool prefetchAllBlks = getenv("TAZER_PREFETCH_ALLBLKS") ? atoi(getenv("TAZER_PREFETCH_ALLBLKS")) : 0;
 //const bool prefetchNextBlks = getenv("TAZER_PREFETCH") ? atoi(getenv("TAZER_PREFETCH")) : 1;
 
 //-----------------------------------------------------
-
 
 const uint64_t outputFileBufferSize = 16UL * 1024 * 1024;
 
@@ -222,7 +221,7 @@ const bool bufferFileCacheWrites = true;
 
 const unsigned int ReservationTimeOut = -1;
 
-const std::string sharedMemName("/" + std::string(getenv("USER")) + "ioCache");
+const std::string sharedMemName("/" + tazer_id + "ioCache");
 
 const bool TrackBlockStats = false;
 const bool TrackReads = false;

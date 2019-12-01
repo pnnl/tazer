@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #include "PriorityThreadPool.h"
@@ -86,22 +86,21 @@ PriorityThreadPool<T>::PriorityThreadPool(uint32_t maxThreads) : _maxThreads(max
                                                                  _currentThreads(0), _name("pool") {
 }
 
-
 template <class T>
 PriorityThreadPool<T>::PriorityThreadPool(uint32_t maxThreads, std::string name) : _maxThreads(maxThreads),
-                                                                 _users(0),
-                                                                 _index(0),
-                                                                 _alive(true),
-                                                                 _currentThreads(0), _name(name) {
+                                                                                   _users(0),
+                                                                                   _index(0),
+                                                                                   _alive(true),
+                                                                                   _currentThreads(0), _name(name) {
 }
 
 template <class T>
 PriorityThreadPool<T>::~PriorityThreadPool() {
-    std::cout << "[TAZER] "
-              << "deleting priority pool: " << _users << " " << _q.size() << " " << std::endl;
+    // std::cout << "[TAZER] "
+    //           << "deleting priority pool: " << _users << " " << _q.size() << " " << std::endl;
     terminate(true);
-    std::cout << "[TAZER] "
-              << "deleting priority pool: " << _users << " " << _q.size() << " " << std::endl;
+    // std::cout << "[TAZER] "
+    //           << "deleting priority pool: " << _users << " " << _q.size() << " " << std::endl;
 }
 
 template <class T>
@@ -192,8 +191,8 @@ void PriorityThreadPool<T>::workLoop() {
     }
     //This is the end counter we need to decrement
     _currentThreads.fetch_sub(1);
-    if (_q.size() > _currentThreads){
-        std::cout<<"[TAZER DEBUG] "<<_name<<" not empty while closing!!!! remaining threads: "<<_currentThreads<<" remaining tasks: "<<_q.size()<<std::endl;
+    if (_q.size() > _currentThreads) {
+        std::cout << "[TAZER DEBUG] " << _name << " not empty while closing!!!! remaining threads: " << _currentThreads << " remaining tasks: " << _q.size() << std::endl;
     }
 }
 
@@ -229,7 +228,7 @@ int PriorityThreadPool<T>::numTasks() {
     return _q.size();
 }
 
-template class PriorityThreadPool<std::packaged_task<Request*()>>;
-template class PriorityThreadPool<std::packaged_task<std::future<Request*>()>>;
-template class PriorityThreadPool<std::packaged_task<std::shared_future<Request*>()>>;
+template class PriorityThreadPool<std::packaged_task<Request *()>>;
+template class PriorityThreadPool<std::packaged_task<std::future<Request *>()>>;
+template class PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>>;
 template class PriorityThreadPool<std::function<void()>>;

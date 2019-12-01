@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #include "Config.h"
@@ -206,16 +206,17 @@ void __attribute__((constructor)) tazerInit(void) {
 void __attribute__((destructor)) tazerCleanup(void) {
     timer.start();
     init = false; //set to false because we cant ensure our static members have not already been deleted.
-    std::cerr << "[TAZER] "
-              << "Exiting Client" << std::endl;
-    if (Config::printHits)
-        InputFile::printHits();
 
-    if (ConnectionPool::useCnt->size() > 0) {
-        for (auto conUse : *ConnectionPool::useCnt) {
-            //if (conUse.second > 1) {
-            std::cout << "[TAZER] connection: " << conUse.first << " num_tx: " << conUse.second << " amount: " << (*ConnectionPool::stats)[conUse.first].first << " B time: " << (*ConnectionPool::stats)[conUse.first].second << " s avg BW: " << ((*ConnectionPool::stats)[conUse.first].first / (*ConnectionPool::stats)[conUse.first].second) / 1000000 << "MB/s" << std::endl;
-            //}
+    if (Config::printStats) {
+        std::cout << "[TAZER] "
+                  << "Exiting Client" << std::endl;
+
+        if (ConnectionPool::useCnt->size() > 0) {
+            for (auto conUse : *ConnectionPool::useCnt) {
+                //if (conUse.second > 1) {
+                std::cout << "[TAZER] connection: " << conUse.first << " num_tx: " << conUse.second << " amount: " << (*ConnectionPool::stats)[conUse.first].first << " B time: " << (*ConnectionPool::stats)[conUse.first].second << " s avg BW: " << ((*ConnectionPool::stats)[conUse.first].first / (*ConnectionPool::stats)[conUse.first].second) / 1000000 << "MB/s" << std::endl;
+                //}
+            }
         }
     }
 
@@ -364,12 +365,12 @@ inline void removeFromSet(std::unordered_set<FILE *> &set, FILE *value, unixfclo
 }
 
 template <typename FileId, typename Func, typename FuncPosix, typename... Args>
-auto outerWrapper(const char * name, FileId fileId, Timer::Metric metric, Func tazerFun, FuncPosix posixFun, Args... args) {
-    if(!init) {
+auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func tazerFun, FuncPosix posixFun, Args... args) {
+    if (!init) {
         posixFun = (FuncPosix)dlsym(RTLD_NEXT, name);
         return posixFun(args...);
     }
-    
+
     timer.start();
 
     //Check if this is a special file to track (from environment variable)
@@ -546,7 +547,7 @@ int fsync(int fd) {
 }
 
 template <typename Func, typename FuncLocal>
-ssize_t tazerVector(const char * name, Timer::Metric metric, Func tazerFun, FuncLocal localFun, int fd, const struct iovec *iov, int iovcnt) {
+ssize_t tazerVector(const char *name, Timer::Metric metric, Func tazerFun, FuncLocal localFun, int fd, const struct iovec *iov, int iovcnt) {
     ssize_t ret = 0;
     vLock.writerLock();
     for (int i = 0; i < iovcnt && ret < iovcnt; i++) {

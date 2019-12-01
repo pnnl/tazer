@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,10 +69,11 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #include "CacheStats.h"
+#include "Config.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -86,7 +87,6 @@ extern char *__progname;
 
 thread_local uint64_t _depth_cs = 0;
 thread_local uint64_t _current_cs[100];
-
 
 char *metricTypeName_cs[] = {
     "request",
@@ -130,15 +130,18 @@ CacheStats::~CacheStats() {
 }
 
 void CacheStats::print(std::string cacheName) {
-    std::cout << cacheName << std::endl;
-    std::stringstream ss;
-    std::cout << std::fixed;
-    for (int i = 0; i < lastMetric; i++) {
-        for (int j = 0; j < last; j++) {
-            std::cout << "[TAZER] " << cacheName << " " << metricTypeName_cs[i] << " " << metricName_cs[j] << " " << _time[i][j] / billion << " " << _cnt[i][j] << " " << _amt[i][j] << std::endl;
+    if (Config::printStats) {
+        std::cout << cacheName << std::endl;
+        std::stringstream ss;
+        std::cout << std::fixed;
+        for (int i = 0; i < lastMetric; i++) {
+            for (int j = 0; j < last; j++) {
+                std::cout << "[TAZER] " << cacheName << " " << metricTypeName_cs[i] << " " << metricName_cs[j] << " " << _time[i][j] / billion << " " << _cnt[i][j] << " " << _amt[i][j] << std::endl;
+            }
+            std::cout << "[TAZER] " << cacheName << " "
+                      << "BW: " << (_amt[i][0] / 1000000.0) / ((_time[i][0] + _time[i][3] + _time[i][4]) / billion) << " effective BW: " << (_amt[i][7] / 1000000.0) / (_time[i][7] / billion) << std::endl;
         }
-        std::cout << "[TAZER] " << cacheName << " "
-                  << "BW: " << (_amt[i][0] / 1000000.0) / ((_time[i][0] + _time[i][3] + _time[i][4]) / billion) << " effective BW: " << (_amt[i][7] / 1000000.0) / (_time[i][7] / billion) << std::endl;
+        std::cout << std::endl;
     }
 
     // dprintf(stdoutcp, "[TAZER] %s\n%s\n", myprogname.c_str(), ss.str().c_str());
@@ -163,7 +166,7 @@ int64_t CacheStats::getTimestamp() {
     return (int64_t)std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 }
 
-void CacheStats::start( ) {
+void CacheStats::start() {
     _current_cs[_depth_cs] = getCurrentTime();
     _depth_cs++;
 }

@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #include "FileCache.h"
@@ -104,8 +104,8 @@ FileCache::FileCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSi
     _blocksfd = -1;
     _blkIndexfd = -1;
 
-    _filePath = filePath + "/" + std::string(getenv("USER")) + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".tzr";
-    std::string indexPath("/" + std::string(getenv("USER")) + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".idx");
+    _filePath = filePath + "/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".tzr";
+    std::string indexPath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".idx");
 
     bool *indexInit;
     if (Config::enableSharedMem) {
@@ -215,7 +215,7 @@ FileCache::~FileCache() {
     writeToFile(_numBlocks * sizeof(MemBlockEntry), (uint8_t *)_blkIndex);
     (*fsync)(_blocksfd);
     _binLock->writerUnlock(0);
-    std::string cacheName("/" + std::string(getenv("USER")) + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".idx");
+    std::string cacheName("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".idx");
     shm_unlink(cacheName.c_str());
     _blkIndexfd = -1;
     (*_close)(_blocksfd);

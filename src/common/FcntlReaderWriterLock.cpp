@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #include "FcntlReaderWriterLock.h"
@@ -237,7 +237,7 @@ void FcntlReaderWriterLock::writerUnlock3(int fd, uint64_t blk, std::atomic<uint
 //                                                                                                                             _numEntries(numEntries),
 //                                                                                                                             _lockPath(lockPath) {
 
-//     std::string filePath = Config::sharedMemName + "_" + std::string(getenv("USER")) + "_lock_" + std::to_string(_entrySize) + "_" + std::to_string(_numEntries);
+//     std::string filePath = Config::sharedMemName + "_" + Config::tazer_id  + "_lock_" + std::to_string(_entrySize) + "_" + std::to_string(_numEntries);
 //     std::atomic<uint16_t> temp[4096];
 //     std::cout << _numEntries << " " << 2 * _numEntries * sizeof(std::atomic<uint16_t>) << " " << sizeof(temp) << " " << 2 * sizeof(temp) << std::endl;
 
@@ -297,7 +297,7 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
     _fdMutex = new ReaderWriterLock();
     _fd = (*(unixopen_t)dlsym(RTLD_NEXT, "open"))(_lockPath.c_str(), O_RDWR);
 
-    std::string shmPath("/" + std::string(getenv("USER")) + "_fcntlbnded_shm.lck");
+    std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
     int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
     if (shmFd == -1) {
         shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
@@ -331,7 +331,7 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
 FcntlBoundedReaderWriterLock::~FcntlBoundedReaderWriterLock() {
     delete[] _readers;
     delete[] _writers;
-    std::string shmPath("/" + std::string(getenv("USER")) + "_fcntlbnded_shm.lck");
+    std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
     shm_unlink(shmPath.c_str());
     (*(unixclose_t)dlsym(RTLD_NEXT, "close"))(_fd);
 }
