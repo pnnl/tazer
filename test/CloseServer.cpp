@@ -82,7 +82,9 @@
 
 int main(int argc, char **argv) {
     std::string serverIp = std::string(argv[1]);
-    int port = Config::serverPort; //atoi(argv[2]);
+    int port = Config::serverPort;
+    if(argc > 2)
+        port = atoi(argv[2]);
     Connection *connection = Connection::addNewClientConnection(serverIp, port, 1);
     if (connection) {
         connection->lock();
