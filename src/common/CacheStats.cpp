@@ -77,8 +77,8 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
@@ -88,11 +88,11 @@ extern char *__progname;
 thread_local uint64_t _depth_cs = 0;
 thread_local uint64_t _current_cs[100];
 
-char *metricTypeName_cs[] = {
+const char *metricTypeName_cs[] = {
     "request",
     "prefetch"};
 
-char *metricName_cs[] = {
+const char *metricName_cs[] = {
     "hits",
     "misses",
     "prefetches",
