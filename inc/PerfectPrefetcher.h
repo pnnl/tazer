@@ -92,7 +92,7 @@ private:
     void loadAccessTrace(std::string fileName);
 
     std::vector<std::pair<uint64_t,uint64_t>> _trace; //Trace containing the blocks accessed by the application as <startBlk, endBlk> pairs
-    int _lastIndex; //Last index called in trace
+    size_t _lastIndex; //Last index called in trace
 
 
 };
