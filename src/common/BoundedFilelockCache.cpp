@@ -366,7 +366,7 @@ std::vector<std::shared_ptr<BoundedCache<FcntlBoundedReaderWriterLock>::BlockEnt
 
     std::vector<std::shared_ptr<BlockEntry>> entries;
     int startIndex = binIndex * _associativity;
-    for (int i = 0; i < _associativity; i++) {
+    for (size_t i = 0; i < _associativity; i++) {
         entries.emplace_back(new FileBlockEntry());
         memcpy(entries[i].get(), &fEntries[i], sizeof(FileBlockEntry));
         // log(this)<<fEntries[i].fileIndex<<" "<<fEntries[i].blockIndex<<" "<<fEntries[i].fileName<<" "<<fEntries[i].prefetched<<" "<<entries[i].get()->prefetched<<std::endl;
