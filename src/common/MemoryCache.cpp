@@ -116,7 +116,7 @@ MemoryCache::~MemoryCache() {
     stats.start();
     // log(this) << "deleting " << _name << " in memory cache, collisions: " << _collisions << std::endl;
     // std::cout<<"[TAZER] " << "numBlks: " << _numBlocks << " numBins: " << _numBins << " cacheSize: " << _cacheSize << std::endl;
-    for (int i = 0; i < _numBlocks; i++) {
+    for (size_t i = 0; i < _numBlocks; i++) {
         if (_blkIndex[i].activeCnt > 0) { // this typically means we reserved a block via prefetching but never honored the reservation, so try to prefetch again... this should probably be read?
             std::cout
                 << "[TAZER] " << _name << " " << i << " " << _numBlocks << " " << _blkIndex[i].activeCnt << " " << _blkIndex[i].fileIndex << " " << _blkIndex[i].blockIndex << " prefetched: " << _blkIndex[i].prefetched << std::endl;
@@ -193,7 +193,7 @@ void MemoryCache::writeBlockEntry(uint32_t blockIndex, BlockEntry *entry) {
 void MemoryCache::readBin(uint32_t binIndex, BlockEntry *entries) {
     // memcpy(entries, &_blkIndex[binIndex * _associativity], sizeof(BlockEntry) * _associativity);
     int startIndex = binIndex * _associativity;
-    for (int i = 0; i < _associativity; i++) {
+    for (size_t i = 0; i < _associativity; i++) {
         readBlockEntry(i + startIndex, &entries[i]);
     }
 }
