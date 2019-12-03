@@ -107,26 +107,26 @@ struct openFileMsg {
     uint32_t blkSize;
     uint8_t compress;
     uint8_t output;
-    char name[];
+    char* name;
 };
 
 struct fileSizeMsg {
     msgHeader header;
     uint64_t fileSize;
     uint8_t open;
-    char name[];
+    char* name;
 };
 
 struct requestFileSizeMsg {
     msgHeader header;
-    char name[];
+    char* name;
 };
 
 struct requestBlkMsg {
     msgHeader header;
     uint32_t start;
     uint32_t end;
-    char name[];
+    char* name;
 };
 
 struct sendBlkMsg {
@@ -134,12 +134,12 @@ struct sendBlkMsg {
     int compression;
     uint32_t blk;
     uint32_t dataSize;
-    char data[];
+    char* data;
 };
 
 struct closeFileMsg {
     msgHeader header;
-    char name[];
+    char* name;
 };
 
 struct closeConMsg {
@@ -156,7 +156,7 @@ struct writeMsg {
     uint32_t compSize;
     uint64_t fp;
     unsigned int sn;
-    char data[];
+    char* data;
 };
 
 struct ackMsg {
