@@ -77,23 +77,26 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
+#include <string>
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
+
+using std::string;
 
 extern char *__progname;
 
 thread_local uint64_t _depth = 0;
 thread_local uint64_t _current = 0;
 
-char *metricTypeName[] = {
+string metricTypeName[] = {
     "tazer",
     "local",
     "system"};
 
-char *metricName[] = {
+string metricName[] = {
     "in_open",
     "out_open",
     "close",
