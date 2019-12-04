@@ -166,12 +166,12 @@ const bool useBoundedFilelockCache = getenv("TAZER_BOUNDED_FILELOCK_CACHE") ? at
 static uint64_t boundedFilelockCacheSize = getenv("TAZER_BOUNDED_FILELOCK_CACHE_SIZE") ? atol(getenv("TAZER_BOUNDED_FILELOCK_CACHE_SIZE")) : 1 * 1024 * 1024 * 1024UL;
 const uint32_t boundedFilelockCacheAssociativity = 16UL;
 const uint64_t boundedFilelockCacheBlocksize = maxBlockSize;
-const std::string boundedFilelockCacheFilePath("/tmp/" + tazer_id + "/tazer_cache/gc"); // TODO: have option to pass from environment variable
+const std::string boundedFilelockCacheFilePath = getenv("TAZER_BOUNDED_FILELOCK_CACHE_PATH") ? std::string(getenv("TAZER_BOUNDED_FILELOCK_CACHE_PATH")) : std::string("/tmp/" + tazer_id + "/tazer_cache/gc"); // TODO: have option to pass from environment variable
 
 //Filelock Cache Parameters
 const bool useFilelockCache = getenv("TAZER_FILELOCK_CACHE") ? atoi(getenv("TAZER_FILELOCK_CACHE")) : 0;
 const uint64_t filelockCacheBlocksize = maxBlockSize;
-const std::string filelockCacheFilePath("/tmp/" + tazer_id + "/tazer_cache/gc"); // TODO: have option to pass from environment variable
+const std::string filelockCacheFilePath = getenv("TAZER_FILELOCK_CACHE_PATH") ? std::string(getenv("TAZER_FILELOCK_CACHE_PATH")) : std::string("/tmp/" + tazer_id + "/tazer_cache/gc");
 
 //Network Cache Parameters
 const bool useNetworkCache = getenv("TAZER_NETWORK_CACHE") ? atoi(getenv("TAZER_NETWORK_CACHE")) : 1;
