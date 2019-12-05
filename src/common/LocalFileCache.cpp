@@ -207,7 +207,16 @@ void LocalFileCache::addFile(uint32_t index, std::string filename, uint64_t bloc
         uint64_t hash = (uint64_t)XXH32(hashstr.c_str(), filename.size(), 0);
         bool compress = false;
 
-        _fileMap.emplace(index, FileEntry{filename, blockSize, fileSize, hash});
+        std::string local_path="";
+        std::size_t pos = filename.find("lfn:"); 
+        if (pos != std::string::npos){
+            local_path = getenv("TAZER_LOCAL_BASE")+filename.substr(pos);
+        }
+        else{
+            local_path = filename;
+        }
+
+        _fileMap.emplace(index, FileEntry{local_path, blockSize, fileSize, hash});
         std::ifstream *file = new std::ifstream();
         file->open(filename, std::fstream::binary);
         if (!file->is_open()) {

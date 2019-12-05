@@ -227,7 +227,18 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
     struct stat sbuf;
     sbuf.st_size = 0;
     ConnectionPool *pool = NULL;
-    if (stat(_name.c_str(), &sbuf) == 0) {
+    std::string local_path="";
+    std::string base_name="";
+    std::size_t pos = _name.find("lfn:"); 
+    if (pos != std::string::npos){
+        local_path = getenv("TAZER_LOCAL_BASE")+_name.substr(pos+4); //+4 = len("lfn:")
+        base_name = _name.substr(pos+4); //+4 = len("lfn:")
+    }
+    else{
+        local_path = _name;
+        base_name = _name;
+    }
+    if (stat(local_path.c_str(), &sbuf) == 0) {
         if (!output) {
             _size = sbuf.st_size;
         }
@@ -238,6 +249,26 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
             bool created;
             pool = ConnectionPool::addNewConnectionPool(_name, _compress, _connections, created);
             _size = pool->openFileOnAllServers();
+        }
+        if (Config::useHttpCache && !output) {
+            std::string X509_USER_PROXY=getenv("TAZER_X509_USER_PROXY");
+            std::string CAPATH = getenv("TAZER_CAPATH");
+            std::string HTTP_BASE = getenv("TAZER_HTTP_CACHE_BASE");
+            std::string LOCAL_BASE = getenv("TAZER_LOCAL_BASE");
+            std::string cmd = "curl -L --cert " + X509_USER_PROXY +                                    
+                      " --key " + X509_USER_PROXY +                                                    
+                      " --cacert " + X509_USER_PROXY +                                                 
+                      " --capath " + CAPATH + " " +                                                      
+                      HTTP_BASE + base_name +                                                         
+                      " -o " + LOCAL_BASE+base_name ;  
+            std::cout<<"cmd: "<<cmd<<std::endl;
+            system(cmd.c_str());
+            if (stat(local_path.c_str(), &sbuf) == 0) {
+                _size = sbuf.st_size;
+            }
+            if(_size == 0){
+                std::cout<<" download failed"<<std::endl;
+            }
         }
     }
 

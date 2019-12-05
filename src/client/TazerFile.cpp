@@ -154,7 +154,7 @@ bool TazerFile::readMetaInfo() {
         log(this) << cur << " " << line << std::endl;
 
         uint32_t lcur = 0;
-        uint32_t next = line.find(":", lcur);
+        uint32_t next = line.find("&", lcur);
         if (next == std::string::npos) {
             log(this) << "0:improperly formatted meta file" << std::endl;
             break;
@@ -163,7 +163,7 @@ bool TazerFile::readMetaInfo() {
         log(this) << "hostaddr: " << hostAddr << std::endl;
 
         lcur = next + 1;
-        next = line.find(":", lcur);
+        next = line.find("&", lcur);
         if (next == std::string::npos) {
             log(this) << "1:improperly formatted meta file" << std::endl;
             break;
@@ -172,7 +172,7 @@ bool TazerFile::readMetaInfo() {
         log(this) << "port: " << port << std::endl;
 
         lcur = next + 1;
-        next = line.find(":", lcur);
+        next = line.find("&", lcur);
         if (next == std::string::npos) {
             log(this) << "2:improperly formatted meta file" << std::endl;
             break;
@@ -181,7 +181,7 @@ bool TazerFile::readMetaInfo() {
         log(this) << "compress: " << _compress << std::endl;
 
         lcur = next + 1;
-        next = line.find(":", lcur);
+        next = line.find("&", lcur);
         if (next == std::string::npos) {
             log(this) << "3:improperly formatted meta file" << std::endl;
             break;
@@ -190,7 +190,7 @@ bool TazerFile::readMetaInfo() {
         log(this) << "prefetch: " << _prefetch << std::endl;
 
         lcur = next + 1;
-        next = line.find(":", lcur);
+        next = line.find("&", lcur);
         if (next == std::string::npos) {
             log(this) << "4:improperly formatted meta file" << std::endl;
             break;
@@ -199,7 +199,7 @@ bool TazerFile::readMetaInfo() {
         log(this) << "save_local: " << _save_local << std::endl;
 
         lcur = next + 1;
-        next = line.find(":", lcur);
+        next = line.find("&", lcur);
         if (next == std::string::npos) {
             log(this) << "5:improperly formatted meta file" << std::endl;
             break;

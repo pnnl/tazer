@@ -192,11 +192,13 @@ const int printStats = getenv("TAZER_PRINT_STATS") ? atoi(getenv("TAZER_PRINT_ST
 //-----------------------------------------------------
 
 // server parameters
-const bool useServerNetworkCache = getenv("TAZER_NETWORK_CACHE") ? atoi(getenv("TAZER_NETWORK_CACHE")) : 1;
+const bool useServerNetworkCache = getenv("TAZER_NETWORK_CACHE") ? atoi(getenv("TAZER_NETWORK_CACHE")) : 0;
 const uint64_t serverCacheSize = getenv("TAZER_SERVER_CACHE_SIZE") ? atol(getenv("TAZER_SERVER_CACHE_SIZE")) : 20UL * 1024 * 1024 * 1024;
 const uint64_t serverCacheBlocksize = maxBlockSize;
 const uint32_t serverCacheAssociativity = 16UL;
 const std::string ServerConnectionsPath(getenv("TAZER_SERVER_CONNECTIONS") ? getenv("TAZER_SERVER_CONNECTIONS") : "");
+
+const bool useHttpCache = getenv("TAZER_HTTP_CACHE") ? atoi(getenv("TAZER_HTTP_CACHE")) : 0;  
 
 const bool prefetchEvict = getenv("TAZER_PREFETCH_EVICT") ? atoi(getenv("TAZER_PREFETCH_EVICT")) : 0; //When evicting a block, choose prefetched blocks first.
 
