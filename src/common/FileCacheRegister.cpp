@@ -109,7 +109,7 @@ void FileCacheRegister::incUsage() {
 }
 
 void FileCacheRegister::unlink() {
-    shm_unlink(Config::sharedMemName.c_str());
+    //shm_unlink(Config::sharedMemName.c_str());
 }
 
 void FileCacheRegister::decUsage() {
@@ -154,6 +154,7 @@ FileCacheRegister *FileCacheRegister::initFileCacheRegister() {
         int fd = shm_open(Config::sharedMemName.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
         if (fd == -1) {
             // printf("Reusing shared memory\n");
+            std::cout << "resuing file cache register" << std::endl;
             fd = shm_open(Config::sharedMemName.c_str(), O_RDWR, 0644);
             if (fd != -1) {
                 ftruncate(fd, sizeof(FileCacheRegister));
@@ -213,7 +214,7 @@ unsigned int FileCacheRegister::getFileRegisterIndex(std::string name) {
 void FileCacheRegister::closeFileCacheRegister() {
     //Not sure if this should lock...
     if (_register) {
-        _register->decUsage();
+       // _register->decUsage();
     }
     //    shm_unlink(Config::sharedMemName.c_str());
 }
