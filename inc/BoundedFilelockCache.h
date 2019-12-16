@@ -90,7 +90,7 @@ class BoundedFilelockCache : public BoundedCache<FcntlBoundedReaderWriterLock> {
 
   private:
     struct FileBlockEntry : BlockEntry {
-        char fileName[100];
+        char fileName[1024];
     };
 
     virtual uint8_t *getBlockData(unsigned int blockIndex);
