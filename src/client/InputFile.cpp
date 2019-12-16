@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #include "InputFile.h"
@@ -216,17 +216,17 @@ InputFile::InputFile(std::string name, std::string metaName, int fd, bool openFi
     switch (_prefetch) {
     case NONE:
         //_prefetcher = NULL;
-        std::cout << "[TAZER] "
+        log(this) << "[TAZER] "
                   << "No prefetcher" << std::endl;
         break;
     case DELTA:
         _prefetcher = new DeltaPrefetcher("DELTAPREFETCHER");
-        std::cout << "[TAZER] "
+        log(this) << "[TAZER] "
                   << "DELTA prefetcher" << std::endl;
         break;
     case PERFECT:
         _prefetcher = new PerfectPrefetcher("PERFECTPREFETCHER", name);
-        std::cout << "[TAZER] "
+        log(this) << "[TAZER] "
                   << "Perfect prefetcher" << std::endl;
         break;
     default:
@@ -237,7 +237,7 @@ InputFile::InputFile(std::string name, std::string metaName, int fd, bool openFi
 }
 
 InputFile::~InputFile() {
-    *this << "Destroying file " << _metaName << std::endl;
+    log(this) << "Destroying file " << _metaName << std::endl;
     close();
 }
 
@@ -251,7 +251,7 @@ void InputFile::open() {
 
             bool created;
             NetworkCache *nc = (NetworkCache *)_cache->getCacheByName(NETWORKCACHENAME);
-            std::cout << "[TAZER] init meta time: " << _initMetaTime << std::endl;
+            // std::cout << "[TAZER] init meta time: " << _initMetaTime << std::endl;
             nc->stats.addTime(false, CacheStats::Metric::ovh, _initMetaTime);
             nc->stats.start();
             ConnectionPool *pool = ConnectionPool::addNewConnectionPool(_name, _compress, _connections, created);
@@ -287,7 +287,7 @@ void InputFile::open() {
         lock.unlock();
     }
     else {
-        *this << "ERROR: " << _name << " has no connections!" << std::endl;
+        log(this) << "ERROR: " << _name << " has no connections!" << std::endl;
     }
     // std::cout << "done open: " << _name << " " << servers_requested << " " << _transferPool.numTasks() << std::endl;
 }
@@ -354,7 +354,7 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
         _cache->stats.start(); // "ovh" timer
 
         if (_filePos[index] >= _fileSize) {
-            std::cerr << "[TAZER]" << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
+            log(this) << "[TAZER] " << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
             _eof = true;
             _cache->stats.end(false, CacheStats::Metric::ovh);
             _cache->stats.end(false, CacheStats::Metric::hits);
@@ -387,8 +387,8 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
         for (uint32_t blk = startBlock; blk < endBlock; blk++) {
             _cache->stats.end(false, CacheStats::Metric::ovh);
             auto request = _cache->requestBlock(blk, _blkSize, _regFileIndex, reads, priority);
-            _cache->stats.start();//ovh
-            if (request->ready) { //the block was in a client side cache!!
+            _cache->stats.start(); //ovh
+            if (request->ready) {  //the block was in a client side cache!!
                 auto amt = copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
                 request->originating->stats.addAmt(false, CacheStats::Metric::read, amt);
                 _cache->bufferWrite(request);
@@ -402,7 +402,6 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
                 }
             }
         }
-
 
         //If prefetching is enabled for this file
         if (_prefetcher != NULL) {
@@ -419,13 +418,13 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
 
             _cache->stats.end(false, CacheStats::Metric::ovh);
             auto stallTime = Timer::getCurrentTime();
-            
+
             auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
-            
+
             _cache->getCacheByName(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls, Timer::getCurrentTime() - stallTime, 1);
             request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
-            _cache->stats.start();//ovh
-            if (request->ready) { // hmm what does it mean if this is NULL? do we need to catch and report this?
+            _cache->stats.start(); //ovh
+            if (request->ready) {  // hmm what does it mean if this is NULL? do we need to catch and report this?
                 auto amt = copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
                 _cache->getCacheByName(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, amt);
                 request->originating->stats.addAmt(false, CacheStats::Metric::stalled, amt);
@@ -438,11 +437,11 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
             auto stallTime = Timer::getCurrentTime();
 
             auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
-           
+
             _cache->getCacheByName(request->waitingCache)->stats.addTime(false, CacheStats::Metric::stalls, Timer::getCurrentTime() - stallTime, 1);
             request->originating->stats.addTime(false, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
             _cache->stats.start(); //ovh
-            if (request->ready) { // hmm what does it mean if this is NULL? do we need to catch and report this?
+            if (request->ready) {  // hmm what does it mean if this is NULL? do we need to catch and report this?
                 auto amt = copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
                 _cache->getCacheByName(request->waitingCache)->stats.addAmt(false, CacheStats::Metric::stalls, amt);
                 request->originating->stats.addAmt(false, CacheStats::Metric::stalled, amt);
@@ -463,7 +462,7 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
 }
 
 ssize_t InputFile::write(const void *buf, size_t count, uint32_t index) {
-    *this << "in InputFile write.... need to implement... exiting" << std::endl;
+    log(this) << "in InputFile write.... need to implement... exiting" << std::endl;
     exit(-1);
     return 0;
 }
@@ -473,7 +472,6 @@ uint64_t InputFile::fileSizeFromServer() {
     bool created;
     ConnectionPool *pool = ConnectionPool::addNewConnectionPool(_name, _compress, _connections, created);
     fileSize = pool->openFileOnAllServers();
-    std::cout << "fileSizeFromServer: " << fileSize << std::endl;
     return fileSize;
 }
 

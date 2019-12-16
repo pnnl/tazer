@@ -108,8 +108,10 @@ char *makeBuffer(unsigned int size) {
 
 size_t getFileSize(std::string fileName) {
     struct stat64 sb;
-    if (lstat64(fileName.c_str(), &sb) != -1)
+    if (lstat64(fileName.c_str(), &sb) != -1) {
+        std::cout << "Size: " << sb.st_size << std::endl;
         return sb.st_size;
+    }
     std::cout << "EMPTY FILE" << std::endl;
     return 0;
 }
@@ -143,14 +145,15 @@ void writeToFile(int fd, char *buffer, int size) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc == 4) {
-        std::string source1(argv[1]);
-        std::string source2(argv[2]);
-        std::string sourceFileName = source1 + source2;
-        std::string destFileName(argv[3]);
+    if (argc == 3) {
+        std::string sourceFileName(argv[1]);
+        std::string destFileName(argv[2]);
+
+        std::cout << sourceFileName << " " << destFileName << std::endl;
 
         dFile = open(destFileName.c_str(), O_WRONLY | O_CREAT, 0644); //Open file for writing
         if (dFile != -1) {
+            std::cout << "HEREEEEE" << std::endl;
             fileSize = getFileSize(sourceFileName);
             numBlocks = fileSize / blockSize;
             if (fileSize % blockSize)

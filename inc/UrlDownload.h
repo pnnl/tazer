@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//
+//    
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,117 +69,54 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-//
+// 
 //*EndLicense****************************************************************
 
-#include "Timer.h"
-#include "Config.h"
-#include <fstream>
+#ifndef URLDOWNLOAD_H
+#define URLDOWNLOAD_H
+
+#ifdef USE_CURL
+
 #include <iostream>
-#include <sstream>
-#include <stdlib.h>
 #include <string.h>
-#include <thread>
-#include <unistd.h>
-#include <unordered_map>
+#include <string>
+#include <mutex>
+#include <queue>
+#include <curl/curl.h>
+#include "ReaderWriterLock.h"
 
-extern char *__progname;
+/* Building a class that takes a url and a filepath and then downloads the file to the filepath.*/
+class UrlDownload {
+private:
+    std::string _url;
+    std::string _filepath;
+    
+    static std::mutex _lock;
+    static ReaderWriterLock _initLock;
+    static std::queue<CURL*> _handles;
+public:
+    UrlDownload(std::string url);
+    ~UrlDownload();
+    
+    CURL * getHandle();
+    void retHandle(CURL * handle);
+    
+    bool download();
+    std::string name();
+    unsigned int size();
+    
+    static std::string downloadUrl(std::string path);
+    static int sizeUrl(std::string path);
+};
 
-thread_local uint64_t _depth = 0;
-thread_local uint64_t _current = 0;
+#define downloadUrlPath(path) UrlDownload::downloadUrl(path)
+#define sizeUrlPath(path) UrlDownload::sizeUrl(path)
 
-char *metricTypeName[] = {
-    "tazer",
-    "local",
-    "system"};
+#else
 
-char *metricName[] = {
-    "in_open",
-    "out_open",
-    "close",
-    "read",
-    "write",
-    "seek",
-    "stat",
-    "fsync",
-    "readv",
-    "writev",
-    "in_fopen",
-    "out_fopen",
-    "fclose",
-    "fread",
-    "fwrite",
-    "ftell",
-    "fseek",
-    "fgetc",
-    "fgets",
-    "fputc",
-    "fputs",
-    "feof",
-    "rewind",
-    "constructor",
-    "destructor",
-    "dummy"};
+#define downloadUrlPath(path) path
+#define sizeUrlPath(path) -1
 
-Timer::Timer() {
-    for (int i = 0; i < lastMetric; i++) {
-        for (int j = 0; j < last; j++) {
-            _time[i][j] = 0;
-            _cnt[i][j] = 0;
-            _amt[i][j] = 0;
-        }
-    }
+#endif
+#endif /* URLDOWNLOAD_H */
 
-    stdoutcp = dup(1);
-    myprogname = __progname;
-}
-
-Timer::~Timer() {
-    if (Config::printStats) {
-        std::stringstream ss;
-        ss << std::fixed;
-        for (int i = 0; i < lastMetric; i++) {
-            for (int j = 0; j < last; j++) {
-                ss << "[TAZER] " << metricTypeName[i] << " " << metricName[j] << " " << _time[i][j] / billion << " " << _cnt[i][j] << " " << _amt[i][j] << std::endl;
-            }
-        }
-        dprintf(stdoutcp, "[TAZER] %s\n%s\n", myprogname.c_str(), ss.str().c_str());
-    }
-}
-
-uint64_t Timer::getCurrentTime() {
-    auto now = std::chrono::high_resolution_clock::now();
-    auto now_ms = std::chrono::time_point_cast<std::chrono::nanoseconds>(now);
-    auto value = now_ms.time_since_epoch();
-    uint64_t ret = value.count();
-    return ret;
-}
-
-char *Timer::printTime() {
-    auto t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    auto buf = ctime(&t);
-    buf[strcspn(buf, "\n")] = 0;
-    return buf;
-}
-
-int64_t Timer::getTimestamp() {
-    return (int64_t)std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-}
-
-void Timer::start() {
-    if (!_depth)
-        _current = getCurrentTime();
-    _depth++;
-}
-
-void Timer::end(MetricType type, Metric metric) {
-    if (_depth == 1) {
-        _time[type][metric] += getCurrentTime() - _current;
-        _cnt[type][metric]++;
-    }
-    _depth--;
-}
-
-void Timer::addAmt(MetricType type, Metric metric, uint64_t amt) {
-    _amt[type][metric] += amt;
-}

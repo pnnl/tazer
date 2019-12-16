@@ -264,7 +264,7 @@ bool ConnectionPool::openFileOnServer(Connection *server) {
 
 void ConnectionPool::addOpenFileTask(Connection *server) {
     //if (_prefetchLock.tryReaderLock()) { //This makes sure the file isn't deleted
-    // *this << "adding open file task " << server->addrport() << std::endl;
+    // std::cout << "adding open file task " << server->addrport() << std::endl;
     std::thread t = std::thread([this, server] {
         //if (_active) {
         if (openFileOnServer(server)) {
@@ -283,6 +283,7 @@ void ConnectionPool::addOpenFileTask(Connection *server) {
 
 uint64_t ConnectionPool::openFileOnAllServers() {
     if (!_valid_server) {
+        // std::cout << "valid server!!! " << _connections.size() << std::endl;
         for (uint32_t i = 0; i < _connections.size(); i++) {
             _servers_requested++;
             addOpenFileTask(_connections[i]);
@@ -292,7 +293,7 @@ uint64_t ConnectionPool::openFileOnAllServers() {
             sched_yield();
         }
     }
-    std::cout << "Well: " << _fileSize << std::endl;
+    // std::cout << "Well: " << _fileSize << std::endl;
     return _fileSize;
 }
 

@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//
+//    
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,117 +69,18 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-//
+// 
 //*EndLicense****************************************************************
 
-#include "Timer.h"
-#include "Config.h"
-#include <fstream>
 #include <iostream>
-#include <sstream>
-#include <stdlib.h>
-#include <string.h>
-#include <thread>
-#include <unistd.h>
-#include <unordered_map>
+#include "UrlDownload.h"
 
-extern char *__progname;
-
-thread_local uint64_t _depth = 0;
-thread_local uint64_t _current = 0;
-
-char *metricTypeName[] = {
-    "tazer",
-    "local",
-    "system"};
-
-char *metricName[] = {
-    "in_open",
-    "out_open",
-    "close",
-    "read",
-    "write",
-    "seek",
-    "stat",
-    "fsync",
-    "readv",
-    "writev",
-    "in_fopen",
-    "out_fopen",
-    "fclose",
-    "fread",
-    "fwrite",
-    "ftell",
-    "fseek",
-    "fgetc",
-    "fgets",
-    "fputc",
-    "fputs",
-    "feof",
-    "rewind",
-    "constructor",
-    "destructor",
-    "dummy"};
-
-Timer::Timer() {
-    for (int i = 0; i < lastMetric; i++) {
-        for (int j = 0; j < last; j++) {
-            _time[i][j] = 0;
-            _cnt[i][j] = 0;
-            _amt[i][j] = 0;
-        }
-    }
-
-    stdoutcp = dup(1);
-    myprogname = __progname;
+int main(int argc, char *argv[]) {
+    std::string inUrl(argv[1]);
+    int size = sizeUrlPath(inUrl);
+    std::cout << "Downloading size: " << size << std::endl;
+    std::string path = downloadUrlPath(inUrl);
+    std::cout << path << std::endl;
+    return 0;
 }
 
-Timer::~Timer() {
-    if (Config::printStats) {
-        std::stringstream ss;
-        ss << std::fixed;
-        for (int i = 0; i < lastMetric; i++) {
-            for (int j = 0; j < last; j++) {
-                ss << "[TAZER] " << metricTypeName[i] << " " << metricName[j] << " " << _time[i][j] / billion << " " << _cnt[i][j] << " " << _amt[i][j] << std::endl;
-            }
-        }
-        dprintf(stdoutcp, "[TAZER] %s\n%s\n", myprogname.c_str(), ss.str().c_str());
-    }
-}
-
-uint64_t Timer::getCurrentTime() {
-    auto now = std::chrono::high_resolution_clock::now();
-    auto now_ms = std::chrono::time_point_cast<std::chrono::nanoseconds>(now);
-    auto value = now_ms.time_since_epoch();
-    uint64_t ret = value.count();
-    return ret;
-}
-
-char *Timer::printTime() {
-    auto t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    auto buf = ctime(&t);
-    buf[strcspn(buf, "\n")] = 0;
-    return buf;
-}
-
-int64_t Timer::getTimestamp() {
-    return (int64_t)std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-}
-
-void Timer::start() {
-    if (!_depth)
-        _current = getCurrentTime();
-    _depth++;
-}
-
-void Timer::end(MetricType type, Metric metric) {
-    if (_depth == 1) {
-        _time[type][metric] += getCurrentTime() - _current;
-        _cnt[type][metric]++;
-    }
-    _depth--;
-}
-
-void Timer::addAmt(MetricType type, Metric metric, uint64_t amt) {
-    _amt[type][metric] += amt;
-}

@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #include "Cache.h"
@@ -120,7 +120,7 @@ Cache::Cache(std::string name) : Loggable(Config::CacheLog, name),
         _base = this;
         _lastLevel = this;
     }
-    // std::string shmPath("/" + std::string(getenv("USER")) + _name + "_stats.lck");
+    // std::string shmPath("/" + Config::tazer_id  + _name + "_stats.lck");
     // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
     // if (shmFd == -1) {
     //     shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
@@ -204,14 +204,13 @@ Cache::~Cache() {
         // delete _fm_lock;
         stats.end(false, CacheStats::Metric::destructor);
         stats.print(_name);
-        std::cout << std::endl;
     }
 
     if (_nextLevel) {
-        std::cout << "going to delete next level" << std::endl;
+        log(this) << "going to delete next level" << std::endl;
         delete _nextLevel;
     }
-    std::string shmPath("/" + std::string(getenv("USER")) + _name + "_stats.lck");
+    std::string shmPath("/" + Config::tazer_id + _name + "_stats.lck");
     shm_unlink(shmPath.c_str());
 }
 
@@ -340,7 +339,6 @@ bool Cache::bufferWrite(Request *req) {
     return true;
 }
 
-
 void Cache::updateRequestTime(uint64_t time) {
     if (_ioCnt->load() < _ioWinSize) {
         _ioCnt->fetch_add(1);
@@ -361,7 +359,6 @@ double Cache::getRequestTime() {
     // log(this) << _name << " " << (_curIoTime / 1000000000.0) / _ioCnt << std::endl;
     return (_curIoTime->load() / 1000000000.0) / _ioCnt->load();
 }
-
 
 void Cache::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
     // std::cout<<"[TAZER] " << "adding file: " << filename << " " << (void *)this << " " << (void *)_nextLevel << std::endl;
