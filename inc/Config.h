@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #ifndef CONFIG_H
@@ -112,7 +112,7 @@ const unsigned int numPrefetchThreads = 1;
 //Connection Parameters
 const unsigned int defaultBufferSize = 1024;
 const unsigned int maxConRetry = 10;
-const unsigned int messageRetry = (unsigned int)10; //Simulates infinite retry...
+const unsigned int messageRetry = (unsigned int)100; //Simulates infinite retry...
 const unsigned int socketsPerConnection = 1;
 const unsigned int socketStep = 1024;
 const unsigned int socketRetry = 1;
@@ -123,7 +123,6 @@ const unsigned int fileOpenRetry = 1;
 //Serve file Parameters
 const unsigned int numCompressTask = 0;
 const unsigned int removeOutput = 1;
-
 
 //architecure Parameters
 const bool enableSharedMem = getenv("TAZER_ENABLE_SHARED_MEMORY") ? atoi(getenv("TAZER_ENABLE_SHARED_MEMORY")) : 1;
@@ -205,15 +204,12 @@ const unsigned int numPrefetchBlks = getenv("TAZER_PREFETCH_NUM_BLKS") ? atoi(ge
 const int prefetchDelta = getenv("TAZER_PREFETCH_DELTA") ? atoi(getenv("TAZER_PREFETCH_DELTA")) : 1;
 const std::string prefetchFileDir = getenv("TAZER_PREFETCH_FILEDIR") ? getenv("TAZER_PREFETCH_FILEDIR") : "./";
 
-
-
 //const bool prefetchGlobal = getenv("TAZER_PREFETCH_GLOBAL") ? atoi(getenv("TAZER_PREFETCH_GLOBAL")) : 1;
 //const unsigned int prefetchGap = getenv("TAZER_PREFETCH_GAP") ? atoi(getenv("TAZER_PREFETCH_GAP")) : 0;
 //const bool prefetchAllBlks = getenv("TAZER_PREFETCH_ALLBLKS") ? atoi(getenv("TAZER_PREFETCH_ALLBLKS")) : 0;
 //const bool prefetchNextBlks = getenv("TAZER_PREFETCH") ? atoi(getenv("TAZER_PREFETCH")) : 1;
 
 //-----------------------------------------------------
-
 
 const uint64_t outputFileBufferSize = 16UL * 1024 * 1024;
 
