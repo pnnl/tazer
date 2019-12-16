@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #include "ConnectionPool.h"
@@ -247,7 +247,7 @@ bool ConnectionPool::openFileOnServer(Connection *server) {
     // std::cout << std::this_thread::get_id() << " done Opening file on server: " << server->addrport() << " name: " << _name << " blkSize: " << Config::networkBlockSize << " compress: " << _compress << std::endl;
 
     if (fileSize == 0) {
-        std::cerr << "ERROR: files size " << fileSize << std::endl;
+        std::cerr << "ERROR: files size " << fileSize << " " << server->addrport() << " " << _name << std::endl;
         return false;
     }
     else {
