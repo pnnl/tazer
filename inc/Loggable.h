@@ -115,6 +115,30 @@ class Loggable {
       private:
         Loggable *_parent;
     };
+
+    struct err {
+        std::unique_lock<std::mutex> lk;
+        err(Loggable *me)
+            : lk(std::unique_lock<std::mutex>(*mtx_cout)), _parent(me) {
+            *_parent->_o << "[TAZER ERROR] " << Timer::printTime() << " ";
+        }
+        ~err() {
+        }
+
+        template <typename T>
+        err &operator<<(const T &_t) {
+            *_parent->_o << _t;
+            return *this;
+        }
+
+        err &operator<<(std::ostream &(*fp)(std::ostream &)) {
+            *_parent->_o << fp;
+            return *this;
+        }
+
+      private:
+        Loggable *_parent;
+    };
     static std::mutex *mtx_cout;
 
     Loggable(bool log, std::string fileName) : _log(log), _o(NULL) {
@@ -222,6 +246,7 @@ class Loggable {
     bool _log;
     std::ostream *_o;
     friend log;
+    friend err;
 
     // static std::atomic<bool> _initiated;
 };
