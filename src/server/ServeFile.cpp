@@ -314,7 +314,7 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
     }
 
     else {
-        log(this) << "ERROR: file " << _name << " does not exists" << std::endl;
+        std::cout << "ERROR: file " << _name << " does not exists" << std::endl;
     }
 }
 
