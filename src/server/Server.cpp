@@ -288,9 +288,11 @@ int main(int argc, char *argv[]) {
     if (argc == 3)
         addr += argv[2];
 
-    if (getInSocket(portno, sockfd) < 0) {
-        perror("ERROR on binding");
-        exit(1);
+    if (argc == 2){
+        if (getInSocket(portno, sockfd) < 0) {
+            perror("ERROR on binding");
+            exit(1);
+        }
     }
 
     if (argc == 3) {
