@@ -87,7 +87,7 @@ class FileCacheRegister {
     FileCacheRegister();
     ~FileCacheRegister();
 
-    static FileCacheRegister *openFileCacheRegister();
+    static FileCacheRegister *openFileCacheRegister(bool server=false);
     static void closeFileCacheRegister();
 
     unsigned int registerFile(std::string name);
@@ -105,7 +105,7 @@ class FileCacheRegister {
     char _fileName[NUMENTRIES][MAXFILENAME];
     static std::atomic_int _registerInitLock;
     static FileCacheRegister *_register;
-    static FileCacheRegister *initFileCacheRegister();
+    static FileCacheRegister *initFileCacheRegister(bool server=false);
 };
 
 #endif /* FILECACHEREGISTER_H */

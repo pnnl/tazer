@@ -532,9 +532,10 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                         else {
                             std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> reads;
                             double reqTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
-                            _lastLevel->readBlock(req, reads, 0); //rerequest block from last level, note this updates the request data structure so we do not need to update it manually;
-                            std::cout << "[TAZER] " << Timer::printTime() << " " << _name << " timeout, rereqeusting block " << req->blkIndex << " " << req->fileIndex << " " << getRequestTime() << " " << _lastLevel->getRequestTime() << " " << reqTime << " " << reads.size() << std::endl;
+                            _nextLevel->readBlock(req, reads, 0); //rerequest block from next level, note this updates the request data structure so we do not need to update it manually;
+                            std::cout << "[TAZER] " << Timer::printTime() << " " << _name << " timeout, rereqeusting block " << req->blkIndex <<" from "<<_nextLevel->name()<< " " << req->fileIndex << " " << getRequestTime() << " " << _lastLevel->getRequestTime() << " " << reqTime << " " << reads.size() << std::endl;
                             reads[req->blkIndex].get().get();
+                            std::cout << "[TAZER] " <<"got block after "<<req->blkIndex<<" retrying!"<<std::endl;
                             memset(waitingCacheName, 0, MAX_CACHE_NAME_LEN);
                             memcpy(waitingCacheName, _lastLevel->name().c_str(), MAX_CACHE_NAME_LEN);
                         }

@@ -112,7 +112,7 @@ const unsigned int numPrefetchThreads = 1;
 //Connection Parameters
 const unsigned int defaultBufferSize = 1024;
 const unsigned int maxConRetry = 10;
-const unsigned int messageRetry = (unsigned int)10; //Simulates infinite retry...
+const unsigned int messageRetry = (unsigned int)100; //Simulates infinite retry...
 const unsigned int socketsPerConnection = 1;
 const unsigned int socketStep = 1024;
 const unsigned int socketRetry = 1;
@@ -192,7 +192,7 @@ const int printStats = getenv("TAZER_PRINT_STATS") ? atoi(getenv("TAZER_PRINT_ST
 //-----------------------------------------------------
 
 // server parameters
-const bool useServerNetworkCache = getenv("TAZER_NETWORK_CACHE") ? atoi(getenv("TAZER_NETWORK_CACHE")) : 1;
+const bool useServerNetworkCache = getenv("TAZER_NETWORK_CACHE") ? atoi(getenv("TAZER_NETWORK_CACHE")) : 0;
 const uint64_t serverCacheSize = getenv("TAZER_SERVER_CACHE_SIZE") ? atol(getenv("TAZER_SERVER_CACHE_SIZE")) : 20UL * 1024 * 1024 * 1024;
 const uint64_t serverCacheBlocksize = maxBlockSize;
 const uint32_t serverCacheAssociativity = 16UL;

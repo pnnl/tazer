@@ -247,7 +247,7 @@ bool ConnectionPool::openFileOnServer(Connection *server) {
     // std::cout << std::this_thread::get_id() << " done Opening file on server: " << server->addrport() << " name: " << _name << " blkSize: " << Config::networkBlockSize << " compress: " << _compress << std::endl;
 
     if (fileSize == 0) {
-        std::cerr << "ERROR: files size " << fileSize << std::endl;
+        std::cerr << "ERROR: files size " << fileSize << " " << server->addrport() << " " << _name << std::endl;
         return false;
     }
     else {

@@ -147,15 +147,16 @@ unsigned int FileCacheRegister::registerFile(std::string name) {
     return fileIndex;
 }
 
-FileCacheRegister *FileCacheRegister::initFileCacheRegister() {
+FileCacheRegister *FileCacheRegister::initFileCacheRegister(bool server) {
     FileCacheRegister *reg = NULL;
     if (Config::enableSharedMem){
         // printf("Using Register %s\n", Config::sharedMemName.c_str());
-        int fd = shm_open(Config::sharedMemName.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+        std::string name = server ? Config::sharedMemName+"_server" : Config::sharedMemName;
+        int fd = shm_open(name.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
         if (fd == -1) {
             // printf("Reusing shared memory\n");
             std::cout << "resuing file cache register" << std::endl;
-            fd = shm_open(Config::sharedMemName.c_str(), O_RDWR, 0644);
+            fd = shm_open(name.c_str(), O_RDWR, 0644);
             if (fd != -1) {
                 ftruncate(fd, sizeof(FileCacheRegister));
                 void *ptr = mmap(NULL, sizeof(FileCacheRegister), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -183,7 +184,7 @@ FileCacheRegister *FileCacheRegister::initFileCacheRegister() {
     return reg;
 }
 
-FileCacheRegister *FileCacheRegister::openFileCacheRegister() {
+FileCacheRegister *FileCacheRegister::openFileCacheRegister(bool server) {
     int check = REG_EMPTY;
     // std::cout<<"opening file cache reg..."<<_registerInitLock<<" "<<check<<" "<<REG_INIT<<std::endl;
     if (_registerInitLock.compare_exchange_weak(check, REG_INIT)) {

@@ -75,6 +75,7 @@
 #include "Message.h"
 #include "Config.h"
 #include "Connection.h"
+// #include "Loggable.h"
 //#include "ErrorTester.h"
 #include <string.h>
 #include <string>
@@ -496,6 +497,15 @@ std::string recSendBlkMsg(Connection *connection, char **data, unsigned int &blk
             dataBufSize = msg.dataSize;
         }
         *data = new char[dataBufSize];
+    }
+
+    if (msg.dataSize > dataBufSize){
+        std::cout <<"Message size larger than expected: "<<msg.dataSize <<" "<<dataBufSize<<std::endl;
+         if (created) {
+            delete[] * data;
+            *data = NULL;
+        }
+        return std::string();
     }
 
     //    int retDataSize = connection->recvMsg(*data, msg.dataSize);

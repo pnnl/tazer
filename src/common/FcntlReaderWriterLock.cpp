@@ -296,34 +296,40 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
 
     _fdMutex = new ReaderWriterLock();
     _fd = (*(unixopen_t)dlsym(RTLD_NEXT, "open"))(_lockPath.c_str(), O_RDWR);
+    if (Config::enableSharedMem){
+        
 
-    std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
-    int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
-    if (shmFd == -1) {
-        shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
-        if (shmFd != -1) {
-            std::cout << "resusing fcntl shm lock" << std::endl;
-            ftruncate(shmFd, sizeof(uint32_t) + sizeof(ReaderWriterLock));
-            void *ptr = mmap(NULL, sizeof(uint32_t) + sizeof(ReaderWriterLock), PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
-            uint32_t *init = (uint32_t *)ptr;
-            while (!*init) {
-                sched_yield();
+        std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
+        int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+        if (shmFd == -1) {
+            shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
+            if (shmFd != -1) {
+                std::cout << "resusing fcntl shm lock" << std::endl;
+                ftruncate(shmFd, sizeof(uint32_t) + sizeof(ReaderWriterLock));
+                void *ptr = mmap(NULL, sizeof(uint32_t) + sizeof(ReaderWriterLock), PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
+                uint32_t *init = (uint32_t *)ptr;
+                while (!*init) {
+                    sched_yield();
+                }
+                _shmLock = (ReaderWriterLock *)((uint8_t *)init + sizeof(uint32_t));
             }
-            _shmLock = (ReaderWriterLock *)((uint8_t *)init + sizeof(uint32_t));
+            else {
+                std::cerr << "[TAZER]"
+                        << "Error opening shared memory " << strerror(errno) << std::endl;
+            }
         }
         else {
-            std::cerr << "[TAZER]"
-                      << "Error opening shared memory " << strerror(errno) << std::endl;
+            std::cout << "creating fcntl shm lock" << std::endl;
+            ftruncate(shmFd, sizeof(uint32_t) + sizeof(ReaderWriterLock));
+            void *ptr = mmap(NULL, sizeof(uint32_t) + sizeof(ReaderWriterLock), PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
+
+            uint32_t *init = (uint32_t *)ptr;
+            _shmLock = new ((uint8_t *)init + sizeof(uint32_t)) ReaderWriterLock();
+            *init = 1;
         }
     }
-    else {
-        std::cout << "creating fcntl shm lock" << std::endl;
-        ftruncate(shmFd, sizeof(uint32_t) + sizeof(ReaderWriterLock));
-        void *ptr = mmap(NULL, sizeof(uint32_t) + sizeof(ReaderWriterLock), PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
-
-        uint32_t *init = (uint32_t *)ptr;
-        _shmLock = new ((uint8_t *)init + sizeof(uint32_t)) ReaderWriterLock();
-        *init = 1;
+    else{
+        _shmLock = new ReaderWriterLock();
     }
 }
 
@@ -331,9 +337,13 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
 FcntlBoundedReaderWriterLock::~FcntlBoundedReaderWriterLock() {
     delete[] _readers;
     delete[] _writers;
-    std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
-    shm_unlink(shmPath.c_str());
-    (*(unixclose_t)dlsym(RTLD_NEXT, "close"))(_fd);
+    if (Config::enableSharedMem){
+        std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
+        shm_unlink(shmPath.c_str());
+        (*(unixclose_t)dlsym(RTLD_NEXT, "close"))(_fd);
+    }
+    delete _fdMutex;
+    delete _shmLock;
 }
 
 void FcntlBoundedReaderWriterLock::readerLock(uint64_t entry) {

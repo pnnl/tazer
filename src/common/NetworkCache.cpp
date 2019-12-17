@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #include "NetworkCache.h"
@@ -86,6 +86,7 @@
 #include <fcntl.h>
 #include <future>
 #include <memory>
+#include <signal.h>
 #include <string.h>
 #include <string>
 #include <sys/mman.h>
@@ -148,13 +149,14 @@ Request *NetworkCache::decompress(Request *req, char *compBuf, uint32_t compBufS
 }
 
 // std::future<Request*> NetworkCache::requestBlk(Connection *server, uint32_t blkStart, uint32_t blkEnd, uint32_t fileIndex, uint32_t priority) {
-std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req, uint32_t priority) {
+std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req, uint32_t priority, bool &success) {
     auto fileIndex = req->fileIndex;
     auto blkStart = req->blkIndex;
     auto blkEnd = blkStart;
     // std::cerr << "[TAZER] " << fileIndex << " " << _fileMap[fileIndex].name << " Requesting blks: " << blkStart << " " << blkEnd << " " << Config::networkBlockSize << std::dec << std::endl;
-    bool success = false;
+    // bool success = false;
     server->lock();
+    bool compress = _compressMap[fileIndex];
     //Currently we are only ever getting a single block at a time (blkStart == blkEnd)
     //That makes this reasonable... A better idea is to keep track of what block succeeded
     //And only re-request those that failed...
@@ -189,13 +191,16 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
                 std::string fileName = recSendBlkMsg(server, &data, blk, dataSize, _blkSize);
                 log(this) << fileName << " " << dataSize << " " << blk << std::endl;
                 if (data == NULL) {
-                    //raise(SIGSEGV);
-                    exit(0);
+                    log(this) << "data null: " << fileName << " " << dataSize << " " << blk << std::endl;
+                    success = false;
+                    break;
+                    // raise(SIGSEGV);
+                    // exit(0);
                 }
                 if (!fileName.empty() && dataSize && blk == i) { //Got a block
                     // sizeSum += dataSize;
                     // log(this) << _name<< "Received " << fileName << " " << blk << " " << dataSize << " allocSize " << size << std::endl;
-                    if (_compressMap[fileIndex]) {
+                    if (compress) {
 
                         auto task = std::packaged_task<Request *()>([this, req, data, dataSize, size, blk, priority]() {
                             stats.start();
@@ -221,7 +226,7 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
                     success = true;
                 }
                 else { //Failed to get a block
-                    log(this) << "failed to get block: " << blk << std::endl;
+                    err(this) << "failed to get block: " << blk << std::endl;
                     success = false;
                     break;
                 }
@@ -234,6 +239,7 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
     // auto elapsed = Timer::getCurrentTime() - start;
     // updateIoRate(elapsed, sizeSum);
     server->unlock();
+
     return fut;
 }
 
@@ -242,19 +248,38 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
     stats.start(); //ovh
     stats.start(); //hits
     // std::cout << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << std::endl;
-    
+
     req->time = Timer::getCurrentTime();
     req->originating = this;
     bool prefetch = priority != 0;
 
     auto task = std::packaged_task<std::shared_future<Request *>()>([this, req, priority, prefetch] { //packaged task allow the transfer to execute on an asynchronous tx thread.
         Connection *sev = NULL;
+        _lock->readerLock();
+        ConnectionPool* pool = _conPoolMap[req->fileIndex];
+        _lock->readerUnlock();
         if (!sev) {
-            while (!sev)
-                sev = _conPoolMap[req->fileIndex]->popConnection();
+            while (!sev) {
+                sev = pool->popConnection();
+            }
         }
-        auto fut = requestBlk(sev, req, priority);
-        _conPoolMap[req->fileIndex]->pushConnection(sev, true);
+        bool success = false;
+        auto fut = requestBlk(sev, req, priority, success);
+        int retryCnt = 0;
+        while (!success && retryCnt < 10) {
+
+            Connection *oldSev = sev;
+            sev = NULL;
+            while (!sev) {
+                sev = pool->popConnection();
+            }
+            err(this) << "retrying to request block old: " << oldSev->addrport() << " " << sev->addrport() << std::endl;
+            pool->pushConnection(oldSev, true); //TODO: determine if oldSev is still a viable connection
+            success = false;
+            fut = requestBlk(sev, req, priority, success);
+            retryCnt++;
+        }
+        pool->pushConnection(sev, true);
         stats.addAmt(prefetch, CacheStats::Metric::hits, req->size);
         return fut.share();
     });
