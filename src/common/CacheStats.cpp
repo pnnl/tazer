@@ -88,11 +88,11 @@ extern char *__progname;
 thread_local uint64_t _depth_cs = 0;
 thread_local uint64_t _current_cs[100];
 
-char *metricTypeName_cs[] = {
+char const *metricTypeName_cs[] = {
     "request",
     "prefetch"};
 
-char *metricName_cs[] = {
+char const *metricName_cs[] = {
     "hits",
     "misses",
     "prefetches",

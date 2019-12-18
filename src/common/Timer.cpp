@@ -88,12 +88,12 @@ extern char *__progname;
 thread_local uint64_t _depth = 0;
 thread_local uint64_t _current = 0;
 
-char *metricTypeName[] = {
+char const *metricTypeName[] = {
     "tazer",
     "local",
     "system"};
 
-char *metricName[] = {
+char const *metricName[] = {
     "in_open",
     "out_open",
     "close",
