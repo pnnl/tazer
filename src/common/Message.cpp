@@ -222,7 +222,7 @@ bool serverSendCloseNew(Connection *connection, sendBlkMsg *packet, std::string 
         connection->closeSocket();
         return false;
     }
-    if (name.length() + 1 != connection->sendMsg((char *)name.c_str(), name.length() + 1)) {
+    if ((int64_t)(name.length() + 1) != connection->sendMsg((char *)name.c_str(), name.length() + 1)) {
         connection->closeSocket();
         return false;
     }
@@ -433,7 +433,7 @@ bool recFileSizeMsg(Connection *connection, uint64_t &fileSize) {
     uint8_t opened;
     char *buff = NULL;
     int64_t ret = clientRecRetry(connection, &buff);
-    if (ret > sizeof(struct fileSizeMsg)) { //if less, probably a malformed packet
+    if (ret > (int64_t)sizeof(struct fileSizeMsg)) { //if less, probably a malformed packet
         parseFileSizeMsg(buff, fileSize, opened);
         delete[] buff;
         return true;

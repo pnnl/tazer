@@ -551,7 +551,7 @@ ssize_t tazerVector(const char *name, Timer::Metric metric, Func tazerFun, FuncL
     ssize_t ret = 0;
     vLock.writerLock();
     for (int i = 0; i < iovcnt && ret < iovcnt; i++) {
-        size_t temp = outerWrapper(name, fd, metric, tazerFun, localFun, fd, iov[i].iov_base, iov[i].iov_len);
+        auto temp = outerWrapper(name, fd, metric, tazerFun, localFun, fd, iov[i].iov_base, iov[i].iov_len);
         if (temp == (ssize_t)-1) {
             ret = -1;
             break;

@@ -204,7 +204,7 @@ FileCache::~FileCache() {
     stats.start();
     std::cout
         << "[TAZER] " << _name << " deleting" << std::endl;
-    for (int i = 0; i < _numBlocks; i++) {
+    for (uint32_t i = 0; i < _numBlocks; i++) {
         if (_blkIndex[i].activeCnt > 0) {
             std::cout << "[TAZER] " << _name << " " << i << " " << _numBlocks << " " << _blkIndex[i].activeCnt << " " << _blkIndex[i].fileIndex << " " << _blkIndex[i].blockIndex << " prefetched: " << _blkIndex[i].prefetched << std::endl;
         }
@@ -324,7 +324,7 @@ void FileCache::readBin(uint32_t binIndex, BlockEntry *entries) {
     // MemBlockEntry* mentries = (MemBlockEntry*)entries;
     // memcpy(mentries, &_blkIndex[binIndex * _associativity], sizeof(MemBlockEntry) * _associativity);
     int startIndex = binIndex * _associativity;
-    for (int i = 0; i < _associativity; i++) {
+    for (uint32_t i = 0; i < _associativity; i++) {
         readBlockEntry(i + startIndex, &entries[i]);
     }
 }
@@ -333,7 +333,7 @@ std::vector<std::shared_ptr<BoundedCache<MultiReaderWriterLock>::BlockEntry>> Fi
     // memcpy(entries, &_blkIndex[binIndex * _associativity], sizeof(BlockEntry) * _associativity);
     std::vector<std::shared_ptr<BlockEntry>> entries;
     int startIndex = binIndex * _associativity;
-    for (int i = 0; i < _associativity; i++) {
+    for (uint32_t i = 0; i < _associativity; i++) {
         // entries.emplace_back(std::make_shared<BlockEntry>(*(BlockEntry*)&_blkIndex[i+startIndex]));
         // readBlockEntry(i+startIndex,&entries[i]);
         entries.emplace_back(new MemBlockEntry());

@@ -393,7 +393,7 @@ void FcntlCache::addFile(unsigned int index, std::string filename, uint64_t bloc
         _lock->writerLock();
         _fileMap.emplace(index, FileEntry{filename, blockSize, fileSize, hash});
         auto temp = new std::atomic<uint32_t>[numBlocks];
-        for (int i = 0; i < numBlocks; i++) {
+        for (uint32_t i = 0; i < numBlocks; i++) {
             std::atomic_init(&temp[i], (uint32_t)0);
         }
         _blkCnts.emplace(index, temp);
@@ -420,7 +420,7 @@ void FcntlCache::addFile(unsigned int index, std::string filename, uint64_t bloc
             ftruncate(fd, numBlocks * sizeof(std::atomic<uint8_t>));
             void *ptr = mmap(NULL, numBlocks * sizeof(std::atomic<uint8_t>), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
             _blkIndex[index] = (std::atomic<uint8_t> *)ptr;
-            for (int i = 0; i < numBlocks; i++) {
+            for (uint32_t i = 0; i < numBlocks; i++) {
                 std::atomic_init(&_blkIndex[index][i], (uint8_t)0);
             }
         }

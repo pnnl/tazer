@@ -16,7 +16,7 @@
 //    may use, copy, modify, merge, publish, distribute, sublicense,
 //    and/or sell copies of the Software, and may permit others to do
 //    so, subject to the following conditions:
-//    
+//
 //    * Redistributions of source code must retain the above copyright
 //      notice, this list of conditions and the following disclaimers.
 //
@@ -69,7 +69,7 @@
 //                               for the
 //                  UNITED STATES DEPARTMENT OF ENERGY
 //                   under Contract DE-AC05-76RL01830
-// 
+//
 //*EndLicense****************************************************************
 
 #ifndef MESSAGE_H
@@ -80,7 +80,7 @@
 #define MAGIC 0x32ab4fd
 
 enum msgType {
-    OPEN_FILE_MSG=0,
+    OPEN_FILE_MSG = 0,
     REQ_FILE_SIZE_MSG,
     FILE_SIZE_MSG,
     REQ_BLK_MSG,
@@ -107,38 +107,38 @@ struct openFileMsg {
     uint32_t blkSize;
     uint8_t compress;
     uint8_t output;
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
     char name[];
-    #pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 };
 
 struct fileSizeMsg {
     msgHeader header;
     uint64_t fileSize;
     uint8_t open;
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
     char name[];
-    #pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 };
 
 struct requestFileSizeMsg {
     msgHeader header;
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
     char name[];
-    #pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 };
 
 struct requestBlkMsg {
     msgHeader header;
     uint32_t start;
     uint32_t end;
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
     char name[];
-    #pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 };
 
 struct sendBlkMsg {
@@ -146,18 +146,18 @@ struct sendBlkMsg {
     int compression;
     uint32_t blk;
     uint32_t dataSize;
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
     char data[];
-    #pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 };
 
 struct closeFileMsg {
     msgHeader header;
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
     char name[];
-    #pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 };
 
 struct closeConMsg {
@@ -174,10 +174,10 @@ struct writeMsg {
     uint32_t compSize;
     uint64_t fp;
     unsigned int sn;
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
     char data[];
-    #pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 };
 
 struct ackMsg {

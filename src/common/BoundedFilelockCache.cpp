@@ -354,7 +354,7 @@ void BoundedFilelockCache::readBin(uint32_t binIndex, BlockEntry *entries) {
     preadFromFile(fd, (sizeof(FileBlockEntry) * _associativity), (uint8_t *)fEntries, binIndex * (sizeof(FileBlockEntry) * _associativity));
 
     int startIndex = binIndex * _associativity;
-    for (int i = 0; i < _associativity; i++) {
+    for (uint32_t i = 0; i < _associativity; i++) {
         entries[i] = *(BlockEntry *)&fEntries[i];
     }
 }
@@ -366,7 +366,7 @@ std::vector<std::shared_ptr<BoundedCache<FcntlBoundedReaderWriterLock>::BlockEnt
 
     std::vector<std::shared_ptr<BlockEntry>> entries;
     int startIndex = binIndex * _associativity;
-    for (int i = 0; i < _associativity; i++) {
+    for (uint32_t i = 0; i < _associativity; i++) {
         entries.emplace_back(new FileBlockEntry());
         memcpy(entries[i].get(), &fEntries[i], sizeof(FileBlockEntry));
         // log(this)<<fEntries[i].fileIndex<<" "<<fEntries[i].blockIndex<<" "<<fEntries[i].fileName<<" "<<fEntries[i].prefetched<<" "<<entries[i].get()->prefetched<<std::endl;
