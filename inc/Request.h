@@ -93,7 +93,7 @@ struct Request {
     // Request() : data(NULL),originating(NULL),blkIndex(0),fileIndex(0),size(0){
 
     // }
-    Request(uint32_t blk, uint32_t fileIndex, uint64_t size, Cache *orig, uint8_t *data) : data(data), originating(orig), blkIndex(blk), fileIndex(fileIndex), size(size), ready(false), time(Timer::getCurrentTime()), waitingCache("") {
+    Request(uint32_t blk, uint32_t fileIndex, uint64_t size, Cache *orig, uint8_t *data) : data(data), originating(orig), blkIndex(blk), fileIndex(fileIndex), size(size), time(Timer::getCurrentTime()), ready(false), waitingCache("") {
     }
 };
 #endif //REQUEST_H

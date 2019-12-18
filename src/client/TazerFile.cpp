@@ -107,9 +107,10 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
     _prefetch(false),
     _save_local(false),
     _blkSize(1),
+    _initMetaTime(0),
     _active(false),
-    _fd(fd),
-    _initMetaTime(0) {
+    _fd(fd)
+     {
     readMetaInfo();
     newFilePosIndex();
 }

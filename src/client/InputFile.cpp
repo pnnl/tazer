@@ -199,8 +199,8 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
 InputFile::InputFile(std::string name, std::string metaName, int fd, bool openFile) : TazerFile(TazerFile::Type::Input, name, metaName, fd),
                                                                                       _fileSize(0),
                                                                                       _numBlks(0),
-                                                                                      _prefetcher(NULL),
-                                                                                      _regFileIndex(id()) { //This is if there is no file cache...
+                                                                                      _regFileIndex(id()),
+                                                                                      _prefetcher(NULL) { //This is if there is no file cache...
     std::call_once(init_flag, InputFile::cache_init);
     if (openFile) {
         open();
