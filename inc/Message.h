@@ -107,26 +107,38 @@ struct openFileMsg {
     uint32_t blkSize;
     uint8_t compress;
     uint8_t output;
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wpedantic"
     char name[];
+    #pragma GCC diagnostic pop
 };
 
 struct fileSizeMsg {
     msgHeader header;
     uint64_t fileSize;
     uint8_t open;
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wpedantic"
     char name[];
+    #pragma GCC diagnostic pop
 };
 
 struct requestFileSizeMsg {
     msgHeader header;
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wpedantic"
     char name[];
+    #pragma GCC diagnostic pop
 };
 
 struct requestBlkMsg {
     msgHeader header;
     uint32_t start;
     uint32_t end;
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wpedantic"
     char name[];
+    #pragma GCC diagnostic pop
 };
 
 struct sendBlkMsg {
@@ -134,12 +146,18 @@ struct sendBlkMsg {
     int compression;
     uint32_t blk;
     uint32_t dataSize;
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wpedantic"
     char data[];
+    #pragma GCC diagnostic pop
 };
 
 struct closeFileMsg {
     msgHeader header;
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wpedantic"
     char name[];
+    #pragma GCC diagnostic pop
 };
 
 struct closeConMsg {
@@ -156,7 +174,10 @@ struct writeMsg {
     uint32_t compSize;
     uint64_t fp;
     unsigned int sn;
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wpedantic"
     char data[];
+    #pragma GCC diagnostic pop
 };
 
 struct ackMsg {
