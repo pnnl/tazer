@@ -342,8 +342,11 @@ FcntlBoundedReaderWriterLock::~FcntlBoundedReaderWriterLock() {
         shm_unlink(shmPath.c_str());
         (*(unixclose_t)dlsym(RTLD_NEXT, "close"))(_fd);
     }
+    else{
+        delete _shmLock;
+    }
     delete _fdMutex;
-    delete _shmLock;
+    
 }
 
 void FcntlBoundedReaderWriterLock::readerLock(uint64_t entry) {
