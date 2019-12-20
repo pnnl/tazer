@@ -534,7 +534,9 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                             double reqTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
                             _nextLevel->readBlock(req, reads, 0); //rerequest block from next level, note this updates the request data structure so we do not need to update it manually;
                             std::cout << "[TAZER] " << Timer::printTime() << " " << _name << " timeout, rereqeusting block " << req->blkIndex <<" from "<<_nextLevel->name()<< " " << req->fileIndex << " " << getRequestTime() << " " << _nextLevel->getRequestTime() << " " << reqTime << " " << reads.size() << std::endl;
-                            reads[req->blkIndex].get().get();
+                            if (!req->ready){
+                                reads[req->blkIndex].get().get();
+                            }
                             std::cout << "[TAZER] " <<"got block after "<<req->blkIndex<<" retrying!"<<std::endl;
                             memset(waitingCacheName, 0, MAX_CACHE_NAME_LEN);
                             memcpy(waitingCacheName, _nextLevel->name().c_str(), MAX_CACHE_NAME_LEN);
