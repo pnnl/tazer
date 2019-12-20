@@ -422,7 +422,7 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
 
             auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
 
-            _cache->getCacheByName(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls, Timer::getCurrentTime() - stallTime, 1);
+            _cache->getCacheByName(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls,  (Timer::getCurrentTime() - stallTime) - request->retryTime, 1);
             request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
             _cache->stats.start(); //ovh
             if (request->ready) {  // hmm what does it mean if this is NULL? do we need to catch and report this?
@@ -440,7 +440,7 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
 
             auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
 
-            _cache->getCacheByName(request->waitingCache)->stats.addTime(false, CacheStats::Metric::stalls, Timer::getCurrentTime() - stallTime, 1);
+            _cache->getCacheByName(request->waitingCache)->stats.addTime(false, CacheStats::Metric::stalls, (Timer::getCurrentTime() - stallTime) - request->retryTime, 1);
             request->originating->stats.addTime(false, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
             _cache->stats.start(); //ovh
             if (request->ready) {  // hmm what does it mean if this is NULL? do we need to catch and report this?
