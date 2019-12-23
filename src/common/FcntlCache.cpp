@@ -265,7 +265,7 @@ bool FcntlCache::blockReserve(unsigned int index, unsigned int fileIndex) {
     std::atomic<uint32_t> &blkCnt = _blkCnts[fileIndex][index];
     std::string name = _fileMap[fileIndex].name;
     _lock->readerUnlock();
-    uint64_t otime = Timer::getCurrentTime();
+    // uint64_t otime = Timer::getCurrentTime();
     std::string blkPath = _cachePath + "/" + name + "/lock";
 
     bool empty = false;
@@ -276,19 +276,19 @@ bool FcntlCache::blockReserve(unsigned int index, unsigned int fileIndex) {
     }
     if (empty) {
         if (blkCnt == 0) {
-            uint64_t otime = Timer::getCurrentTime();
+            // uint64_t otime = Timer::getCurrentTime();
             //int fd = (*_open)(blkPath.c_str(), O_RDWR);
             _fdMutex.writerLock();
             int fd = _fdLock[fileIndex];
             bool locked = _fcntlLock.writerLock3(fd, index, blkCnt, _cachePath + "/" + name);
             // _ovhTime4 += Timer::getCurrentTime() - otime;
-            otime = Timer::getCurrentTime();
+            // otime = Timer::getCurrentTime();
             if (locked) {
                 uint8_t byte;
                 (*_lseek)(fd, index, SEEK_SET);
                 (*_read)(fd, &byte, sizeof(uint8_t));
                 // _ovhTime += Timer::getCurrentTime() - otime;
-                otime = Timer::getCurrentTime();
+                // otime = Timer::getCurrentTime();
                 if (byte == UBC_BLK_EMPTY) {
                     (*_lseek)(fd, index, SEEK_SET);
                     byte = UBC_BLK_RES;

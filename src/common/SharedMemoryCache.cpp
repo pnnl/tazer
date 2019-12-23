@@ -170,11 +170,11 @@ SharedMemoryCache::~SharedMemoryCache() {
 }
 
 void SharedMemoryCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size) {
-    uint64_t dstart = Timer::getCurrentTime();
+    // uint64_t dstart = Timer::getCurrentTime();
     // std::cout << "[TAZER] " << _name << " setting block: " << blockIndex << std::endl;
     // std::cerr << "bi: " << blockIndex << " bs: " << _blockSize << " " << blockIndex * _blockSize << " s: " << size << " " << (void *)data << std::endl;
     memcpy(&_blocks[blockIndex * _blockSize], data, size);
-    auto elapsed = Timer::getCurrentTime() - dstart;
+    // auto elapsed = Timer::getCurrentTime() - dstart;
     // _dataAmt += _blockSize;
     // _dataTime += elapsed;
     // updateIoRate(elapsed,_blockSize);

@@ -219,7 +219,7 @@ void FcntlReaderWriterLock::writerUnlock2(int fd, uint64_t blk, std::atomic<uint
         lock.l_whence = SEEK_SET;
         lock.l_start = blk;
         lock.l_len = 1;
-        int ret = fcntl(fd, F_SETLKW, &lock);
+        fcntl(fd, F_SETLKW, &lock);
         blkCnt = 0;
         // std::cout << "unlocking: " << fd << " " << blk << "ret: " << ret << std::endl;
     }

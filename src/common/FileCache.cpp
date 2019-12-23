@@ -154,6 +154,7 @@ FileCache::FileCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSi
     else {
         _blkIndex = new MemBlockEntry[_numBlocks];
         auto binLockDataAddr = new uint8_t[MultiReaderWriterLock::getDataSize(_numBins)];
+        _binLock = new MultiReaderWriterLock(_numBins, binLockDataAddr, true);
         _binLock->writerLock(0);
         memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
         _binLock->writerUnlock(0);
@@ -232,7 +233,7 @@ void FileCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t si
 }
 
 uint8_t *FileCache::getBlockData(unsigned int blockIndex) {
-    uint64_t dstart = Timer::getCurrentTime();
+    // uint64_t dstart = Timer::getCurrentTime();
     uint8_t *buff = new uint8_t[_blockSize];
     (*_lseek)(_blocksfd, blockIndex * _blockSize, SEEK_SET);
     readFromFile(_blockSize, buff);

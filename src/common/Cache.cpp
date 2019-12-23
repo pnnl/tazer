@@ -380,7 +380,7 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
     std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> net_reads;
     std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> local_reads;
 
-    int numBlks = blocks.size();
+    // int numBlks = blocks.size();
     uint64_t startBlk = blocks[0];
 
     for (auto blk : blocks) {
@@ -404,7 +404,7 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
     }
 
     for (auto it = net_reads.begin(); it != net_reads.end(); ++it) {
-        uint32_t blk = (*it).first;
+        // uint32_t blk = (*it).first;
         auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
 
         if (request->data) { // hmm what does it mean if this is NULL? do we need to catch and report this?
@@ -414,7 +414,7 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         }
     }
     for (auto it = local_reads.begin(); it != local_reads.end(); ++it) {
-        uint32_t blk = (*it).first;
+        // uint32_t blk = (*it).first;
         auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
         if (request->data) {                     // hmm what does it mean if this is NULL? do we need to catch and report this?
             bufferWrite(request);

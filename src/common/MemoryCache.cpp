@@ -131,9 +131,9 @@ MemoryCache::~MemoryCache() {
 }
 
 void MemoryCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size) {
-    uint64_t dstart = Timer::getCurrentTime();
+    // uint64_t dstart = Timer::getCurrentTime();
     memcpy(&_blocks[blockIndex * _blockSize], data, size);
-    auto elapsed = Timer::getCurrentTime() - dstart;
+    // auto elapsed = Timer::getCurrentTime() - dstart;
     // _dataTime += elapsed;
     // _dataAmt += _blockSize;
     // updateIoRate(elapsed,_blockSize);
@@ -142,7 +142,7 @@ void MemoryCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t 
 uint8_t *MemoryCache::getBlockData(unsigned int blockIndex) {
     // auto dstart = Timer::getCurrentTime();
 
-    auto start = Timer::getCurrentTime();
+    // auto start = Timer::getCurrentTime();
     uint8_t *temp = (uint8_t *)&_blocks[blockIndex * _blockSize];
 
     // auto elapsed = Timer::getCurrentTime()-start;

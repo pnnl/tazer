@@ -148,7 +148,7 @@ void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::s
     _lock->readerLock();
     auto fileSize = _fileMap[fileIndex].fileSize;
     auto name = _fileMap[fileIndex].name;
-    auto blkSize = _fileMap[fileIndex].blockSize;
+    // auto blkSize = _fileMap[fileIndex].blockSize;
     auto file = _fstreamMap[fileIndex];
     _lock->readerUnlock();
 
@@ -160,7 +160,7 @@ void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::s
         else {
             stats.addAmt(prefetch, CacheStats::Metric::prefetches, 1);
         }
-        uint64_t htime = Timer::getCurrentTime();
+        // uint64_t htime = Timer::getCurrentTime();
         stats.end(prefetch, CacheStats::Metric::ovh);
         stats.start(); //hits
         file.second->writerLock();
@@ -205,7 +205,7 @@ void LocalFileCache::addFile(uint32_t index, std::string filename, uint64_t bloc
     if (_fileMap.count(index) == 0) {
         std::string hashstr(_name + filename); //should cause each level of the cache to have different indicies for a given file
         uint64_t hash = (uint64_t)XXH32(hashstr.c_str(), filename.size(), 0);
-        bool compress = false;
+        // bool compress = false;
 
         _fileMap.emplace(index, FileEntry{filename, blockSize, fileSize, hash});
         std::ifstream *file = new std::ifstream();

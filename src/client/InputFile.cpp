@@ -379,7 +379,7 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
         // std::cerr << "[TAZER] " << Timer::printTime() << _name << " " << _filePos[index] << " " << _fileSize << " " << count << " " << startBlock << " " << endBlock << std::endl;
 
         trackRead(count, index, startBlock, endBlock);
-        bool error = false;
+        // bool error = false;
         std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> reads;
         std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> net_reads;
         std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> local_reads;

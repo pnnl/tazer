@@ -135,8 +135,8 @@ bool UnboundedCache::writeBlock(Request* req) {
 void UnboundedCache::readBlock(Request* req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request*>>> &reads, uint64_t priority) {
     //std::cout << "read " << _name << " fi: " << fileIndex << " i: " << index << std::endl;
     // std::cout << "[TAZER] " << _name << " entering read " << index << " " << size << " " << _blockSize << " " << priority << std::endl;
-    uint64_t otime = Timer::getCurrentTime();
-    uint64_t rtime = otime;
+    // uint64_t otime = Timer::getCurrentTime();
+    // uint64_t rtime = otime;
     uint8_t *buff = nullptr;
     auto index = req->blkIndex;
     auto fileIndex = req->fileIndex;
@@ -154,12 +154,12 @@ void UnboundedCache::readBlock(Request* req, std::unordered_map<uint32_t, std::s
             //     _hits++;
             //     _ovhTime += Timer::getCurrentTime() - otime;
             // }
-            uint64_t htime = Timer::getCurrentTime();
+            // uint64_t htime = Timer::getCurrentTime();
             buff = getBlockData(index, fileIndex);
             // if (!prefetch) {
             //     _hitTime += Timer::getCurrentTime() - htime;
             // }
-            otime = Timer::getCurrentTime();
+            // otime = Timer::getCurrentTime();
             req->data=buff;
             req->originating=this;
             req->reservedMap[this]=1;
@@ -170,7 +170,7 @@ void UnboundedCache::readBlock(Request* req, std::unordered_map<uint32_t, std::s
             //     _hits++;
             //     _ovhTime += Timer::getCurrentTime() - otime;
             // }
-            otime = Timer::getCurrentTime();
+            // otime = Timer::getCurrentTime();
         }
 
         if (!buff) { // data not currently present
@@ -181,18 +181,18 @@ void UnboundedCache::readBlock(Request* req, std::unordered_map<uint32_t, std::s
                 // if (!prefetch) {
                 //     _ovhTime2 += Timer::getCurrentTime() - otime;
                 // }
-                uint64_t mtime = Timer::getCurrentTime();
+                // uint64_t mtime = Timer::getCurrentTime();
                 _nextLevel->readBlock(req,reads,priority); //try to satisfy read at next level
                 // if (!prefetch) {
                 //     _missTime += Timer::getCurrentTime() - mtime;
                 // }
-                otime = Timer::getCurrentTime();
+                // otime = Timer::getCurrentTime();
             }
             else {
                 // if (!prefetch) {
                 //     _ovhTime2 += Timer::getCurrentTime() - otime;
                 // }
-                otime = Timer::getCurrentTime();              //someone else has reserved so we will wait for it to arrive in an async //or should we just try to grab it from any local layer... if its not present at all then we wait.
+                // otime = Timer::getCurrentTime();              //someone else has reserved so we will wait for it to arrive in an async //or should we just try to grab it from any local layer... if its not present at all then we wait.
                 
                 uint8_t zero = 0;
                 uint8_t temp = UBC_BLK_RES;
@@ -206,7 +206,7 @@ void UnboundedCache::readBlock(Request* req, std::unordered_map<uint32_t, std::s
                     // if (!prefetch) {
                     //     _stalls_2++;
                     // }
-                    uint64_t stime = Timer::getCurrentTime();
+                    // uint64_t stime = Timer::getCurrentTime();
                     //std::cout << fileIndex << " waiting for block " << index << "  to become available... checking FS: " << reserved << " " << (uint32_t)_blkIndex[fileIndex][index] << std::endl;
                     while (!blockAvailable(req->blkIndex, req->fileIndex, reserved)) {
                         sched_yield();

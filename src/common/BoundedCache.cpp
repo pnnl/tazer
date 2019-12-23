@@ -440,7 +440,7 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
         BlockEntry entry;
         int blockIndex = getBlockIndex(index, fileIndex, &entry);
         if (blockIndex >= 0) { //block is present in cache HIT
-            auto t_cnt = incBlkCnt(blockIndex);
+            incBlkCnt(blockIndex);
             // log(this) << " " << _name << " read hit: blkIndex: " << blockIndex << " fi: " << fileIndex << " i:" << index << " prev cnt: " << t_cnt << std::endl;
             trackBlock(_name, "[BLOCK_READ_HIT]", fileIndex, index, priority);
 
@@ -478,7 +478,7 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                 blockIndex = getBlockIndex(index, fileIndex);
             }
             if (blockIndex >= 0) {
-                auto t_cnt = incBlkCnt(blockIndex);
+                incBlkCnt(blockIndex);
                 req->reservedMap[this] = 1; //we will need to decrement active count on the cache entry when we write back
             }
             else {
@@ -544,7 +544,7 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                             else{
                                 memcpy(waitingCacheName, _lastLevel->name().c_str(), MAX_CACHE_NAME_LEN);
                             }
-                            std::cout << "[TAZER] " <<"got block after "<<req->blkIndex<<" retrying! from: "<<req->originating->name()<<" waiting at: "<<waitingCacheName<<std::endl;        
+                            std::cout << "[TAZER] " <<"got block after "<<req->blkIndex<<" retrying! from: "<<req->originating->name()<<" waiting at: "<<waitingCacheName<<" "<<req->retryTime<<std::endl;        
                         }
 
                         req->waitingCache = waitingCacheName;

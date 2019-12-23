@@ -223,7 +223,7 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
     _pool.initiate();
 
     log(this) << "file: " << _name << std::endl;
-    unsigned int retry = 0;
+    // unsigned int retry = 0;
     struct stat sbuf;
     sbuf.st_size = 0;
     ConnectionPool *pool = NULL;

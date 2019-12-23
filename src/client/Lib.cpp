@@ -220,8 +220,9 @@ void __attribute__((destructor)) tazerCleanup(void) {
         }
     }
 
-    delete InputFile::_cache;
-
+    timer.end(Timer::MetricType::tazer, Timer::Metric::destructor);
+    delete InputFile::_cache; //desturctor time tracked by each cache...
+    timer.start();
     FileCacheRegister::closeFileCacheRegister();
     ConnectionPool::removeAllConnectionPools();
     Connection::closeAllConnections();
