@@ -88,6 +88,10 @@ class SharedMemoryCache : public BoundedCache<MultiReaderWriterLock> {
   protected:
     struct MemBlockEntry : BlockEntry {
         std::atomic<uint32_t> activeCnt;
+        void init(){
+          BlockEntry::init();
+          std::atomic_init(&activeCnt, (uint32_t)0);
+        }
     };
     virtual uint8_t *getBlockData(uint32_t blockIndex);
     virtual void setBlockData(uint8_t *data, uint32_t blockIndex, uint64_t size);

@@ -140,7 +140,10 @@ SharedMemoryCache::SharedMemoryCache(std::string cacheName, uint64_t cacheSize, 
         _binLock = new MultiReaderWriterLock(_numBins, binLockDataAddr, true);
         _binLock->writerLock(0);
         memset(_blocks, 0, _cacheSize);
-        memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
+        // memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
+        for (uint32_t i=0;i<_numBlocks;i++){
+            _blkIndex[i].init();
+        }
         _binLock->writerUnlock(0);
         *init = 1;
         log(this) << "init: " << *init << std::endl;

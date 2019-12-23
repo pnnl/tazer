@@ -75,6 +75,7 @@
 #include "FilelockCache.h"
 #include "Config.h"
 #include "ReaderWriterLock.h"
+#include "AtomicHelper.h"
 #include "Timer.h"
 #include <experimental/filesystem>
 #include <fcntl.h>
@@ -359,12 +360,14 @@ void FilelockCache::addFile(unsigned int index, std::string filename, uint64_t b
                 ftruncate(fd, numBlocks * sizeof(std::atomic<uint8_t>));
                 void *ptr = mmap(NULL, numBlocks * sizeof(std::atomic<uint8_t>), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
                 _blkIndex[index] = (std::atomic<uint8_t> *)ptr;
-                memset(_blkIndex[index], 0, numBlocks * sizeof(std::atomic<uint8_t>));
+                // memset(_blkIndex[index], 0, numBlocks * sizeof(std::atomic<uint8_t>));
+                init_atomic_array(_blkIndex[index],numBlocks,(uint8_t)0);
             }
         }
         else{
             _blkIndex[index] = new std::atomic<uint8_t>[numBlocks];
-            memset(_blkIndex[index], 0, numBlocks * sizeof(std::atomic<uint8_t>));
+            // memset(_blkIndex[index], 0, numBlocks * sizeof(std::atomic<uint8_t>));
+            init_atomic_array(_blkIndex[index],numBlocks,(uint8_t)0);
         }
     }
     // std::cout << "[TAZER] " << _name << " " << _cachePath + "/" + filename << " " << fileSize << " " << blockSize << std::endl;

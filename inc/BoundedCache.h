@@ -114,6 +114,9 @@ class BoundedCache : public Cache {
         uint32_t status;
         uint32_t prefetched;
         char origCache[32];
+        void init(){
+          memset(this,0,sizeof(BlockEntry));
+        }
         // std::atomic<uint32_t> activeCnt;
     };
 

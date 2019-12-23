@@ -106,7 +106,10 @@ MemoryCache::MemoryCache(std::string cacheName, uint64_t cacheSize, uint64_t blo
     _blocks = new uint8_t[_cacheSize];
     _blkIndex = new MemBlockEntry[_numBlocks];
     memset(_blocks, 0, _cacheSize);
-    memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
+    // memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
+    for (uint32_t i=0;i<_numBlocks;i++){
+        _blkIndex[i].init();
+    }
     // log(this) << (void *)_blkIndex << " " << (void *)((uint8_t *)_blkIndex + (_numBlocks * sizeof(BlockEntry))) << std::endl;
     _binLock->writerUnlock(0);
     stats.end(false, CacheStats::Metric::constructor);

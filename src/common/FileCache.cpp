@@ -145,7 +145,10 @@ FileCache::FileCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSi
             _binLock = new MultiReaderWriterLock(_numBins, binLockDataAddr, true);
             indexInit = (bool *)((uint8_t *)binLockDataAddr + MultiReaderWriterLock::getDataSize(_numBins));
             _binLock->writerLock(0);
-            memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
+            // memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
+            for (uint32_t i =0;i<_numBlocks;i++){
+                _blkIndex[i].init();
+            }
             *indexInit = false;
             _binLock->writerUnlock(0);
             *init = 1;
@@ -156,7 +159,10 @@ FileCache::FileCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSi
         auto binLockDataAddr = new uint8_t[MultiReaderWriterLock::getDataSize(_numBins)];
         _binLock = new MultiReaderWriterLock(_numBins, binLockDataAddr, true);
         _binLock->writerLock(0);
-        memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
+        // memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
+        for (uint32_t i =0;i<_numBlocks;i++){
+            _blkIndex[i].init();
+        }
         _binLock->writerUnlock(0);
     }
 

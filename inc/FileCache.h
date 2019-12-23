@@ -98,6 +98,10 @@ class FileCache : public BoundedCache<MultiReaderWriterLock> {
   private:
     struct MemBlockEntry : BlockEntry {
         std::atomic<uint32_t> activeCnt;
+        void init(){
+          BlockEntry::init();
+          std::atomic_init(&activeCnt, (uint32_t)0);
+        }
     };
     void writeToFile(uint64_t size, uint8_t *buff);
     void readFromFile(uint64_t size, uint8_t *buff);
