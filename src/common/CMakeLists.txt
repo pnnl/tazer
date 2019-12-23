@@ -1,5 +1,6 @@
 set(COMMON_HEADERS
     ${CMAKE_SOURCE_DIR}/inc/Config.h
+    ${CMAKE_SOURCE_DIR}/inc/AtomicHelper.h
     ${CMAKE_SOURCE_DIR}/inc/UnixIO.h
     ${CMAKE_SOURCE_DIR}/inc/Loggable.h
     ${CMAKE_SOURCE_DIR}/inc/Trackable.h

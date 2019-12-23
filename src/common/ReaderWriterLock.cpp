@@ -73,6 +73,7 @@
 //*EndLicense****************************************************************
 
 #include "ReaderWriterLock.h"
+#include "AtomicHelper.h"
 #include <cstring>
 #include <iostream>
 
@@ -175,14 +176,18 @@ bool ReaderWriterLock::tryReaderLock() {
 MultiReaderWriterLock::MultiReaderWriterLock(uint32_t numEntries) : _numEntries(numEntries), _dataAddr(NULL) {
 
     _readers = new std::atomic<uint16_t>[_numEntries];
-    memset(_readers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    // memset(_readers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    init_atomic_array(_readers,_numEntries,(uint16_t)0);
     _writers = new std::atomic<uint16_t>[_numEntries];
-    memset(_writers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    // memset(_writers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    init_atomic_array(_writers,_numEntries,(uint16_t)0);
 
     _cur = new std::atomic<uint16_t>[_numEntries];
-    memset(_cur, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    // memset(_cur, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    init_atomic_array(_cur,_numEntries,(uint16_t)0);
     _cnt = new std::atomic<uint16_t>[_numEntries];
-    memset(_cnt, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    // memset(_cnt, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    init_atomic_array(_cnt,_numEntries,(uint16_t)0);
 }
 
 MultiReaderWriterLock::MultiReaderWriterLock(uint32_t numEntries, uint8_t *dataAddr, bool init) : _numEntries(numEntries), _dataAddr(dataAddr) {
@@ -191,10 +196,14 @@ MultiReaderWriterLock::MultiReaderWriterLock(uint32_t numEntries, uint8_t *dataA
     _cur = (std::atomic<uint16_t> *)_writers + numEntries;
     _cnt = (std::atomic<uint16_t> *)_cur + numEntries;
     if (init) {
-        memset(_readers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
-        memset(_writers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
-        memset(_cur, 0, _numEntries * sizeof(std::atomic<uint16_t>));
-        memset(_cnt, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+        // memset(_readers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+        // memset(_writers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+        // memset(_cur, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+        // memset(_cnt, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+        init_atomic_array(_readers,_numEntries,(uint16_t)0);
+        init_atomic_array(_writers,_numEntries,(uint16_t)0);
+        init_atomic_array(_cur,_numEntries,(uint16_t)0);
+        init_atomic_array(_cnt,_numEntries,(uint16_t)0);
     }
 }
 

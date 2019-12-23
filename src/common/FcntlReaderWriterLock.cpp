@@ -73,6 +73,7 @@
 //*EndLicense****************************************************************
 
 #include "FcntlReaderWriterLock.h"
+#include "AtomicHelper.h"
 #include "Config.h"
 #include <cstring>
 #include <fcntl.h>
@@ -290,9 +291,11 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
                                                                                                                             _lockPath(lockPath) {
 
     _readers = new std::atomic<uint16_t>[_numEntries];
-    memset(_readers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    // memset(_readers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    init_atomic_array(_readers,_numEntries,(uint16_t)0);
     _writers = new std::atomic<uint16_t>[_numEntries];
-    memset(_writers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    // memset(_writers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    init_atomic_array(_writers,_numEntries,(uint16_t)0);
 
     _fdMutex = new ReaderWriterLock();
     _fd = (*(unixopen_t)dlsym(RTLD_NEXT, "open"))(_lockPath.c_str(), O_RDWR);
