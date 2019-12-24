@@ -293,9 +293,7 @@ bool BoundedCache<Lock>::writeBlock(Request *req) {
     if (req->reservedMap[this] > 0 || !_terminating) { //when terminating dont waste time trying to write orphan requests
         auto index = req->blkIndex;
         auto fileIndex = req->fileIndex;
-        _localLock->readerLock();
         auto binIndex = getBinIndex(index, fileIndex);
-        _localLock->readerUnlock();
         if (req->originating == this) {
             _binLock->readerLock(binIndex);
             int blockIndex = getBlockIndex(index, fileIndex);
