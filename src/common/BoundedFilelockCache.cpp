@@ -350,27 +350,30 @@ void BoundedFilelockCache::writeBlockEntry(uint32_t blockIndex, BlockEntry *entr
 
 void BoundedFilelockCache::readBin(uint32_t binIndex, BlockEntry *entries) {
     int fd = _binFd;
-    FileBlockEntry fEntries[_associativity];
+    FileBlockEntry* fEntries = new FileBlockEntry[_associativity];
     preadFromFile(fd, (sizeof(FileBlockEntry) * _associativity), (uint8_t *)fEntries, binIndex * (sizeof(FileBlockEntry) * _associativity));
 
     // int startIndex = binIndex * _associativity;
     for (uint32_t i = 0; i < _associativity; i++) {
         entries[i] = *(BlockEntry *)&fEntries[i];
     }
+    delete[] fEntries;
 }
 
 std::vector<std::shared_ptr<BoundedCache<FcntlBoundedReaderWriterLock>::BlockEntry>> BoundedFilelockCache::readBin(uint32_t binIndex) {
     int fd = _binFd;
-    FileBlockEntry fEntries[_associativity];
+    // FileBlockEntry fEntries[_associativity];
+    FileBlockEntry* fEntries = new FileBlockEntry[_associativity];
     preadFromFile(fd, (sizeof(FileBlockEntry) * _associativity), (uint8_t *)fEntries, binIndex * (sizeof(FileBlockEntry) * _associativity));
 
     std::vector<std::shared_ptr<BlockEntry>> entries;
     // int startIndex = binIndex * _associativity;
     for (uint32_t i = 0; i < _associativity; i++) {
-        entries.emplace_back(new FileBlockEntry());
-        memcpy(entries[i].get(), &fEntries[i], sizeof(FileBlockEntry));
+        entries.emplace_back(new FileBlockEntry(&fEntries[i]));
+        // memcpy(entries[i].get(), &fEntries[i], sizeof(FileBlockEntry));
         // log(this)<<fEntries[i].fileIndex<<" "<<fEntries[i].blockIndex<<" "<<fEntries[i].fileName<<" "<<fEntries[i].prefetched<<" "<<entries[i].get()->prefetched<<std::endl;
     }
+    delete[] fEntries;
     return entries;
 }
 

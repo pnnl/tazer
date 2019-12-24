@@ -515,7 +515,7 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                         bool avail = false;
                         uint8_t *buff = NULL;
                         double curTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
-                        while (!avail && curTime < _lastLevel->getRequestTime() * 10) {                      // exit loop if request is 10x times longer than average network request
+                        while (!avail && curTime < std::min(_lastLevel->getRequestTime() * 10,60.0) ) {                      // exit loop if request is 10x times longer than average network request or longer than 1 minute
                             avail = blockAvailable(blockIndex, req->fileIndex, true, cnt, waitingCacheName); //maybe pass in a char* to capture the name of the originating cache?
                             sched_yield();
                             cnt++;

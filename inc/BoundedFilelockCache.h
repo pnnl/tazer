@@ -91,6 +91,14 @@ class BoundedFilelockCache : public BoundedCache<FcntlBoundedReaderWriterLock> {
   private:
     struct FileBlockEntry : BlockEntry {
         char fileName[1024];
+        FileBlockEntry(){
+          BlockEntry::init();
+          memset(fileName,0,1024);
+        }
+        FileBlockEntry(FileBlockEntry* old){
+          memcpy((BlockEntry*)this,(BlockEntry*)old,sizeof(BlockEntry));
+          memcpy(fileName,old->fileName,1024);
+        }
     };
 
     virtual uint8_t *getBlockData(unsigned int blockIndex);
