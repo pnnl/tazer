@@ -221,7 +221,7 @@ ssize_t OutputFile::write(const void *buf, size_t count, uint32_t index) {
             if (bytesToSend < spaceAvail) {
                 spaceAvail = bytesToSend;
             }
-            memcpy(_buffer + _bufferIndex, buf + bytesSent, spaceAvail);
+            memcpy(_buffer + _bufferIndex, (char*)buf + bytesSent, spaceAvail);
             //_totalCnt += spaceAvail;
             bytesSent += spaceAvail;
             bytesToSend -= spaceAvail;
@@ -243,7 +243,7 @@ ssize_t OutputFile::write(const void *buf, size_t count, uint32_t index) {
             spaceAvail = Config::outputFileBufferSize - _bufferIndex;
         }
 
-        memcpy(_buffer + _bufferIndex, buf + bytesSent, bytesToSend);
+        memcpy(_buffer + _bufferIndex, (char*)buf + bytesSent, bytesToSend);
         //_totalCnt += bytesToSend;
         //memcpy(_buffer + _bufferIndex, buf, count);
         _bufferIndex += bytesToSend;
