@@ -203,7 +203,7 @@ void SharedMemoryCache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t bl
         _blkIndex[index].prefetched = prefetched;
     }
     memset(_blkIndex[index].origCache, 0, MAX_CACHE_NAME_LEN);
-    memcpy(_blkIndex[index].origCache, cacheName.c_str(), MAX_CACHE_NAME_LEN);
+    memcpy(_blkIndex[index].origCache, cacheName.c_str(), std::min(cacheName.size(),MAX_CACHE_NAME_LEN));
     _blkIndex[index].status = status;
 }
 

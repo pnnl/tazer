@@ -146,7 +146,6 @@ unixreadv_t unixreadv = NULL;
 unixwritev_t unixwritev = NULL;
 
 void __attribute__((constructor)) tazerInit(void) {
-
     std::call_once(log_flag, []() {
         timer.start();
         Loggable::mtx_cout = new std::mutex();
@@ -197,7 +196,7 @@ void __attribute__((constructor)) tazerInit(void) {
         unixreadv = (unixreadv_t)dlsym(RTLD_NEXT, "readv");
         unixwritev = (unixwritev_t)dlsym(RTLD_NEXT, "writev");
 
-        unsetenv("LD_PRELOAD");
+        //unsetenv("LD_PRELOAD"); //uncomment me if running into issues with an application that launches child shells
         timer.end(Timer::MetricType::tazer, Timer::Metric::constructor);
     });
     init = true;

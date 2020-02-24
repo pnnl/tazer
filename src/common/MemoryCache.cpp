@@ -169,7 +169,8 @@ void MemoryCache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockInd
     //     std::cout << "setting block " << _name << " was: " << _blkIndex[index].origCache << " now: " << cacheName << std::endl;
     // }
     memset(_blkIndex[index].origCache, 0, MAX_CACHE_NAME_LEN);
-    memcpy(_blkIndex[index].origCache, cacheName.c_str(), MAX_CACHE_NAME_LEN);
+
+    memcpy(_blkIndex[index].origCache, cacheName.c_str(), std::min(cacheName.size(),MAX_CACHE_NAME_LEN));
     _blkIndex[index].status = status;
 }
 

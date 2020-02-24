@@ -354,7 +354,7 @@ double Cache::getRequestTime() {
 
     if (_ioCnt->load() == 0) {
         // log(this) << _name << " " << (_curIoTime / 1000000000.0) / 0.0 << std::endl;
-        return 0.0;
+        return 0.0; //probably need to change this...
     }
     // log(this) << _name << " " << (_curIoTime / 1000000000.0) / _ioCnt << std::endl;
     return (_curIoTime->load() / 1000000000.0) / _ioCnt->load();
@@ -388,8 +388,9 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         auto request = requestBlock(blk, blkSize, regFileIndex, reads, priority);
         if (request->ready) { //the block was in a client side cache!!
             //std::cout << "********************Data was on client side!!!" <<std::endl;
-            bufferWrite(request);
             request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
+            bufferWrite(request);
+           
         }
         else {
             //std::cout << "********************Data prerequested!!!" <<std::endl;
@@ -408,18 +409,19 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
 
         if (request->data) { // hmm what does it mean if this is NULL? do we need to catch and report this?
-            bufferWrite(request);
             request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
             stats.addAmt(true, CacheStats::Metric::read, blkSize);
+            bufferWrite(request);
+            
         }
     }
     for (auto it = local_reads.begin(); it != local_reads.end(); ++it) {
         // uint32_t blk = (*it).first;
         auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
         if (request->data) {                     // hmm what does it mean if this is NULL? do we need to catch and report this?
-            bufferWrite(request);
             request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
             stats.addAmt(true, CacheStats::Metric::read, blkSize);
+            bufferWrite(request);
         }
     }
 }

@@ -533,25 +533,25 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                             double reqTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
                             req->retryTime = Timer::getCurrentTime();
                             _lastLevel->readBlock(req, reads, 0); //rerequest block from next level, note this updates the request data structure so we do not need to update it manually;
-                            std::cout << "[TAZER] " << Timer::printTime() << " " << _name << " timeout, rereqeusting block " << req->blkIndex <<" from "<<_lastLevel->name()<< " " << req->fileIndex << " " << getRequestTime() << " " << _lastLevel->getRequestTime() << " " << reqTime << " " << reads.size() << std::endl;
+                            log(this) << "[TAZER] " << Timer::printTime() << " " << _name << " timeout, rereqeusting block " << req->blkIndex <<" from "<<_lastLevel->name()<< " " << req->fileIndex << " " << getRequestTime() << " " << _lastLevel->getRequestTime() << " " << reqTime << " " << reads.size() << std::endl;
                             req->retryTime = Timer::getCurrentTime()-req->retryTime;
                             if (!req->ready){
                                 reads[req->blkIndex].get().get();
-                                memcpy(waitingCacheName, req->waitingCache.c_str(),MAX_CACHE_NAME_LEN);
+                                memcpy(waitingCacheName, req->waitingCache.c_str(), std::min(req->waitingCache.size(),MAX_CACHE_NAME_LEN));
                             }
                             else{
-                                memcpy(waitingCacheName, _lastLevel->name().c_str(), MAX_CACHE_NAME_LEN);
+                                memcpy(waitingCacheName, _lastLevel->name().c_str(), std::min(_lastLevel->name().size(),MAX_CACHE_NAME_LEN));
                             }
-                            std::cout << "[TAZER] " <<"got block after "<<req->blkIndex<<" retrying! from: "<<req->originating->name()<<" waiting at: "<<waitingCacheName<<" "<<req->retryTime<<std::endl;        
+                            log(this) << "[TAZER] " <<"got block after "<<req->blkIndex<<" retrying! from: "<<req->originating->name()<<" waiting at: "<<waitingCacheName<<" "<<req->retryTime<<std::endl;        
                         }
 
                         req->waitingCache = waitingCacheName;
 
                         std::promise<Request *> prom;
-                        auto fut = prom.get_future();
+                        auto inner_fut = prom.get_future();
                         prom.set_value(req);
                         // log(this) << _name << " done read wait: blkIndex: " << blockIndex << " fi: " << fileIndex << " i:" << index << std::endl;
-                        return fut.share();
+                        return inner_fut.share();
                     });
                     reads[index] = fut.share();
                 }
