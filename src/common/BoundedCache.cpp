@@ -434,7 +434,7 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
     }
 
     if (req->size <= _blockSize) {
-        _binLock->readerLock(binIndex);
+        _binLock->writerLock(binIndex);
         BlockEntry entry;
         int blockIndex = getBlockIndex(index, fileIndex, &entry);
         if (blockIndex >= 0) { //block is present in cache HIT
@@ -462,8 +462,8 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
             req->time = Timer::getCurrentTime() - req->time;
             updateRequestTime(req->time);
         }
-
-        _binLock->readerUnlock(binIndex);
+        _binLock->writerUnlock(binIndex);
+        
         if (!buff) { // data not currently present //miss
             trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
 

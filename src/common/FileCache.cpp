@@ -147,7 +147,7 @@ FileCache::FileCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSi
             _binLock->writerLock(0);
             // memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
             for (uint32_t i =0;i<_numBlocks;i++){
-                _blkIndex[i].init();
+                _blkIndex[i].init(this);
             }
             *indexInit = false;
             _binLock->writerUnlock(0);
@@ -161,7 +161,7 @@ FileCache::FileCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSi
         _binLock->writerLock(0);
         // memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
         for (uint32_t i =0;i<_numBlocks;i++){
-            _blkIndex[i].init();
+            _blkIndex[i].init(this);
         }
         _binLock->writerUnlock(0);
     }
@@ -300,7 +300,7 @@ void FileCache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex
         _blkIndex[index].prefetched = prefetched;
     }
     memset(_blkIndex[index].origCache, 0, MAX_CACHE_NAME_LEN);
-    memcpy(_blkIndex[index].origCache, cacheName.c_str(), MAX_CACHE_NAME_LEN);
+    memcpy(_blkIndex[index].origCache, cacheName.c_str(), std::min(cacheName.size(),MAX_CACHE_NAME_LEN));
     _blkIndex[index].status = status;
 }
 
@@ -309,7 +309,11 @@ bool FileCache::blockAvailable(unsigned int index, unsigned int fileIndex, bool 
     if (origCache && avail) {
         memset(origCache, 0, MAX_CACHE_NAME_LEN);
         memcpy(origCache, _blkIndex[index].origCache, MAX_CACHE_NAME_LEN);
-        std::cout << _name << " " << _blkIndex[index].origCache << std::endl;
+        // for better or for worse we allow unlocked access to check if a block avail, 
+        // there is potential for a race here when some over thread updates the block (not changing the data, just the metadata)
+        while(std::string(origCache) == ""){ 
+            memcpy(origCache, _blkIndex[index].origCache, MAX_CACHE_NAME_LEN);
+        }
         return true;
     }
     return avail;

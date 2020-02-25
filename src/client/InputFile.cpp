@@ -422,6 +422,9 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
 
             auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
 
+            if(request ==NULL || request->waitingCache == "" || request->originating == NULL){
+                err(this) <<"something missing!!!!!!!! r: "<<(void*)request<<" wc: "<<request->waitingCache<<" oc: "<<(void*)request->originating<<std::endl;
+            }
             _cache->getCacheByName(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls,  (Timer::getCurrentTime() - stallTime) - request->retryTime, 1);
             request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
             _cache->stats.start(); //ovh
@@ -440,6 +443,9 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
 
             auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
 
+            if(request ==NULL || request->waitingCache == "" || request->originating == NULL){
+                err(this) <<"something missing!!!!!!!! r: "<<(void*)request<<" wc: "<<request->waitingCache<<" oc: "<<(void*)request->originating<<std::endl;
+            }
             _cache->getCacheByName(request->waitingCache)->stats.addTime(false, CacheStats::Metric::stalls, (Timer::getCurrentTime() - stallTime) - request->retryTime, 1);
             request->originating->stats.addTime(false, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
             _cache->stats.start(); //ovh

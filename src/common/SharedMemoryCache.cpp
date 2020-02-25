@@ -142,7 +142,7 @@ SharedMemoryCache::SharedMemoryCache(std::string cacheName, uint64_t cacheSize, 
         memset(_blocks, 0, _cacheSize);
         // memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
         for (uint32_t i=0;i<_numBlocks;i++){
-            _blkIndex[i].init();
+            _blkIndex[i].init(this);
         }
         _binLock->writerUnlock(0);
         *init = 1;
@@ -212,6 +212,14 @@ bool SharedMemoryCache::blockAvailable(unsigned int index, unsigned int fileInde
     if (origCache && avail) {
         memset(origCache, 0, MAX_CACHE_NAME_LEN);
         memcpy(origCache, _blkIndex[index].origCache, MAX_CACHE_NAME_LEN);
+        // for better or for worse we allow unlocked access to check if a block avail, 
+        // there is potential for a race here when some over thread updates the block (not changing the data, just the metadata)
+        while(std::string(origCache) == ""){ 
+            memcpy(origCache, _blkIndex[index].origCache, MAX_CACHE_NAME_LEN);
+        }
+        // if (std::string(_blkIndex[index].origCache) == "" || std::string(origCache) == ""){
+        //     err(this)<<"shared memcache block avail: wtf? "<<_blkIndex[index].origCache<<" "<<origCache<<std::endl;
+        // }
         // std::cout << _name << " " << _blkIndex[index].origCache << std::endl;
         return true;
     }

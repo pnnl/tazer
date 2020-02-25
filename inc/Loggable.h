@@ -165,22 +165,22 @@ class Loggable {
                         mkdir(tss.str().c_str(), 0777);
                     }
                 }
-                std::cout << "[TAZER] "
+                std::cerr << "[TAZER] "
                           << "opening " << ss.str() << std::endl;
                 _of.open(ss.str(), std::ofstream::out);
                 _o = &_of;
             }
             else {
-                _o = &std::cout;
+                _o = &std::cerr;
             }
         }
         else {
-            _o = &std::cout;
+            _o = &std::cerr;
         }
     }
 
     Loggable() : _log(false), _o(NULL) {
-        _o = &std::cout;
+        _o = &std::cerr;
         // std::cout << &std::cout << " 2 " << _o << std::endl;
     }
 
@@ -191,7 +191,7 @@ class Loggable {
                 _of << val;
             }
             else {
-                std::cout << val;
+                std::cerr << val;
             }
         }
         return *this;
@@ -215,7 +215,7 @@ class Loggable {
                 f(_of);
             }
             else {
-                std::cout << f;
+                std::cerr << f;
             }
         }
         return *this;
@@ -227,7 +227,7 @@ class Loggable {
                 f(_of);
             }
             else {
-                std::cout << f;
+                std::cerr << f;
             }
         }
         return *this;

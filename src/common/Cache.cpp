@@ -354,7 +354,7 @@ double Cache::getRequestTime() {
 
     if (_ioCnt->load() == 0) {
         // log(this) << _name << " " << (_curIoTime / 1000000000.0) / 0.0 << std::endl;
-        return 0.0; //probably need to change this...
+        return 0.0; //probably need to change this to address issue 2
     }
     // log(this) << _name << " " << (_curIoTime / 1000000000.0) / _ioCnt << std::endl;
     return (_curIoTime->load() / 1000000000.0) / _ioCnt->load();

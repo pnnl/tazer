@@ -108,7 +108,7 @@ MemoryCache::MemoryCache(std::string cacheName, uint64_t cacheSize, uint64_t blo
     memset(_blocks, 0, _cacheSize);
     // memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
     for (uint32_t i=0;i<_numBlocks;i++){
-        _blkIndex[i].init();
+        _blkIndex[i].init(this);
     }
     // log(this) << (void *)_blkIndex << " " << (void *)((uint8_t *)_blkIndex + (_numBlocks * sizeof(BlockEntry))) << std::endl;
     _binLock->writerUnlock(0);
@@ -169,7 +169,6 @@ void MemoryCache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockInd
     //     std::cout << "setting block " << _name << " was: " << _blkIndex[index].origCache << " now: " << cacheName << std::endl;
     // }
     memset(_blkIndex[index].origCache, 0, MAX_CACHE_NAME_LEN);
-
     memcpy(_blkIndex[index].origCache, cacheName.c_str(), std::min(cacheName.size(),MAX_CACHE_NAME_LEN));
     _blkIndex[index].status = status;
 }
@@ -179,6 +178,15 @@ bool MemoryCache::blockAvailable(unsigned int index, unsigned int fileIndex, boo
     if (origCache && avail) {
         memset(origCache, 0, MAX_CACHE_NAME_LEN);
         memcpy(origCache, _blkIndex[index].origCache, MAX_CACHE_NAME_LEN);
+        // for better or for worse we allow unlocked access to check if a block avail, 
+        // there is potential for a race here when some over thread updates the block (not changing the data, just the metadata)
+        while(std::string(origCache) == ""){ 
+            memcpy(origCache, _blkIndex[index].origCache, MAX_CACHE_NAME_LEN);
+        }
+        // if (std::string(_blkIndex[index].origCache) == "" || std::string(origCache) == ""){
+        //     err(this)<<"shared memcache block avail: wtf? "<<_blkIndex[index].origCache<<" "<<origCache<<std::endl;
+        // }
+        
         // std::cout << _name << " " << _blkIndex[index].origCache << std::endl;
         return true;
     }
