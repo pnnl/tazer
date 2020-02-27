@@ -89,7 +89,7 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-FilelockCache::FilelockCache(std::string cacheName, uint64_t blockSize, std::string cachePath) : UnboundedCache(cacheName, blockSize),
+FilelockCache::FilelockCache(std::string cacheName, CacheType type, uint64_t blockSize, std::string cachePath) : UnboundedCache(cacheName, type, blockSize),
                                                                                                  _open((unixopen_t)dlsym(RTLD_NEXT, "open")),
                                                                                                  _close((unixclose_t)dlsym(RTLD_NEXT, "close")),
                                                                                                  _read((unixread_t)dlsym(RTLD_NEXT, "read")),
@@ -378,10 +378,10 @@ void FilelockCache::addFile(unsigned int index, std::string filename, uint64_t b
     }
 }
 
-Cache *FilelockCache::addNewFilelockCache(std::string fileName, uint64_t blockSize, std::string cachePath) {
+Cache *FilelockCache::addNewFilelockCache(std::string fileName, CacheType type, uint64_t blockSize, std::string cachePath) {
     return Trackable<std::string, Cache *>::AddTrackable(
         fileName, [=]() -> Cache * {
-            Cache *temp = new FilelockCache(fileName, blockSize, cachePath);
+            Cache *temp = new FilelockCache(fileName, type, blockSize, cachePath);
             if (temp)
                 return temp;
             delete temp;

@@ -92,7 +92,7 @@
 #define DPRINTF(...)
 
 template <class Lock>
-BoundedCache<Lock>::BoundedCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : Cache(cacheName),
+BoundedCache<Lock>::BoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : Cache(cacheName,type),
                                                                                                                           _cacheSize(cacheSize),
                                                                                                                           _blockSize(blockSize),
                                                                                                                           _associativity(associativity),
@@ -272,10 +272,10 @@ bool BoundedCache<Lock>::blockReserve(uint32_t index, uint32_t fileIndex, bool &
     // log(this) /*std::cout*/ << " " << _name << "reserving: " << index << " " << reservedIndex << " " << found << " p: " << prefetch << std::endl;
     if (!found && reservedIndex > -1) {
         if (prefetch) {
-            blockSet(reservedIndex, fileIndex, index, BLK_PRE, prefetch, _name);
+            blockSet(reservedIndex, fileIndex, index, BLK_PRE, _type, prefetch);
         }
         else {
-            blockSet(reservedIndex, fileIndex, index, BLK_RES, prefetch, _name);
+            blockSet(reservedIndex, fileIndex, index, BLK_RES, _type, prefetch);
         }
         ret = true;
     }
@@ -330,15 +330,15 @@ bool BoundedCache<Lock>::writeBlock(Request *req) {
                     BlockEntry entry;
                     readBlockEntry(blockIndex, &entry);
                     if (entry.status != BLK_WR || entry.status != BLK_AVAIL) {
-                        blockSet(blockIndex, fileIndex, index, BLK_WR, entry.prefetched, req->originating->name());
+                        blockSet(blockIndex, fileIndex, index, BLK_WR, req->originating->type(), entry.prefetched);
                         _binLock->writerUnlock(binIndex);
                         setBlockData(req->data, blockIndex, req->size);
                         _binLock->writerLock(binIndex);
-                        blockSet(blockIndex, fileIndex, index, BLK_AVAIL, entry.prefetched, req->originating->name()); //write the name of the originating cache so we can properly attribute stall time...
+                        blockSet(blockIndex, fileIndex, index, BLK_AVAIL, req->originating->type(), entry.prefetched); //write the name of the originating cache so we can properly attribute stall time...
                         _binLock->writerUnlock(binIndex);
                     }
                     else if (entry.status == BLK_AVAIL) {
-                        blockSet(blockIndex, fileIndex, index, BLK_AVAIL, entry.prefetched, req->originating->name()); //update timestamp
+                        blockSet(blockIndex, fileIndex, index, BLK_AVAIL, req->originating->type(), entry.prefetched); //update timestamp
                         _binLock->writerUnlock(binIndex);
                     }
                     else { //the writer will update the timestamp
@@ -449,7 +449,7 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
             else {
                 stats.addAmt(prefetch, CacheStats::Metric::hits, req->size);
             }
-            blockSet(blockIndex, fileIndex, index, BLK_AVAIL, entry.prefetched, _name);
+            blockSet(blockIndex, fileIndex, index, BLK_AVAIL, _type, entry.prefetched);
             stats.end(prefetch, CacheStats::Metric::ovh);
             stats.start(); // hits
             buff = getBlockData(blockIndex);
@@ -507,14 +507,15 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                     auto fut = std::async(std::launch::deferred, [this, req, blockIndex, prefetch] {
                         // log(this) << _name << " read wait: blkIndex: " << blockIndex << " fi: " << fileIndex << " i:" << index << std::endl;
                         uint64_t stime = Timer::getCurrentTime();
-                        char waitingCacheName[MAX_CACHE_NAME_LEN];
-                        waitingCacheName[0] = '\0';
+                        // char waitingCacheName[MAX_CACHE_NAME_LEN];
+                        // waitingCacheName[0] = '\0';
+                        CacheType waitingCacheType = CacheType::empty;
                         uint64_t cnt = 0;
                         bool avail = false;
                         uint8_t *buff = NULL;
                         double curTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
                         while (!avail && curTime < std::min(_lastLevel->getRequestTime() * 10,60.0) ) {                      // exit loop if request is 10x times longer than average network request or longer than 1 minute
-                            avail = blockAvailable(blockIndex, req->fileIndex, true, cnt, waitingCacheName); //maybe pass in a char* to capture the name of the originating cache?
+                            avail = blockAvailable(blockIndex, req->fileIndex, true, cnt, &waitingCacheType); //maybe pass in a char* to capture the name of the originating cache?
                             sched_yield();
                             cnt++;
                             curTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
@@ -528,24 +529,24 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                             updateRequestTime(req->time);
                         }
                         else {
-                            memset(waitingCacheName, 0, MAX_CACHE_NAME_LEN);
+                            waitingCacheType = CacheType::empty;
                             std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> reads;
                             double reqTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
                             req->retryTime = Timer::getCurrentTime();
                             _lastLevel->readBlock(req, reads, 0); //rerequest block from next level, note this updates the request data structure so we do not need to update it manually;
-                            log(this) << "[TAZER] " << Timer::printTime() << " " << _name << " timeout, rereqeusting block " << req->blkIndex <<" from "<<_lastLevel->name()<< " " << req->fileIndex << " " << getRequestTime() << " " << _lastLevel->getRequestTime() << " " << reqTime << " " << reads.size() << std::endl;
+                            log(this) << Timer::printTime() << " " << _name << " timeout, rereqeusting block " << req->blkIndex <<" from "<<_lastLevel->name()<< " " << req->fileIndex << " " << getRequestTime() << " " << _lastLevel->getRequestTime() << " " << reqTime << " " << reads.size() << std::endl;
                             req->retryTime = Timer::getCurrentTime()-req->retryTime;
                             if (!req->ready){
                                 reads[req->blkIndex].get().get();
-                                memcpy(waitingCacheName, req->waitingCache.c_str(), std::min(req->waitingCache.size(),MAX_CACHE_NAME_LEN));
+                                waitingCacheType = req->waitingCache;
                             }
                             else{
-                                memcpy(waitingCacheName, _lastLevel->name().c_str(), std::min(_lastLevel->name().size(),MAX_CACHE_NAME_LEN));
+                                waitingCacheType = _lastLevel->type();
                             }
-                            log(this) << "[TAZER] " <<"got block after "<<req->blkIndex<<" retrying! from: "<<req->originating->name()<<" waiting at: "<<waitingCacheName<<" "<<req->retryTime<<std::endl;        
+                            log(this) <<"got block after "<<req->blkIndex<<" retrying! from: "<<req->originating->name()<<" waiting on cache type: "<<cacheTypeName(waitingCacheType)<<" "<<req->retryTime<<std::endl;        
                         }
 
-                        req->waitingCache = waitingCacheName;
+                        req->waitingCache = waitingCacheType;
 
                         std::promise<Request *> prom;
                         auto inner_fut = prom.get_future();

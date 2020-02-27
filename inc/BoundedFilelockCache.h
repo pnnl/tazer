@@ -82,11 +82,11 @@
 
 class BoundedFilelockCache : public BoundedCache<FcntlBoundedReaderWriterLock> {
   public:
-    BoundedFilelockCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
+    BoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
     virtual ~BoundedFilelockCache();
 
     virtual bool writeBlock(Request *req);
-    static Cache *addNewBoundedFilelockCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
+    static Cache *addNewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
 
   private:
     struct FileBlockEntry : BlockEntry {
@@ -99,7 +99,7 @@ class BoundedFilelockCache : public BoundedCache<FcntlBoundedReaderWriterLock> {
           memset(fileName,0,1024);
         }
         FileBlockEntry(FileBlockEntry* old){
-          memcpy((BlockEntry*)this,(BlockEntry*)old,sizeof(BlockEntry));
+          *(BlockEntry*)this = *(BlockEntry*)old;
           memcpy(fileName,old->fileName,1024);
         }
         void init(BoundedCache* c){
@@ -109,8 +109,8 @@ class BoundedFilelockCache : public BoundedCache<FcntlBoundedReaderWriterLock> {
 
     virtual uint8_t *getBlockData(unsigned int blockIndex);
     virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size);
-    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, int32_t prefetch = -1, std::string cacheName = BOUNDEDFILELOCKCACHENAME);
-    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, char *origCache = NULL);
+    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch);
+    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
 
     virtual std::shared_ptr<BlockEntry> getCompareBlkEntry(uint32_t index, uint32_t fileIndex);
     virtual bool sameBlk(BlockEntry *blk1, BlockEntry *blk2);

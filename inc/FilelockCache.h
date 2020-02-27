@@ -81,11 +81,11 @@
 
 class FilelockCache : public UnboundedCache {
   public:
-    FilelockCache(std::string cacheName, uint64_t blockSize, std::string cachePath);
+    FilelockCache(std::string cacheName, CacheType type, uint64_t blockSize, std::string cachePath);
     virtual ~FilelockCache();
 
     virtual void addFile(unsigned int index, std::string filename, uint64_t blockSize, uint64_t fileSize);
-    static Cache *addNewFilelockCache(std::string fileName, uint64_t blockSize, std::string cachePath);
+    static Cache *addNewFilelockCache(std::string fileName, CacheType type, uint64_t blockSize, std::string cachePath);
 
   private:
     virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false);

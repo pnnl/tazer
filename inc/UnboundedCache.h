@@ -89,7 +89,7 @@
 
 class UnboundedCache : public Cache {
   public:
-    UnboundedCache(std::string cacheName, uint64_t blockSize);
+    UnboundedCache(std::string cacheName, CacheType type, uint64_t blockSize);
     virtual ~UnboundedCache();
 
     virtual bool writeBlock(Request* req);

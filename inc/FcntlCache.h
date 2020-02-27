@@ -82,11 +82,11 @@
 
 class FcntlCache : public UnboundedCache {
   public:
-    FcntlCache(std::string cacheName, uint64_t blockSize, std::string cachePath);
+    FcntlCache(std::string cacheName, CacheType type, uint64_t blockSize, std::string cachePath);
     virtual ~FcntlCache();
 
     virtual void addFile(unsigned int index, std::string filename, uint64_t blockSize, uint64_t fileSize);
-    static Cache *addNewFcntlCache(std::string fileName, uint64_t blockSize, std::string cachePath);
+    static Cache *addNewFcntlCache(std::string fileName, CacheType type, uint64_t blockSize, std::string cachePath);
 
   private:
     virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false);

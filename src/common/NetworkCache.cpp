@@ -97,7 +97,7 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-NetworkCache::NetworkCache(std::string cacheName, PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> &txPool, PriorityThreadPool<std::packaged_task<Request *()>> &decompPool) : Cache(cacheName),
+NetworkCache::NetworkCache(std::string cacheName, CacheType type, PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> &txPool, PriorityThreadPool<std::packaged_task<Request *()>> &decompPool) : Cache(cacheName,type),
                                                                                                                                                                                                       _transferPool(txPool),
                                                                                                                                                                                                       _decompPool(decompPool) {
     stats.start();
@@ -143,7 +143,7 @@ Request *NetworkCache::decompress(Request *req, char *compBuf, uint32_t compBufS
     req->reservedMap[this] = 1;
     req->ready = true;
     req->time = Timer::getCurrentTime() - req->time;
-    req->waitingCache = NETWORKCACHENAME;
+    req->waitingCache = CacheType::network;
     updateRequestTime(req->time);
     return req;
 }
@@ -219,7 +219,7 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
                         req->reservedMap[this] = 1;
                         req->ready = true;
                         req->time = Timer::getCurrentTime() - req->time;
-                        req->waitingCache = NETWORKCACHENAME;
+                        req->waitingCache = CacheType::network;
                         updateRequestTime(req->time);
                         prom.set_value(req);
                     }
@@ -306,10 +306,10 @@ void NetworkCache::setFileConnectionPool(uint32_t index, ConnectionPool *conPool
     _lock->writerUnlock();
 }
 
-Cache *NetworkCache::addNewNetworkCache(std::string cacheName, PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> &txPool, PriorityThreadPool<std::packaged_task<Request *()>> &decompPool) {
+Cache *NetworkCache::addNewNetworkCache(std::string cacheName, CacheType type, PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> &txPool, PriorityThreadPool<std::packaged_task<Request *()>> &decompPool) {
     return Trackable<std::string, Cache *>::AddTrackable(
         cacheName, [&]() -> Cache * {
-            Cache *temp = new NetworkCache(cacheName, txPool, decompPool);
+            Cache *temp = new NetworkCache(cacheName, type, txPool, decompPool);
             return temp;
         });
 }

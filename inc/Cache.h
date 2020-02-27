@@ -75,6 +75,7 @@
 #ifndef CACHE_H
 #define CACHE_H
 #include "CacheStats.h"
+#include "CacheTypes.h"
 #include "Loggable.h"
 #include "PriorityThreadPool.h"
 #include "ReaderWriterLock.h"
@@ -91,7 +92,7 @@
 
 class Cache : public Loggable, public Trackable<std::string, Cache *> {
   public:
-    Cache(std::string name = BASECACHENAME);
+    Cache(std::string name, CacheType type);
     virtual ~Cache();
 
     // virtual bool writeBlock(uint32_t index, uint64_t size, char *buffer, uint32_t fileIndex, Cache *originating = NULL);
@@ -111,6 +112,7 @@ class Cache : public Loggable, public Trackable<std::string, Cache *> {
     virtual void addCacheLevel(Cache *, uint64_t level = 0);
     virtual Cache *getCacheAtLevel(uint64_t level);
     virtual Cache *getCacheByName(std::string name);
+    virtual Cache *getCacheByType(CacheType type);
     virtual Cache *getNextLevel();
     virtual void setLevel(uint64_t level);
     uint32_t numBlocks();
@@ -120,6 +122,7 @@ class Cache : public Loggable, public Trackable<std::string, Cache *> {
     double getRequestTime();
 
     virtual std::string name() { return _name; }
+    virtual CacheType type () {return _type; }
 
     virtual void addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
     //void prefetchBlocks(uint32_t index, uint64_t startBlk, uint64_t endBlk, uint64_t numBlks, uint64_t fileSize, uint64_t blkSize, uint64_t regFileIndex);
@@ -128,7 +131,7 @@ class Cache : public Loggable, public Trackable<std::string, Cache *> {
     CacheStats stats;
 
   protected:
-    virtual void blockSet(uint32_t index, uint32_t fileIndex = 0, uint32_t blockIndex = 0);
+    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex);
     virtual bool blockReserve(uint32_t index, uint32_t fileIndex, int &reservedIndex, bool prefetch = false);
     virtual void setBase(Cache *base);
 
@@ -183,6 +186,7 @@ class Cache : public Loggable, public Trackable<std::string, Cache *> {
     uint64_t *_ioTimes; //[_ioWinSize];
     uint64_t _ioAmts[_ioWinSize];
 
+    CacheType _type;
     std::string _name;
     uint64_t _level;
     Cache *_nextLevel;

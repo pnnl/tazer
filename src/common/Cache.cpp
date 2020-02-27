@@ -97,9 +97,10 @@
 // std::mutex Cache::_pMutex;
 // std::unordered_set<std::string> Cache::_prefetches;
 
-Cache::Cache(std::string name) : Loggable(Config::CacheLog, name),
+Cache::Cache(std::string name,  CacheType type) : Loggable(Config::CacheLog, name),
                                  _ioTime(0),
                                  _ioAmt(0),
+                                 _type(type),
                                  _name(name),
                                  _level(0),
                                  _nextLevel(NULL),
@@ -294,6 +295,18 @@ Cache *Cache::getCacheByName(std::string name) {
     }
     else if (_nextLevel) {
         return _nextLevel->getCacheByName(name);
+    }
+    else {
+        return NULL;
+    }
+}
+
+Cache *Cache::getCacheByType(CacheType type) {
+    if (type == _type) {
+        return this;
+    }
+    else if (_nextLevel) {
+        return _nextLevel->getCacheByType(type);
     }
     else {
         return NULL;

@@ -166,6 +166,7 @@ void OutputFile::close() {
         //Close file
         closeFileOnServer();
 
+        delete[] _buffer;
         //Reset values
         _seqNum.store(0);
         _sendNum.store(0);
@@ -318,8 +319,9 @@ void OutputFile::addTransferTask(char *buf, uint64_t size, uint64_t compSize, ui
                     *this << "Successful write " << _totalCnt << " " << seqNum << std::endl;
                 }
             }
-            else
+            else{
                 *this << "Failed send" << std::endl;
+            }
             _connections[0]->unlock();
             _sendNum.fetch_add(1);
         }

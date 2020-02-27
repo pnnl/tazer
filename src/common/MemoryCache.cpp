@@ -97,7 +97,7 @@
 #define DPRINTF(...)
 
 //single process, but shared across threads
-MemoryCache::MemoryCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : BoundedCache(cacheName, cacheSize, blockSize, associativity) {
+MemoryCache::MemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : BoundedCache(cacheName, type, cacheSize, blockSize, associativity) {
     std::cout << "[TAZER] "
               << "Constructing " << _name << " in memory cache" << std::endl;
     stats.start();
@@ -157,37 +157,34 @@ uint8_t *MemoryCache::getBlockData(unsigned int blockIndex) {
 
 //Must lock first!
 //This uses the actual index (it does not do a search)
-
-void MemoryCache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, int32_t prefetched, std::string cacheName) {
+void MemoryCache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched) {
     _blkIndex[index].fileIndex = fileIndex + 1;
     _blkIndex[index].blockIndex = blockIndex + 1;
     _blkIndex[index].timeStamp = Timer::getCurrentTime();
     if (prefetched >= 0) {
         _blkIndex[index].prefetched = prefetched;
     }
-    // if (status == BLK_AVAIL) {
-    //     std::cout << "setting block " << _name << " was: " << _blkIndex[index].origCache << " now: " << cacheName << std::endl;
-    // }
-    memset(_blkIndex[index].origCache, 0, MAX_CACHE_NAME_LEN);
-    memcpy(_blkIndex[index].origCache, cacheName.c_str(), std::min(cacheName.size(),MAX_CACHE_NAME_LEN));
+    _blkIndex[index].origCache.store(type);
     _blkIndex[index].status = status;
 }
 
-bool MemoryCache::blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs, uint32_t cnt, char *origCache) {
+// blockAvailable calls are not protected by locks
+// we know that when calling blockAvailable the actual data cannot change during the read (due to refernce counting protections)
+// what can change is the meta data associated with the last access of the data (and which cache it originated from)
+// in certain cases, we want to capture the originating cache and return it for performance reasons
+// there is a potential race between when a block is available and when we capture the originating cache
+// having origCache be atomic ensures we always get a valid ID (even though it may not always be 100% acurate)
+// we are willing to accept some small error in attribution of stats
+bool MemoryCache::blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs, uint32_t cnt, CacheType *origCache) {
     bool avail = _blkIndex[index].status == BLK_AVAIL;
     if (origCache && avail) {
-        memset(origCache, 0, MAX_CACHE_NAME_LEN);
-        memcpy(origCache, _blkIndex[index].origCache, MAX_CACHE_NAME_LEN);
+        *origCache = CacheType::empty;
+        *origCache = _blkIndex[index].origCache.load();
         // for better or for worse we allow unlocked access to check if a block avail, 
         // there is potential for a race here when some over thread updates the block (not changing the data, just the metadata)
-        while(std::string(origCache) == ""){ 
-            memcpy(origCache, _blkIndex[index].origCache, MAX_CACHE_NAME_LEN);
+        while(*origCache == CacheType::empty){ 
+            *origCache = _blkIndex[index].origCache.load();
         }
-        // if (std::string(_blkIndex[index].origCache) == "" || std::string(origCache) == ""){
-        //     err(this)<<"shared memcache block avail: wtf? "<<_blkIndex[index].origCache<<" "<<origCache<<std::endl;
-        // }
-        
-        // std::cout << _name << " " << _blkIndex[index].origCache << std::endl;
         return true;
     }
     return avail;
@@ -195,15 +192,12 @@ bool MemoryCache::blockAvailable(unsigned int index, unsigned int fileIndex, boo
 
 void MemoryCache::readBlockEntry(uint32_t blockIndex, BlockEntry *entry) {
     *entry = *(BlockEntry *)&_blkIndex[blockIndex];
-    // memcpy(entry, &_blkIndex[blockIndex], sizeof(BlockEntry));
 }
 void MemoryCache::writeBlockEntry(uint32_t blockIndex, BlockEntry *entry) {
     *(BlockEntry *)&_blkIndex[blockIndex] = *entry;
-    // memcpy(&_blkIndex[blockIndex], entry, sizeof(BlockEntry));
 }
 
 void MemoryCache::readBin(uint32_t binIndex, BlockEntry *entries) {
-    // memcpy(entries, &_blkIndex[binIndex * _associativity], sizeof(BlockEntry) * _associativity);
     int startIndex = binIndex * _associativity;
     for (uint32_t i = 0; i < _associativity; i++) {
         readBlockEntry(i + startIndex, &entries[i]);
@@ -211,14 +205,11 @@ void MemoryCache::readBin(uint32_t binIndex, BlockEntry *entries) {
 }
 
 std::vector<std::shared_ptr<BoundedCache<MultiReaderWriterLock>::BlockEntry>> MemoryCache::readBin(uint32_t binIndex) {
-    // memcpy(entries, &_blkIndex[binIndex * _associativity], sizeof(BlockEntry) * _associativity);
     std::vector<std::shared_ptr<BlockEntry>> entries;
     int startIndex = binIndex * _associativity;
     for (uint32_t i = 0; i < _associativity; i++) {
-        // entries.emplace_back(std::make_shared<BlockEntry>(*(BlockEntry*)&_blkIndex[i+startIndex]))
         entries.emplace_back(new MemBlockEntry());
         *entries[i].get() = *(BlockEntry *)&_blkIndex[i + startIndex];
-        // readBlockEntry(i+startIndex,&entries[i]);
     }
     return entries;
 }
@@ -234,11 +225,10 @@ bool MemoryCache::anyUsers(uint32_t blk) {
     return _blkIndex[blk].activeCnt;
 }
 
-Cache *MemoryCache::addNewMemoryCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) {
-    // std::string newFileName("MemoryCache");
+Cache *MemoryCache::addNewMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) {
     return Trackable<std::string, Cache *>::AddTrackable(
         cacheName, [&]() -> Cache * {
-            Cache *temp = new MemoryCache(cacheName, cacheSize, blockSize, associativity);
+            Cache *temp = new MemoryCache(cacheName,type, cacheSize, blockSize, associativity);
             return temp;
         });
 }

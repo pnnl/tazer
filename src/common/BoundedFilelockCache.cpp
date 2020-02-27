@@ -94,7 +94,7 @@
 #define DPRINTF(...)
 
 //TODO: create version that locks the file when reserved and only releases after it has written it...
-BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath) : BoundedCache(cacheName, cacheSize, blockSize, associativity),
+BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath) : BoundedCache(cacheName, type, cacheSize, blockSize, associativity),
                                                                                                                                                            _open((unixopen_t)dlsym(RTLD_NEXT, "open")),
                                                                                                                                                            _close((unixclose_t)dlsym(RTLD_NEXT, "close")),
                                                                                                                                                            _read((unixread_t)dlsym(RTLD_NEXT, "read")),
@@ -351,7 +351,7 @@ void BoundedFilelockCache::writeBlockEntry(uint32_t blockIndex, BlockEntry *entr
 void BoundedFilelockCache::readBin(uint32_t binIndex, BlockEntry *entries) {
     int fd = _binFd;
     FileBlockEntry* fEntries = new FileBlockEntry[_associativity];
-    for (int i =0; i< _associativity;++i){
+    for (uint32_t i =0; i< _associativity;++i){
         fEntries[i].init(this);
     }
     preadFromFile(fd, (sizeof(FileBlockEntry) * _associativity), (uint8_t *)fEntries, binIndex * (sizeof(FileBlockEntry) * _associativity));
@@ -367,7 +367,7 @@ std::vector<std::shared_ptr<BoundedCache<FcntlBoundedReaderWriterLock>::BlockEnt
     int fd = _binFd;
     // FileBlockEntry fEntries[_associativity];
     FileBlockEntry* fEntries = new FileBlockEntry[_associativity];
-    for (int i =0; i< _associativity;++i){
+    for (uint32_t i =0; i< _associativity;++i){
         fEntries[i].init(this);
     }
     preadFromFile(fd, (sizeof(FileBlockEntry) * _associativity), (uint8_t *)fEntries, binIndex * (sizeof(FileBlockEntry) * _associativity));
@@ -376,15 +376,20 @@ std::vector<std::shared_ptr<BoundedCache<FcntlBoundedReaderWriterLock>::BlockEnt
     // int startIndex = binIndex * _associativity;
     for (uint32_t i = 0; i < _associativity; i++) {
         entries.emplace_back(new FileBlockEntry(&fEntries[i]));
-        // memcpy(entries[i].get(), &fEntries[i], sizeof(FileBlockEntry));
-        // log(this)<<fEntries[i].fileIndex<<" "<<fEntries[i].blockIndex<<" "<<fEntries[i].fileName<<" "<<fEntries[i].prefetched<<" "<<entries[i].get()->prefetched<<std::endl;
     }
     delete[] fEntries;
     return entries;
 }
 
-//Must lock first!
-bool BoundedFilelockCache::blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs, uint32_t cnt, char *origCache) {
+
+// blockAvailable calls are not protected by locks
+// we know that when calling blockAvailable the actual data cannot change during the read (due to refernce counting protections)
+// what can change is the meta data associated with the last access of the data (and which cache it originated from)
+// in certain cases, we want to capture the originating cache and return it for performance reasons
+// there is a potential race between when a block is available and when we capture the originating cache
+// having origCache be atomic ensures we always get a valid ID (even though it may not always be 100% acurate)
+// we are willing to accept some small error in attribution of stats
+bool BoundedFilelockCache::blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs, uint32_t cnt, CacheType *origCache) {
 
     bool avail = false;
     if (checkFs && !avail) {
@@ -403,15 +408,15 @@ bool BoundedFilelockCache::blockAvailable(unsigned int index, unsigned int fileI
         if (entry.status == BLK_AVAIL) {
             avail = true;
             if (origCache) {
-                memset(origCache, 0, MAX_CACHE_NAME_LEN);
-                memcpy(origCache, entry.origCache, MAX_CACHE_NAME_LEN);
+                *origCache = CacheType::empty;
+                *origCache = entry.origCache.load();
                 // for better or for worse we allow unlocked access to check if a block avail, 
                 // there is potential for a race here when some over thread updates the block (not changing the data, just the metadata)
-                while(std::string(origCache) == ""){ 
+                while(*origCache == CacheType::empty){ 
                     start = Timer::getCurrentTime();
                     preadFromFile(fd, sizeof(entry), (uint8_t *)&entry, index * sizeof(entry));
                     elapsed += Timer::getCurrentTime() - start;
-                    memcpy(origCache, entry.origCache, MAX_CACHE_NAME_LEN);
+                    *origCache = entry.origCache.load();
                 }
             }
         }
@@ -461,7 +466,7 @@ bool BoundedFilelockCache::anyUsers(uint32_t blk) {
     return _blkLock->lockAvail(blk) == 1;
 }
 
-void BoundedFilelockCache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, int32_t prefetched, std::string cacheName) {
+void BoundedFilelockCache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched) {
     FileBlockEntry entry(this);
     _localLock->readerLock();
     std::string name = _fileMap[fileIndex].name;
@@ -475,8 +480,7 @@ void BoundedFilelockCache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t
     entry.blockIndex = blockIndex + 1;
     entry.status = status;
     entry.timeStamp = Timer::getTimestamp();
-    memset(entry.origCache, 0, MAX_CACHE_NAME_LEN);
-    memcpy(entry.origCache, cacheName.c_str(), std::min(cacheName.size(),MAX_CACHE_NAME_LEN));
+    entry.origCache.store(type);
     if (prefetched >= 0) {
         entry.prefetched = prefetched;
     }
@@ -500,10 +504,10 @@ void BoundedFilelockCache::cleanUpBlockData(uint8_t *data) {
     delete[] data;
 }
 
-Cache *BoundedFilelockCache::addNewBoundedFilelockCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath) {
+Cache *BoundedFilelockCache::addNewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath) {
     return Trackable<std::string, Cache *>::AddTrackable(
         cacheName, [=]() -> Cache * {
-            Cache *temp = new BoundedFilelockCache(cacheName, cacheSize, blockSize, associativity, cachePath);
+            Cache *temp = new BoundedFilelockCache(cacheName, type, cacheSize, blockSize, associativity, cachePath);
             if (temp)
                 return temp;
             delete temp;

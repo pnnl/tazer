@@ -99,7 +99,7 @@
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 //#define DPRINTF(...)
-Cache ServeFile::_cache;
+Cache ServeFile::_cache(BASECACHENAME,CacheType::base);
 
 ThreadPool<std::function<void()>> ServeFile::_pool(Config::numServerCompThreads);
 std::vector<Connection *> ServeFile::_connections;
@@ -172,32 +172,32 @@ bool ServeFile::addConnections() {
 
 void ServeFile::cache_init(void) {
     uint64_t level = 0;
-    Cache *c = MemoryCache::addNewMemoryCache(MEMORYCACHENAME, Config::serverCacheSize, Config::serverCacheBlocksize, Config::serverCacheAssociativity);
+    Cache *c = MemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::serverCacheSize, Config::serverCacheBlocksize, Config::serverCacheAssociativity);
     std::cerr << "[TAZER] "
               << "mem cache: " << (void *)c << std::endl;
     ServeFile::_cache.addCacheLevel(c, ++level);
 
-    c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME);
+    c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME, CacheType::local);
     std::cerr << "[TAZER] "
               << "local file cache: " << (void *)c << std::endl;
     ServeFile::_cache.addCacheLevel(c, ++level);
 
     if (Config::useSharedMemoryCache) {
-        c = SharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
+        c = SharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME, CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
         std::cerr << "[TAZER] "
                   << "shared mem  cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }
 
     if (Config::useBoundedFilelockCache) {
-        c = BoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
+        c = BoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
         std::cerr << "[TAZER] "
                   << "bounded filelock cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }
 
     if (Config::useServerNetworkCache) {
-        c = NetworkCache::addNewNetworkCache(NETWORKCACHENAME, ServeFile::_transferPool, ServeFile::_decompressionPool);
+        c = NetworkCache::addNewNetworkCache(NETWORKCACHENAME, CacheType::network, ServeFile::_transferPool, ServeFile::_decompressionPool);
         std::cerr << "[TAZER] "
                   << "net cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
@@ -383,11 +383,22 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
                 auto pending = reads[blk];
                 auto stallTime = Timer::getCurrentTime();
                 auto request = pending.get().get();
-                _cache.getCacheByName(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls, Timer::getCurrentTime() - stallTime, 1);
+                if (request->waitingCache != CacheType::empty){
+                    _cache.getCacheByType(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls, Timer::getCurrentTime() - stallTime, 1);
+                }
+                else{
+                    err(this) << "waiting cache is empty"<<std::endl;
+                }
                 request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
                 if (request->ready) {
                     // std::cout << "net: " << _name << " " << blk << std::endl;
-                    _cache.getCacheByName(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, _blkSize);
+                    if (request->waitingCache != CacheType::empty){
+                        _cache.getCacheByType(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, _blkSize);
+                    }
+                    else{
+                        err(this) << "waiting cache is empty"<<std::endl;
+                    }
+
                     request->originating->stats.addAmt(false, CacheStats::Metric::stalled, _blkSize);
                     return sendData(connection, blk, request);
                 }

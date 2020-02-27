@@ -149,7 +149,7 @@ void __attribute__((constructor)) tazerInit(void) {
     std::call_once(log_flag, []() {
         timer.start();
         Loggable::mtx_cout = new std::mutex();
-        InputFile::_cache = new Cache(BASECACHENAME);
+        InputFile::_cache = new Cache(BASECACHENAME, CacheType::base);
         ConnectionPool::useCnt = new std::unordered_map<std::string, uint64_t>();
         ConnectionPool::consecCnt = new std::unordered_map<std::string, uint64_t>();
         ConnectionPool::stats = new std::unordered_map<std::string, std::pair<double, double>>();

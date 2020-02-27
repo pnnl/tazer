@@ -94,7 +94,7 @@ struct dummy {};
 template <class Lock>
 class BoundedCache : public Cache {
   public:
-    BoundedCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
+    BoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
     virtual ~BoundedCache();
 
     virtual bool writeBlock(Request *req);
@@ -113,10 +113,35 @@ class BoundedCache : public Cache {
         uint32_t timeStamp;
         uint32_t status;
         uint32_t prefetched;
-        char origCache[32];
+        // char origCache[32];
+        std::atomic<CacheType> origCache; 
+        // this member is atomic because blockAvailable calls are not protected by locks
+        // we know that when calling blockAvailable the actual data cannot change during the read (due to refernce counting protections)
+        // what can change is the meta data associated with the last access of the data (and which cache it originated from)
+        // in certain cases, we want to capture the originating cache and return it for performance reasons
+        // there is a potential race between when a block is available and when we capture the originating cache
+        // having origCache be atomic ensures we always get a valid ID (even though it may not always be 100% acurate)
+        // we are willing to accept some small error in attribution of stats
         void init(BoundedCache* c){
-          memset(this,0,sizeof(BlockEntry));
-          memcpy(origCache,c->name().c_str(),std::min(c->name().size(),MAX_CACHE_NAME_LEN));
+          // memset(this,0,sizeof(BlockEntry));
+          fileIndex =0;
+          blockIndex = 0;
+          timeStamp = 0;
+          status = 0;
+          prefetched= 0;
+          std::atomic_init(&origCache,CacheType::empty);
+        }
+        BlockEntry& operator= (const BlockEntry &entry){
+          if (this == &entry){
+            return *this;
+          }
+          fileIndex = entry.fileIndex;
+          blockIndex = entry.blockIndex;
+          timeStamp = entry.timeStamp;
+          status = entry.status;
+          prefetched= entry.prefetched;
+          origCache.store(entry.origCache.load());
+          return *this;
         }
         // std::atomic<uint32_t> activeCnt;
     };
@@ -128,9 +153,10 @@ class BoundedCache : public Cache {
     virtual uint32_t getBinOffset(uint32_t index, uint32_t fileIndex);
 
     //TODO: eventually when we create a flag for stat keeping we probably dont need to store the cacheName...
-    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, int32_t prefetch, std::string cacheName = "") = 0;
+    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte,  CacheType type, int32_t prefetch) = 0;
 
-    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, char *origCache = NULL) = 0;
+    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL) = 0;
+
     // virtual char *blockMiss(uint32_t index, uint64_t &size, uint32_t fileIndex, std::unordered_map<uint64_t,std::future<std::future<Request*>>> &reads);
     virtual uint8_t *getBlockData(uint32_t blockIndex) = 0;
     virtual void setBlockData(uint8_t *data, uint32_t blockIndex, uint64_t size) = 0;

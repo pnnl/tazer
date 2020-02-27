@@ -90,7 +90,7 @@
 #define DPRINTF(...)
 
 //TODO: create version that locks the file when reserved and only releases after it has written it...
-FcntlCache::FcntlCache(std::string cacheName, uint64_t blockSize, std::string cachePath) : UnboundedCache(cacheName, blockSize),
+FcntlCache::FcntlCache(std::string cacheName, CacheType type, uint64_t blockSize, std::string cachePath) : UnboundedCache(cacheName, type, blockSize),
                                                                                            _open((unixopen_t)dlsym(RTLD_NEXT, "open")),
                                                                                            _close((unixclose_t)dlsym(RTLD_NEXT, "close")),
                                                                                            _read((unixread_t)dlsym(RTLD_NEXT, "read")),
@@ -490,10 +490,10 @@ void FcntlCache::addFile(unsigned int index, std::string filename, uint64_t bloc
     }
 }
 
-Cache *FcntlCache::addNewFcntlCache(std::string fileName, uint64_t blockSize, std::string cachePath) {
+Cache *FcntlCache::addNewFcntlCache(std::string fileName, CacheType type, uint64_t blockSize, std::string cachePath) {
     return Trackable<std::string, Cache *>::AddTrackable(
         fileName, [=]() -> Cache * {
-            Cache *temp = new FcntlCache(fileName, blockSize, cachePath);
+            Cache *temp = new FcntlCache(fileName, type, blockSize, cachePath);
             if (temp)
                 return temp;
             delete temp;

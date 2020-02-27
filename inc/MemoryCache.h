@@ -80,10 +80,10 @@
 
 class MemoryCache : public BoundedCache<MultiReaderWriterLock> {
   public:
-    MemoryCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
+    MemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
     ~MemoryCache();
 
-    static Cache *addNewMemoryCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
+    static Cache *addNewMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
 
   protected:
     struct MemBlockEntry : BlockEntry {
@@ -95,8 +95,8 @@ class MemoryCache : public BoundedCache<MultiReaderWriterLock> {
     };
     virtual uint8_t *getBlockData(unsigned int blockIndex);
     virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size);
-    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, int32_t prefetch = -1, std::string cacheName = MEMORYCACHENAME);
-    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, char *origCache = NULL);
+    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch);
+    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
     virtual void readBlockEntry(uint32_t blockIndex, BlockEntry *entry);
     virtual void writeBlockEntry(uint32_t blockIndex, BlockEntry *entry);
     virtual void readBin(uint32_t binIndex, BlockEntry *entries);

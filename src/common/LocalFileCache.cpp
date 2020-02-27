@@ -96,7 +96,7 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-LocalFileCache::LocalFileCache(std::string cacheName) : Cache(cacheName) {
+LocalFileCache::LocalFileCache(std::string cacheName, CacheType type) : Cache(cacheName,type) {
     stats.start();
     _lock = new ReaderWriterLock();
     stats.end(false,CacheStats::Metric::constructor);
@@ -190,10 +190,10 @@ void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::s
     stats.end(prefetch, CacheStats::Metric::read);
 }
 
-Cache *LocalFileCache::addNewLocalFileCache(std::string cacheName) {
+Cache *LocalFileCache::addNewLocalFileCache(std::string cacheName, CacheType type) {
     return Trackable<std::string, Cache *>::AddTrackable(
         cacheName, [&]() -> Cache * {
-            Cache *temp = new LocalFileCache(cacheName);
+            Cache *temp = new LocalFileCache(cacheName, type);
             return temp;
         });
 }
