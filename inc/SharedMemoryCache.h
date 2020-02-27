@@ -80,23 +80,23 @@
 
 class SharedMemoryCache : public BoundedCache<MultiReaderWriterLock> {
   public:
-    SharedMemoryCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
+    SharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
     ~SharedMemoryCache();
 
-    static Cache *addNewSharedMemoryCache(std::string cacheName, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
+    static Cache *addNewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
 
   protected:
     struct MemBlockEntry : BlockEntry {
         std::atomic<uint32_t> activeCnt;
-        void init(){
-          BlockEntry::init();
+        void init(BoundedCache* c){
+          BlockEntry::init(c);
           std::atomic_init(&activeCnt, (uint32_t)0);
         }
     };
     virtual uint8_t *getBlockData(uint32_t blockIndex);
     virtual void setBlockData(uint8_t *data, uint32_t blockIndex, uint64_t size);
-    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, int32_t prefetch = -1, std::string cacheName = SHAREDMEMORYCACHENAME);
-    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, char *origCache = NULL);
+    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch);
+    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
     virtual void readBlockEntry(uint32_t blockIndex, BlockEntry *entry);
     virtual void writeBlockEntry(uint32_t blockIndex, BlockEntry *entry);
     virtual void readBin(uint32_t binIndex, BlockEntry *entries);

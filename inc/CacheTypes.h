@@ -72,29 +72,51 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef LOCALFILECACHE_H
-#define LOCALFILECACHE_H
-#include "Cache.h"
+//cache IDS
 
-#define LOCALFILECACHENAME "localfilecache"
-
-class LocalFileCache : public Cache {
-  public:
-    LocalFileCache(std::string cacheName, CacheType type);
-    virtual ~LocalFileCache();
-
-    bool writeBlock(Request *req);
-
-    virtual void readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority);
-    void printStats();
-
-    static Cache *addNewLocalFileCache(std::string cacheName, CacheType type);
-    void addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
-
-  private:
-    uint8_t *getBlockData(std::ifstream *file, uint32_t blockIndex, uint64_t blockSize,uint64_t fileSize);
-    std::unordered_map<uint32_t, std::pair<std::ifstream *, ReaderWriterLock *>> _fstreamMap;
-    ReaderWriterLock *_lock;
+#ifndef CACHETYPES_H_
+#define CACHETYPES_H_
+enum CacheType{
+    empty,
+    base,
+    privateMemory,
+    sharedMemory,
+    burstBuffer,
+    nodeFile,
+    boundedGlobalFile,
+    globalFileLock,
+    globalFcntl,
+    network,
+    local
 };
 
-#endif /* LOCALFILECACHE_H */
+static inline std::string cacheTypeName(CacheType type){
+    switch (type) {
+        case CacheType::empty:
+            return "empty";
+        case CacheType::base:
+            return "base";
+        case CacheType::privateMemory:
+            return "privateMemory";
+        case CacheType::sharedMemory:
+            return "sharedMemory";
+        case CacheType::burstBuffer:
+            return "burstBuffer";
+        case CacheType::nodeFile:
+            return "nodeFile";
+        case CacheType::boundedGlobalFile:
+            return "boundedGlobalFile";
+        case CacheType::globalFileLock:
+            return "globalFileLock";
+        case CacheType::globalFcntl:
+            return "globalFcntl";
+        case CacheType::network:
+            return "network";
+        case CacheType::local:
+            return "local";
+        default:
+            return "unknown cache type";
+    }
+}
+
+#endif

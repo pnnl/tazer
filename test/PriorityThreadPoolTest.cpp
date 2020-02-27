@@ -80,7 +80,7 @@ PriorityThreadPool<std::packaged_task<std::future<Request*>()>> pool(10);
 
 int main(int argc, char *argv[]) {
     pool.initiate();
-    Cache *cache = new Cache(BASECACHENAME);
+    Cache *cache = new Cache(BASECACHENAME, CacheType::base);
     uint8_t *buf = NULL;
     for (int i = 10; i > 0; i--) {
         auto task = std::packaged_task<std::future<Request*>()>([i, buf, cache] { //packaged task allow the transfer to execute on an asynchronous tx thread.

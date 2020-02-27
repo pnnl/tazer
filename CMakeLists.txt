@@ -11,6 +11,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -pthread -g -Wl,--no-as-
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ftls-model=global-dynamic -fPIC ")
 #add_compile_options("-fsanitize=address" )
 #add_compile_options("-fno-omit-frame-pointer")
+#add_compile_options("-fno-common")
 #link_libraries("-fsanitize=address")
 include_directories(/cvmfs/belle.cern.ch/sl6/externals/v01-05-01/Linux_x86_64/common/lib/gcc/x86_64-pc-linux-gnu/6.3.0/include)
 

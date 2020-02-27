@@ -34,8 +34,9 @@ set(COMMON_HEADERS
     ${CMAKE_SOURCE_DIR}/inc/SharedMemoryCache.h
     ${CMAKE_SOURCE_DIR}/inc/NetworkCache.h
     ${CMAKE_SOURCE_DIR}/inc/LocalFileCache.h
-    ${CMAKE_SOURCE_DIR}/inc/BlockSizeTranslationCache.h
+    #${CMAKE_SOURCE_DIR}/inc/BlockSizeTranslationCache.h
     ${CMAKE_SOURCE_DIR}/inc/CacheStats.h
+    ${CMAKE_SOURCE_DIR}/inc/CacheTypes.h
     ${CMAKE_SOURCE_DIR}/inc/Prefetcher.h
     ${CMAKE_SOURCE_DIR}/inc/DeltaPrefetcher.h
     ${CMAKE_SOURCE_DIR}/inc/PerfectPrefetcher.h
@@ -73,7 +74,7 @@ set(COMMON_FILES
     SharedMemoryCache.cpp
     NetworkCache.cpp
     LocalFileCache.cpp
-    BlockSizeTranslationCache.cpp
+#    BlockSizeTranslationCache.cpp
     CacheStats.cpp
     Loggable.cpp
     Prefetcher.cpp

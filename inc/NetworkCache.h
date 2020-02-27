@@ -80,7 +80,7 @@
 
 class NetworkCache : public Cache {
   public:
-    NetworkCache(std::string cacheName, PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> &txPool, PriorityThreadPool<std::packaged_task<Request *()>> &decompPool);
+    NetworkCache(std::string cacheName, CacheType type, PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> &txPool, PriorityThreadPool<std::packaged_task<Request *()>> &decompPool);
     virtual ~NetworkCache();
 
     bool writeBlock(Request *req);
@@ -92,7 +92,7 @@ class NetworkCache : public Cache {
 
     void printStats();
 
-    static Cache *addNewNetworkCache(std::string cacheName, PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> &txPool, PriorityThreadPool<std::packaged_task<Request *()>> &decompPool);
+    static Cache *addNewNetworkCache(std::string cacheName, CacheType type, PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> &txPool, PriorityThreadPool<std::packaged_task<Request *()>> &decompPool);
     void addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
 
   private:

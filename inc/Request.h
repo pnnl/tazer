@@ -75,6 +75,7 @@
 #ifndef REQUEST_H
 #define REQUEST_H
 #include "Timer.h"
+#include "CacheTypes.h"
 #include <string.h>
 #include <unordered_map>
 
@@ -89,12 +90,13 @@ struct Request {
     uint64_t retryTime;
     std::unordered_map<Cache *, uint8_t> reservedMap;
     bool ready;
-    std::string waitingCache;
+    // std::string waitingCache;
+    CacheType waitingCache;
 
     // Request() : data(NULL),originating(NULL),blkIndex(0),fileIndex(0),size(0){
 
     // }
-    Request(uint32_t blk, uint32_t fileIndex, uint64_t size, Cache *orig, uint8_t *data) : data(data), originating(orig), blkIndex(blk), fileIndex(fileIndex), size(size), time(Timer::getCurrentTime()),retryTime(0), ready(false), waitingCache("") {
+    Request(uint32_t blk, uint32_t fileIndex, uint64_t size, Cache *orig, uint8_t *data) : data(data), originating(orig), blkIndex(blk), fileIndex(fileIndex), size(size), time(Timer::getCurrentTime()),retryTime(0), ready(false), waitingCache(CacheType::empty) {
     }
 };
 #endif //REQUEST_H

@@ -90,7 +90,7 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-UnboundedCache::UnboundedCache(std::string cacheName, uint64_t blockSize) : Cache(cacheName),
+UnboundedCache::UnboundedCache(std::string cacheName, CacheType type, uint64_t blockSize) : Cache(cacheName,type),
                                                                             _blockSize(blockSize),
                                                                             _outstanding(0) {
 
