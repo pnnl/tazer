@@ -225,3 +225,14 @@ void LocalFileCache::addFile(uint32_t index, std::string filename, uint64_t bloc
         _nextLevel->addFile(index, filename, blockSize, fileSize);
     }
 }
+
+void LocalFileCache::removeFile(uint32_t index){
+    _lock->writerLock();
+    auto file = _fstreamMap[index];
+    _fstreamMap.erase(index);
+    _fileMap.erase(index);
+    file.first->close();
+    delete file.first;
+    delete file.second;
+    _lock->writerUnlock();
+}

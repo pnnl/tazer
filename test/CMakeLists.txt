@@ -74,3 +74,5 @@ configure_file(ConvertToRecords.py ${CMAKE_BINARY_DIR}/test/ConverToRecords.py @
 
 add_executable(PriorityThreadPoolTest PriorityThreadPoolTest.cpp)
 target_link_libraries(PriorityThreadPoolTest testLib)
+
+configure_file(FileStressTest.sh ${CMAKE_BINARY_DIR}/test/FileStressTest.sh @ONLY)
