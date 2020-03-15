@@ -1,22 +1,15 @@
 -*-Mode: markdown;-*-
 
-TAZeR (Transparent Asynchronous Zero-copy Remote I/O)
-============================================================
+$Id$
 
-* URL:
+
+TAZeR (Transparent Asynchronous Zero-copy Remote I/O)
+=============================================================================
+
+* URLs:
   - https://github.com/pnnl/tazer/
   - https://gitlab.pnnl.gov/perf-lab-hub/tazer
 
-* People
-  - Joshua Suetterlein
-  - Ryan D. Friese
-  - Nathan R. Tallent
-
-* Contacting:
-  _firstname_._lastname_@pnnl.gov
-
-Description:
-------------
 
 TAZeR is a remote I/O framework that reduces effective data access latency. It was motivated by scientific workflow analytics. In these workloads inputs are large and read intensive, and include complex access patterns. Outputs are comparatively small and do not overwrite inputs, resulting in a simple data consistency model.
 
@@ -27,8 +20,21 @@ TAZeR combines state-of-the-art techniques to lower data access latencies and in
 - TAZeR is scalable: it introduces _no_ client-server bottlenecks: each client is ephemeral and connected to a task's process; all servers are associated with a persistent file system (and there can be multiple servers).
 
 
+* Contacts: _firstname_._lastname_@pnnl.gov
+  - Ryan D. Friese
+  - Joshua Suetterlein
+  - Nathan R. Tallent
+
+
+* Contributors:
+  - Ryan D. Friese (PNNL)
+  - Joshua Suetterlein (PNNL)
+  - Nathan R. Tallent (PNNL)
+
+
+
 References:
-------------
+-----------------------------------------------------------------------------
 
 * Joshua Suetterlein, Ryan D. Friese, Nathan R. Tallent, and Malachi Schram, "TAZeR: Hiding the cost of remote I/O in distributed scientific workflows," in Proc. of the 2019 IEEE Intl. Conf. on Big Data, IEEE Computer Society, December 2019. http://doi.org/doi.org/10.1109/BigData47090.2019.9006418
 
