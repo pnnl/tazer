@@ -79,3 +79,6 @@ if(CURL)
     add_executable(SimpleUrlTest SimpleUrlTest.cpp)
     target_link_libraries(SimpleUrlTest testLib)
 endif()
+
+configure_file(FileStressTest.sh ${CMAKE_BINARY_DIR}/test/FileStressTest.sh @ONLY)
+

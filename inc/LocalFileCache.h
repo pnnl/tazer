@@ -90,6 +90,7 @@ class LocalFileCache : public Cache {
 
     static Cache *addNewLocalFileCache(std::string cacheName, CacheType type);
     void addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
+    void removeFile(uint32_t index);
 
   private:
     uint8_t *getBlockData(std::ifstream *file, uint32_t blockIndex, uint64_t blockSize,uint64_t fileSize);

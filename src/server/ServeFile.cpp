@@ -299,6 +299,7 @@ ServeFile::~ServeFile() {
     if (_output && _remove) {
         remove(_name.c_str());
     }
+    ((LocalFileCache*)_cache.getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
     log(this) << _name << " closed" << std::endl;
 }
 

@@ -183,6 +183,9 @@ void LocalFile::close() {
     if (_active.compare_exchange_strong(prev, false)) {
         DPRINTF("CLOSE: _FC: %p _BC: %p\n", _fc, _bc);
     }
+    if (Config::useLocalFileCache) {
+        ((LocalFileCache*)_cache->getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
+    }
     lock.unlock();
 }
 

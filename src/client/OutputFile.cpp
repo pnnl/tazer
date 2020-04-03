@@ -143,11 +143,12 @@ void OutputFile::close() {
     //std::cout<<"[TAZER] " << "closing bi: " << _bufferIndex << " bc: " << _bufferCnt << " bfp: " << _bufferFp << " " << _totalCnt << std::endl;
     if (_bufferCnt > 0) {
         uint32_t seqNum = _seqNum.fetch_add(1);
-        //char * buffer = new char[Config::outputFileBufferSize];
+        char * buffer = new char[Config::outputFileBufferSize];
         if (_compress)
             addCompressTask(_buffer, _bufferCnt, _bufferFp, seqNum);
         else
             addTransferTask(_buffer, _bufferCnt, _bufferCnt, _bufferFp, seqNum);
+        _buffer = buffer;
         //std::cout<<"[TAZER] " << "final add tx task" << std::endl;
     }
     std::unique_lock<std::mutex> lock(_openCloseLock);
