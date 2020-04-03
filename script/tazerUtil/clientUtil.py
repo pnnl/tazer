@@ -31,6 +31,7 @@ class TazerClient:
         else:
             newLdPreload = self.path + ":" + oldLdPreload
         os.environ["LD_PRELOAD"] = newLdPreload
+        
         util.printCommand(args)
         process = sp.Popen(args, stdout=self.outFile, stderr=self.outFile, universal_newlines=True)
         process.wait()

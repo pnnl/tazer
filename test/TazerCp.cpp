@@ -153,7 +153,6 @@ int main(int argc, char *argv[]) {
 
         dFile = open(destFileName.c_str(), O_WRONLY | O_CREAT, 0644); //Open file for writing
         if (dFile != -1) {
-            std::cout << "HEREEEEE" << std::endl;
             fileSize = getFileSize(sourceFileName);
             numBlocks = fileSize / blockSize;
             if (fileSize % blockSize)

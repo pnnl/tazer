@@ -83,7 +83,7 @@
 
 class LocalFile : public TazerFile {
   public:
-    LocalFile(std::string fileName, int fd, bool openFile = true);
+    LocalFile(std::string name, std::string metaName, int fd, bool openFile = true);
     ~LocalFile();
 
     static void cache_init(void);

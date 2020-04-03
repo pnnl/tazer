@@ -89,6 +89,7 @@
 #include <unordered_set>
 //#include "ErrorTester.h"
 #include "InputFile.h"
+#include "LocalFile.h"
 #include "RSocketAdapter.h"
 #include "ReaderWriterLock.h"
 #include "TazerFile.h"
@@ -150,6 +151,7 @@ void __attribute__((constructor)) tazerInit(void) {
         timer.start();
         Loggable::mtx_cout = new std::mutex();
         InputFile::_cache = new Cache(BASECACHENAME, CacheType::base);
+        LocalFile::_cache = new Cache(BASECACHENAME, CacheType::base);
         ConnectionPool::useCnt = new std::unordered_map<std::string, uint64_t>();
         ConnectionPool::consecCnt = new std::unordered_map<std::string, uint64_t>();
         ConnectionPool::stats = new std::unordered_map<std::string, std::pair<double, double>>();
@@ -221,6 +223,7 @@ void __attribute__((destructor)) tazerCleanup(void) {
 
     timer.end(Timer::MetricType::tazer, Timer::Metric::destructor);
     delete InputFile::_cache; //desturctor time tracked by each cache...
+    delete LocalFile::_cache; //desturctor time tracked by each cache...
     timer.start();
     FileCacheRegister::closeFileCacheRegister();
     ConnectionPool::removeAllConnectionPools();
@@ -304,7 +307,6 @@ inline auto innerWrapper(int fd, bool &isTazerFile, Func tazerFun, FuncLocal loc
     unsigned int fp = 0;
     if (init && TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, fp)) {
         isTazerFile = true;
-
         return tazerFun(file, fp, args...);
     }
     return localFun(args...);
@@ -508,8 +510,14 @@ int tazerStat(std::string name, std::string metaName, TazerFile::Type type, int 
         buf->st_size = (off_t)file->fileSize();
     else {
         int fd = (*unixopen)(metaName.c_str(), O_RDONLY, 0);
-        InputFile tempFile(name, metaName, fd, false);
-        buf->st_size = tempFile.fileSize();
+        if(type == TazerFile::Type::Input) {
+            InputFile tempFile(name, metaName, fd, false);
+            buf->st_size = tempFile.fileSize();
+        }
+        else if(type == TazerFile::Type::Local) {
+            LocalFile tempFile(name, metaName, fd, false);
+            buf->st_size = tempFile.fileSize();
+        }
         (*unixclose)(fd);
     }
     return ret;

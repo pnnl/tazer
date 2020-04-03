@@ -1,5 +1,5 @@
 add_library(testLib SHARED $<TARGET_OBJECTS:common>)
-target_link_libraries(testLib ${RDMACM_LIB} ${RT_LIB} stdc++fs)
+target_link_libraries(testLib ${RDMACM_LIB} ${RT_LIB} ${CURL_LIB} ${SSL_LIB} stdc++fs)
 
 add_executable(ServerTest ServerTest.cpp)
 target_link_libraries(ServerTest testLib)
@@ -74,3 +74,8 @@ configure_file(ConvertToRecords.py ${CMAKE_BINARY_DIR}/test/ConverToRecords.py @
 
 add_executable(PriorityThreadPoolTest PriorityThreadPoolTest.cpp)
 target_link_libraries(PriorityThreadPoolTest testLib)
+
+if(CURL)
+    add_executable(SimpleUrlTest SimpleUrlTest.cpp)
+    target_link_libraries(SimpleUrlTest testLib)
+endif()

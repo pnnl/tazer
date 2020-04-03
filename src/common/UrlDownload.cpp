@@ -76,7 +76,7 @@
 #include "Config.h"
 #include <algorithm>
 
-//#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
 //This is afile to test
@@ -181,11 +181,12 @@ size_t WriteMemoryCallback(void * contents, size_t size, size_t nmemb, void * us
         printf("Out-of-memory\n");
         return 0;
     }
-  mem->memory = ptr;
-  memcpy(&(mem->memory[mem->size]), contents, realsize);
-  mem->size += realsize;
-  mem->memory[mem->size] = '\0';
-  return realsize;
+    DPRINTF("RealSize: %lu\n", realsize);
+    mem->memory = ptr;
+    memcpy(&(mem->memory[mem->size]), contents, realsize);
+    mem->size += realsize;
+    mem->memory[mem->size] = '\0';
+    return realsize;
 }
 
 //Returns the size of a file to download
@@ -206,7 +207,8 @@ unsigned int UrlDownload::size() {
     curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
     curl_easy_setopt(handle, CURLOPT_TIMEOUT, Config::UrlTimeOut);
     curl_easy_setopt(handle, CURLOPT_URL, _url.c_str());
-    curl_easy_perform(handle);
+    CURLcode errornum = curl_easy_perform(handle);
+    DPRINTF("%s\n", curl_easy_strerror(errornum));
     
     unsigned int ret = 0;
     // printf("%s", chunk.memory);
@@ -219,6 +221,9 @@ unsigned int UrlDownload::size() {
         for(end = start; end && *end != '\n'; end++);
         *end = '\0';
         ret = atoi(start);
+    }
+    else {
+        std::cout << "No content-length" << std::endl;
     }
     free(chunk.memory);
     return ret;

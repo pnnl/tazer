@@ -89,6 +89,7 @@
 #include "InputFile.h"
 #include "TazerFile.h"
 #include "OutputFile.h"
+#include "LocalFile.h"
 #include "Timer.h"
 #include "UnixIO.h"
 
@@ -314,18 +315,17 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
                 return temp;
             });
     }
-    // TODO: reimplement local file with new cache structure
-    // else if (type == TazerFile::Local) {
-    //     return Trackable<std::string, TazerFile *>::AddTrackable(
-    //         fileName, [=]() -> TazerFile * {
-    //             TazerFile *temp = new LocalFile(fileName, fd, open);
-    //             if (open && temp && temp->active() == 0) {
-    //                 delete temp;
-    //                 return NULL;
-    //             }
-    //             return temp;
-    //         });
-    // }
+    else if (type == TazerFile::Local) {
+        return Trackable<std::string, TazerFile *>::AddTrackable(
+            fileName, [=]() -> TazerFile * {
+                TazerFile *temp = new LocalFile(fileName, metaName, fd, open);
+                if (open && temp && temp->active() == 0) {
+                    delete temp;
+                    return NULL;
+                }
+                return temp;
+            });
+    }
     return NULL;
 }
 
