@@ -295,12 +295,15 @@ void InputFile::open() {
     // std::cout << "done open: " << _name << " " << servers_requested << " " << _transferPool.numTasks() << std::endl;
 }
 
-//Close doesn't really do much, we hedge our bet that we will likey reopen the file thus we keep our connections to the servers active...
+//Close doesn't really do much, we hedge our bet that we will likey reopen the file thus we keep our connections to the servers active...but we do close a file descriptor if localfilecache is used
 void InputFile::close() {
     std::unique_lock<std::mutex> lock(_openCloseLock);
     bool prev = true;
     if (_active.compare_exchange_strong(prev, false)) {
         DPRINTF("CLOSE: _FC: %p _BC: %p\n", _fc, _bc);
+    }
+    if (Config::useLocalFileCache) {
+        ((LocalFileCache*)_cache->getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
     }
     lock.unlock();
     // std::cout << "Closing file " << _name << std::endl;
