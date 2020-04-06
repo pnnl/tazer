@@ -313,7 +313,6 @@ int UrlDownload::sizeUrl(std::string path) {
 
 std::string UrlDownload::downloadUrl(std::string path) {
     if(strstr(path.c_str(), "http://") || strstr(path.c_str(), "https://")) {
-        std::cout << "Downloading file " << path << std::endl;
         UrlDownload url(path);
         url.download();
         return url.name();
