@@ -1,4 +1,4 @@
-// -*-Mode: C++;-*-
+// -*-Mode: C++;-*- // technically C99
 
 //*BeginLicense**************************************************************
 //
@@ -72,61 +72,23 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef URLDOWNLOAD_H
-#define URLDOWNLOAD_H
+#ifndef URLFILECACHE_H
+#define URLFILECACHE_H
+#include "Cache.h"
+#include "LocalFileCache.h"
 
-#ifdef USE_CURL
+#define URLFILECACHENAME "urlfilecache"
 
-#include <iostream>
-#include <string.h>
-#include <string>
-#include <mutex>
-#include <queue>
-#include <curl/curl.h>
-#include "ReaderWriterLock.h"
-
-/* Building a class that takes a url and a filepath and then downloads the file to the filepath.*/
-class UrlDownload {
-private:
-    std::string _url;
-    std::string _filepath;
-    
-    static std::mutex _lock;
-    static ReaderWriterLock _initLock;
-    static std::queue<CURL*> _handles;
-
-    template<class T>
-    auto getHeader(CURL * handle, T fn);
-    unsigned int countData(CURL * handle);
-    void printHeader(CURL * handle);
-
-public:
-    UrlDownload(std::string url);
-    ~UrlDownload();
-    
-    CURL * resetHandle(CURL * handle);
-    CURL * getHandle();
-    void retHandle(CURL * handle);
-    
-    bool download();
-    std::string name();
-    unsigned int size();
-    
-    static std::string downloadUrl(std::string path);
-    static int sizeUrl(std::string path);
-    static bool checkDownloadable(std::string path);
+class UrlFileCache : public LocalFileCache {
+  public:
+    UrlFileCache(std::string cacheName, CacheType type);
+    virtual ~UrlFileCache();
+    void addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
+    void removeFile(uint32_t index);
+    static Cache * addNewUrlFileCache(std::string cacheName, CacheType type);
+  private:
+    ReaderWriterLock *_lock;
+    std::unordered_map<uint32_t, std::string> _urlMap;
 };
 
-#define checkUrlPath(path) UrlDownload::checkDownloadable(path)
-#define sizeUrlPath(path) UrlDownload::sizeUrl(path)
-#define downloadUrlPath(path) UrlDownload::downloadUrl(path)
-
-#else
-
-#define checkUrlPath(path) false
-#define sizeUrlPath(path) -1
-#define downloadUrlPath(path) path
-
-#endif
-#endif /* URLDOWNLOAD_H */
-
+#endif /* URLFILECACHE_H */

@@ -83,8 +83,9 @@ set(COMMON_FILES
 )
 
 if(CURL)
-    set(COMMON_HEADERS ${COMMON_HEADERS} ${CMAKE_SOURCE_DIR}/inc/UrlDownload.h)
-    set(COMMON_FILES ${COMMON_FILES} UrlDownload.cpp)
+    set(COMMON_HEADERS ${COMMON_HEADERS} ${CMAKE_SOURCE_DIR}/inc/UrlDownload.h 
+                                         ${CMAKE_SOURCE_DIR}/inc/UrlFileCache.h)
+    set(COMMON_FILES ${COMMON_FILES} UrlDownload.cpp UrlFileCache.cpp)
 endif()
 
 add_library(common OBJECT ${COMMON_HEADERS} ${COMMON_FILES})

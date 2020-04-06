@@ -72,61 +72,75 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef URLDOWNLOAD_H
-#define URLDOWNLOAD_H
+#include "UrlFileCache.h"
+#include "UrlDownload.h"
+#include "Config.h"
+#include "Connection.h"
+#include "ConnectionPool.h"
+#include "Message.h"
+#include "ReaderWriterLock.h"
+#include "Timer.h"
+#include "lz4.h"
+#include "xxhash.h"
 
-#ifdef USE_CURL
-
-#include <iostream>
+#include <chrono>
+#include <fcntl.h>
+#include <future>
+#include <memory>
 #include <string.h>
 #include <string>
-#include <mutex>
-#include <queue>
-#include <curl/curl.h>
-#include "ReaderWriterLock.h"
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
-/* Building a class that takes a url and a filepath and then downloads the file to the filepath.*/
-class UrlDownload {
-private:
-    std::string _url;
-    std::string _filepath;
-    
-    static std::mutex _lock;
-    static ReaderWriterLock _initLock;
-    static std::queue<CURL*> _handles;
+//#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+#define DPRINTF(...)
 
-    template<class T>
-    auto getHeader(CURL * handle, T fn);
-    unsigned int countData(CURL * handle);
-    void printHeader(CURL * handle);
+UrlFileCache::UrlFileCache(std::string cacheName, CacheType type) : LocalFileCache(cacheName,type) {
+    std::cout << "[TAZER] " << "Constructing " << _name << " URLFileCache" << std::endl;
+    _lock = new ReaderWriterLock();
+}
 
-public:
-    UrlDownload(std::string url);
-    ~UrlDownload();
-    
-    CURL * resetHandle(CURL * handle);
-    CURL * getHandle();
-    void retHandle(CURL * handle);
-    
-    bool download();
-    std::string name();
-    unsigned int size();
-    
-    static std::string downloadUrl(std::string path);
-    static int sizeUrl(std::string path);
-    static bool checkDownloadable(std::string path);
-};
+UrlFileCache::~UrlFileCache() {
+    std::cout << "[TAZER] " << "Deleting " << _name << " URLFileCache" << std::endl;
+}
 
-#define checkUrlPath(path) UrlDownload::checkDownloadable(path)
-#define sizeUrlPath(path) UrlDownload::sizeUrl(path)
-#define downloadUrlPath(path) UrlDownload::downloadUrl(path)
+Cache *UrlFileCache::addNewUrlFileCache(std::string cacheName, CacheType type) {
+    return Trackable<std::string, Cache *>::AddTrackable(
+        cacheName, [&]() -> Cache * {
+            Cache *temp = new UrlFileCache(cacheName, type);
+            return temp;
+        });
+}
 
-#else
+void UrlFileCache::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
+    std::cout << "URLFILECACHE ADDFILE" << std::endl;
+    std::string name = filename;
+    if(checkUrlPath(filename)) {
+        name = downloadUrlPath(filename);
+        if(Config::deleteDownloads) {
+            _lock->writerLock();
+            _urlMap.emplace(index, name);
+            std::cout << index << " " << name << std::endl;
+            _lock->writerUnlock();
+        }
+    }
+    LocalFileCache::addFile(index, name, blockSize, fileSize);
+}
 
-#define checkUrlPath(path) false
-#define sizeUrlPath(path) -1
-#define downloadUrlPath(path) path
+void UrlFileCache::removeFile(uint32_t index) {
+    std::cout << "Removing file " << index << std::endl;
+    if(Config::deleteDownloads) {
+        _lock->writerLock();
 
-#endif
-#endif /* URLDOWNLOAD_H */
-
+        auto it = _urlMap.find(index);
+        if (it != _urlMap.end()) {
+            std::cout << it->second << std::endl;
+            remove(it->second.c_str());
+            _urlMap.erase (it);
+        }
+        _lock->writerUnlock();
+    }
+    LocalFileCache::removeFile(index);
+}

@@ -127,6 +127,16 @@ UrlDownload::~UrlDownload() {
     
 }
 
+CURL * UrlDownload::resetHandle(CURL * handle) {
+    //These are the base options
+    curl_easy_reset(handle);
+    curl_easy_setopt(handle, CURLOPT_URL, _url.c_str());
+    curl_easy_setopt(handle, CURLOPT_USERAGENT, "tazer");
+    curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, true);
+    curl_easy_setopt(handle, CURLOPT_TIMEOUT, Config::UrlTimeOut);
+    return handle;
+}
+
 CURL * UrlDownload::getHandle() {
     CURL * handle = NULL;
     while(!handle) {
@@ -137,7 +147,7 @@ CURL * UrlDownload::getHandle() {
         }
         lock.unlock();
     }
-    return handle;
+    return resetHandle(handle);
 }
 
 void UrlDownload::retHandle(CURL * handle) {
@@ -146,22 +156,39 @@ void UrlDownload::retHandle(CURL * handle) {
     lock.unlock();
 }
 
-bool UrlDownload::download(){
+//This downloads remote file to file pointer
+bool UrlDownload::download() {
     bool ret = false;
     CURL * handle = getHandle();
     DPRINTF("download filepath: %s\n", _filepath.c_str());
     FILE * fp = fopen(_filepath.c_str(), "wb");
     if(fp) {
-        curl_easy_reset(handle);
-        curl_easy_setopt(handle, CURLOPT_USERAGENT, "tazer");
-        curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, NULL);
-        curl_easy_setopt(handle, CURLOPT_URL, _url.c_str());
         curl_easy_setopt(handle, CURLOPT_WRITEDATA, fp);
+        curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, NULL);
         curl_easy_perform(handle);
         fclose(fp);
         ret = true;
     }
     retHandle(handle);
+    return ret;
+}
+
+//This is a CURL writeback used to store memory locally
+size_t CountMemoryCallback(void * contents, size_t size, size_t nmemb, void * userp) {
+    size_t packetSize = size * nmemb;
+    size_t * totalSize = (size_t*) userp;
+    (*totalSize)+=packetSize;
+    DPRINTF("PACKETSIZE: %lu\n", packetSize);
+    return packetSize;
+}
+
+//This will return the size of the file to download by downloading to memory (without saving)
+unsigned int UrlDownload::countData(CURL * handle) {
+    unsigned int ret = 0;
+    curl_easy_setopt(handle, CURLOPT_WRITEDATA, (void *)&ret);
+    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, CountMemoryCallback);
+    CURLcode errornum = curl_easy_perform(handle);
+    DPRINTF("%s\n", curl_easy_strerror(errornum));
     return ret;
 }
 
@@ -171,9 +198,9 @@ struct MemoryStruct {
     size_t size;
 };
  
- //This is a CURL writeback used to store memory locally
-size_t WriteMemoryCallback(void * contents, size_t size, size_t nmemb, void * userp)
-{
+//This is a CURL writeback used to store memory locally
+template<class T=void*>
+size_t WriteMemoryCallback(T contents, size_t size, size_t nmemb, void * userp) {
     size_t realsize = size * nmemb;
     struct MemoryStruct * mem = (struct MemoryStruct *) userp;
     char * ptr = (char*) realloc(mem->memory, mem->size + realsize + 1);
@@ -183,63 +210,95 @@ size_t WriteMemoryCallback(void * contents, size_t size, size_t nmemb, void * us
     }
     DPRINTF("RealSize: %lu\n", realsize);
     mem->memory = ptr;
-    memcpy(&(mem->memory[mem->size]), contents, realsize);
+    memcpy(&(mem->memory[mem->size]), (void*)contents, realsize);
     mem->size += realsize;
     mem->memory[mem->size] = '\0';
     return realsize;
 }
 
-//Returns the size of a file to download
-unsigned int UrlDownload::size() {
-    CURL * handle = getHandle();
-    
+//This will only download the header.  Use the function fn to parse it.
+template<class T>
+auto UrlDownload::getHeader(CURL * handle, T fn) {
     struct MemoryStruct chunk;
     chunk.memory = (char*) malloc(1);
     chunk.memory[0] = '\0';
     chunk.size = 0;
     
-    curl_easy_reset(handle);
-    curl_easy_setopt(handle, CURLOPT_USERAGENT, "tazer");
+    curl_easy_setopt(handle, CURLOPT_HEADERDATA, (void *)&chunk);
+    curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, WriteMemoryCallback<char*>);
     curl_easy_setopt(handle, CURLOPT_NOBODY, true);
-    curl_easy_setopt(handle, CURLOPT_HEADER, true);
-    curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, true);
-    curl_easy_setopt(handle, CURLOPT_WRITEDATA, (void *)&chunk);
-    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-    curl_easy_setopt(handle, CURLOPT_TIMEOUT, Config::UrlTimeOut);
-    curl_easy_setopt(handle, CURLOPT_URL, _url.c_str());
     CURLcode errornum = curl_easy_perform(handle);
     DPRINTF("%s\n", curl_easy_strerror(errornum));
-    
-    unsigned int ret = 0;
-    // printf("%s", chunk.memory);
-    char * pos = strstr(chunk.memory, "Content-Length: ");
-    if(pos) {
-        char * start;
-        for(start = pos; start && *start != ' '; start++);
-        
-        char * end;
-        for(end = start; end && *end != '\n'; end++);
-        *end = '\0';
-        ret = atoi(start);
+
+    if(errornum != CURLE_OK){
+        free(chunk.memory);
+        chunk.memory = NULL;
     }
-    else {
-        std::cout << "No content-length" << std::endl;
-    }
-    free(chunk.memory);
+
+    auto ret = fn(chunk.memory);
+    if(chunk.memory)
+        free(chunk.memory);
     return ret;
+}
+
+//Header parsing function - Prints data
+void printHeader(char * data) {
+    if(data)
+        printf("%s\n", data);
+}
+
+//Header parsing function - Looks for content length and returns it
+unsigned int checkHeaderForContentLength(char * data) {
+    unsigned int ret = 0;
+    if(data) {
+        char * pos = strstr(data, "Content-Length: ");
+        if(pos) {
+            char * start;
+            for(start = pos; start && *start != ' '; start++);
+            
+            char * end;
+            for(end = start; end && *end != '\n'; end++);
+            *end = '\0';
+            ret = atoi(start);
+        }
+    }
+    return ret;
+}
+
+//Header parsing function - Checks for 404 Not Found
+bool checkHeaderForNotFound(char * data) {
+    if(data) {
+        char * pos = strstr(data, "HTTP/1.1 404 Not Found");
+        // if(pos) printf("%s\n", pos);
+        return !pos;
+    }
+    return false;
+}
+
+//Returns the size of a file to download
+unsigned int UrlDownload::size() {
+    CURL * handle = getHandle();
+    if(strstr(_url.c_str(), "http://")) {
+        unsigned int size = getHeader(handle, checkHeaderForContentLength);
+        if(size)
+            return size;
+        resetHandle(handle);
+    }
+    return countData(handle);
 }
 
 std::string UrlDownload::name() {
     return _filepath;
 }
 
-std::string UrlDownload::downloadUrl(std::string path) {
+//Returns if the file can be downloaded by checking headers
+bool UrlDownload::checkDownloadable(std::string path) {
     if(strstr(path.c_str(), "http://") || strstr(path.c_str(), "https://")) {
         UrlDownload url(path);
-        url.download();
-        return url.name();
+        CURL * handle = url.getHandle();
+        return url.getHeader(handle, checkHeaderForNotFound);
     }
-    return path;
+    return false;
 }
 
 //https does not always set content-length... we need to figure a way around...
@@ -247,8 +306,17 @@ int UrlDownload::sizeUrl(std::string path) {
     int ret = -1;
     if(strstr(path.c_str(), "http://") || strstr(path.c_str(), "https://")) {
         UrlDownload url(path);
-        std::cout << "getting size..." << std::endl;
         ret = url.size();
     }
     return ret;
+}
+
+std::string UrlDownload::downloadUrl(std::string path) {
+    if(strstr(path.c_str(), "http://") || strstr(path.c_str(), "https://")) {
+        std::cout << "Downloading file " << path << std::endl;
+        UrlDownload url(path);
+        url.download();
+        return url.name();
+    }
+    return path;
 }

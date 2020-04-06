@@ -93,6 +93,8 @@
 #include "UnixIO.h"
 #include "lz4.h"
 #include "xxhash.h"
+#include "UrlDownload.h"
+#include "UrlFileCache.h"
 #include <fcntl.h>
 #include <fstream>
 #include <iomanip>
@@ -128,7 +130,11 @@ void LocalFile::cache_init(void) {
         LocalFile::_cache->addCacheLevel(c, ++level);
     }
 
+    #ifdef USE_CURL
+    c = UrlFileCache::addNewUrlFileCache(URLFILECACHENAME, CacheType::local);
+    #else
     c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME, CacheType::local);
+    #endif
     std::cerr << "[TAZER] " << "filelock cache: " << (void *)c << std::endl;
     LocalFile::_cache->addCacheLevel(c, ++level);
 }
@@ -139,24 +145,19 @@ LocalFile::LocalFile(std::string name, std::string metaName, int fd, bool openFi
                                                                                       _regFileIndex(id()) { //This is if there is no file cache...
     std::call_once(local_init_flag, LocalFile::cache_init);
     std::unique_lock<std::mutex> lock(_openCloseLock);
-    struct stat sbuf;
-    if (stat(_name.c_str(), &sbuf) == 0) {
-        _fileSize = sbuf.st_size;
-        _blkSize = Config::memoryCacheBlocksize;
-
-        if (_fileSize < _blkSize)
-            _blkSize = _fileSize;
-
-        _numBlks = _fileSize / _blkSize;
-        if (_fileSize % _blkSize != 0)
-            _numBlks++;
-
-        if(openFile)
-            open();
+    
+    _fileSize = sizeUrlPath(name);
+    if(_fileSize == (uint64_t) -1) {
+        struct stat sbuf;
+        if (stat(_name.c_str(), &sbuf) == 0)
+            _fileSize = sbuf.st_size;
     }
+    if(_fileSize == (uint64_t) -1)
+        std::cout << "Failed to open file" << _name << std::endl;
+    else if(openFile)
+        open();
     else {
         _active.store(false);
-        std::cout << "Failed to open file" << _name << std::endl;
     }
     lock.unlock();
 }
@@ -167,6 +168,15 @@ LocalFile::~LocalFile() {
 }
 
 void LocalFile::open() {
+    _blkSize = Config::memoryCacheBlocksize;
+
+    if (_fileSize < _blkSize)
+        _blkSize = _fileSize;
+
+    _numBlks = _fileSize / _blkSize;
+    if (_fileSize % _blkSize != 0)
+        _numBlks++;
+
     bool prev = false;
     if (_active.compare_exchange_strong(prev, true)) {
         FileCacheRegister *reg = FileCacheRegister::openFileCacheRegister();
@@ -182,9 +192,11 @@ void LocalFile::close() {
     bool prev = true;
     if (_active.compare_exchange_strong(prev, false)) {
         DPRINTF("CLOSE: _FC: %p _BC: %p\n", _fc, _bc);
-    }
-    if (Config::useLocalFileCache) {
+        #ifdef USE_CURL
+        ((UrlFileCache*)(_cache->getCacheByName(URLFILECACHENAME)))->removeFile(_regFileIndex);
+        #else
         ((LocalFileCache*)_cache->getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
+        #endif
     }
     lock.unlock();
 }

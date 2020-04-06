@@ -343,7 +343,7 @@ bool TazerFile::removeTazerFile(std::string fileName) {
 }
 
 bool TazerFile::removeTazerFile(TazerFile *file) {
-    return removeTazerFile(file->_metaName);
+    return removeTazerFile(file->_name);
 }
 
 TazerFile *TazerFile::lookUpTazerFile(std::string fileName) {

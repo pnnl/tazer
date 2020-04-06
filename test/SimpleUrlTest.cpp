@@ -77,10 +77,11 @@
 
 int main(int argc, char *argv[]) {
     std::string inUrl(argv[1]);
-    int size = sizeUrlPath(inUrl);
-    std::cout << "Downloading size: " << size << std::endl;
-    std::string path = downloadUrlPath(inUrl);
-    std::cout << path << std::endl;
+    if(checkUrlPath(inUrl)) {
+        int size = sizeUrlPath(inUrl);
+        std::cout << "Downloading size: " << size << std::endl;
+        std::string path = downloadUrlPath(inUrl);
+        std::cout << path << std::endl;
+    }
     return 0;
 }
-
