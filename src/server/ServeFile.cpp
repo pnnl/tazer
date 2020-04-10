@@ -300,11 +300,11 @@ ServeFile::~ServeFile() {
     _pool.terminate();
 
     if (_output && _remove) {
-        std::cout<<"removing: "<<_name<<std::endl;
+        // std::cout<<"removing: "<<_name<<std::endl;
         remove(_name.c_str());
     }
     else{
-        std::cout<<" not removing: "<<_name<<std::endl;
+        // std::cout<<" not removing: "<<_name<<std::endl;
     }
     if (!_output) {
         ((LocalFileCache*)_cache.getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
