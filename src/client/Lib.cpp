@@ -107,7 +107,7 @@ std::once_flag log_flag;
 bool init = false;
 ReaderWriterLock vLock;
 
-static std::unordered_set<std::string> track_files;
+std::unordered_set<std::string>* track_files = NULL; //this is a pointer cause we access in ((attribute)) constructor and initialization isnt guaranteed
 static std::unordered_set<int> track_fd;
 static std::unordered_set<FILE *> track_fp;
 static std::unordered_set<int> ignore_fd;
@@ -154,13 +154,15 @@ void __attribute__((constructor)) tazerInit(void) {
         ConnectionPool::consecCnt = new std::unordered_map<std::string, uint64_t>();
         ConnectionPool::stats = new std::unordered_map<std::string, std::pair<double, double>>();
 
+        track_files = new std::unordered_set<std::string>();
         char *temp = getenv("TAZER_LOCAL_FILES");
         if (temp) {
             std::stringstream files(temp);
             while (!files.eof()) {
                 std::string f;
                 getline(files, f, ' ');
-                track_files.emplace(f);
+                printf("%s\n",f.c_str());
+                track_files->insert(f);
             }
         }
 
@@ -217,6 +219,7 @@ void __attribute__((destructor)) tazerCleanup(void) {
                 //}
             }
         }
+        delete track_files;
     }
 
     timer.end(Timer::MetricType::tazer, Timer::Metric::destructor);
@@ -272,7 +275,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
 
 inline bool trackFile(int fd) { return init ? track_fd.count(fd) : false; }
 inline bool trackFile(FILE *fp) { return init ? track_fp.count(fp) : false; }
-inline bool trackFile(const char *name) { return init ? track_files.count(name) : false; }
+inline bool trackFile(const char *name) { return init ? track_files->count(name) : false; }
 
 inline bool ignoreFile(uint64_t fd) { return init ? ignore_fd.count(fd) : false; }
 inline bool ignoreFile(FILE *fp) { return init ? ignore_fp.count(fp) : false; }
