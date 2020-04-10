@@ -145,18 +145,25 @@ void writeToFile(int fd, char *buffer, int size) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc == 3) {
+    if (argc >= 3) {
         std::string sourceFileName(argv[1]);
         std::string destFileName(argv[2]);
-
-        std::cout << sourceFileName << " " << destFileName << std::endl;
+        long bytesToTransfer = 0;
+        if (argc >3){
+            bytesToTransfer = (atol(argv[3]));
+        }
+        std::cout << sourceFileName << " " << destFileName << " " << bytesToTransfer << std::endl;
 
         dFile = open(destFileName.c_str(), O_WRONLY | O_CREAT, 0644); //Open file for writing
         if (dFile != -1) {
-            std::cout << "HEREEEEE" << std::endl;
+            // std::cout << "HEREEEEE" << std::endl;
             fileSize = getFileSize(sourceFileName);
-            numBlocks = fileSize / blockSize;
-            if (fileSize % blockSize)
+            if (bytesToTransfer == 0){
+                bytesToTransfer = fileSize;
+            }
+
+            numBlocks = bytesToTransfer / blockSize;
+            if (bytesToTransfer % blockSize)
                 numBlocks++;
 
             pool.initiate(); //Start local threads to do write
@@ -164,7 +171,7 @@ int main(int argc, char *argv[]) {
             uint64_t time = Timer::getCurrentTime();
 
             for (unsigned int blk = 0; blk < numBlocks; blk++) {
-                pool.addTask([sourceFileName, blk] { //Push blocks to a task pool
+                pool.addTask([sourceFileName, blk,bytesToTransfer] { //Push blocks to a task pool
                     if (id < 0) {                    //Get an id and use it to open file and create a buffer once per thread
                         id = idCount.fetch_add(1);
                         sFiles[id] = open(sourceFileName.c_str(), O_RDONLY);
@@ -173,7 +180,7 @@ int main(int argc, char *argv[]) {
 
                     if (sFiles[id] != -1) {
                         if (buff[id]) {
-                            size_t bytesToCopy = (blk + 1 == numBlocks) ? fileSize - blk * blockSize : blockSize;
+                            size_t bytesToCopy = (blk + 1 == numBlocks) ? bytesToTransfer - blk * blockSize : blockSize;
                             lseek(sFiles[id], blk * blockSize, SEEK_SET);                   //Set the file pos for reading block
                             readFromFile(sFiles[id], buff[id], sizeof(char) * bytesToCopy); //Read block from file
 
