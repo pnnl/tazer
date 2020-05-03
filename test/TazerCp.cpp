@@ -80,6 +80,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <errno.h>
 
 const unsigned int numThreads = 1;
 ThreadPool<std::function<void()>> pool(numThreads);
@@ -158,62 +159,69 @@ int main(int argc, char *argv[]) {
         if (dFile != -1) {
             // std::cout << "HEREEEEE" << std::endl;
             fileSize = getFileSize(sourceFileName);
-            if (bytesToTransfer == 0){
-                bytesToTransfer = fileSize;
-            }
+            if (fileSize > 0) {
+                if (bytesToTransfer == 0){
+                    bytesToTransfer = fileSize;
+                }
 
-            numBlocks = bytesToTransfer / blockSize;
-            if (bytesToTransfer % blockSize)
-                numBlocks++;
+                numBlocks = bytesToTransfer / blockSize;
+                if (bytesToTransfer % blockSize)
+                    numBlocks++;
 
-            pool.initiate(); //Start local threads to do write
+                pool.initiate(); //Start local threads to do write
 
-            uint64_t time = Timer::getCurrentTime();
+                uint64_t time = Timer::getCurrentTime();
 
-            for (unsigned int blk = 0; blk < numBlocks; blk++) {
-                pool.addTask([sourceFileName, blk,bytesToTransfer] { //Push blocks to a task pool
-                    if (id < 0) {                    //Get an id and use it to open file and create a buffer once per thread
-                        id = idCount.fetch_add(1);
-                        sFiles[id] = open(sourceFileName.c_str(), O_RDONLY);
-                        buff[id] = makeBuffer(blockSize);
-                    }
+                for (unsigned int blk = 0; blk < numBlocks; blk++) {
+                    pool.addTask([sourceFileName, blk,bytesToTransfer] { //Push blocks to a task pool
+                        if (id < 0) {                    //Get an id and use it to open file and create a buffer once per thread
+                            id = idCount.fetch_add(1);
+                            sFiles[id] = open(sourceFileName.c_str(), O_RDONLY);
+                            buff[id] = makeBuffer(blockSize);
+                        }
 
-                    if (sFiles[id] != -1) {
-                        if (buff[id]) {
-                            size_t bytesToCopy = (blk + 1 == numBlocks) ? bytesToTransfer - blk * blockSize : blockSize;
-                            lseek(sFiles[id], blk * blockSize, SEEK_SET);                   //Set the file pos for reading block
-                            readFromFile(sFiles[id], buff[id], sizeof(char) * bytesToCopy); //Read block from file
+                        if (sFiles[id] != -1) {
+                            if (buff[id]) {
+                                size_t bytesToCopy = (blk + 1 == numBlocks) ? bytesToTransfer - blk * blockSize : blockSize;
+                                lseek(sFiles[id], blk * blockSize, SEEK_SET);                   //Set the file pos for reading block
+                                readFromFile(sFiles[id], buff[id], sizeof(char) * bytesToCopy); //Read block from file
 
-                            writeMutex.lock();                                        //Lock file to write
-                            lseek(dFile, blk * blockSize, SEEK_SET);                  //Set the file pos for writing block
-                            writeToFile(dFile, buff[id], sizeof(char) * bytesToCopy); //Write block into file
-                            writeMutex.unlock();                                      //Unlock the destination file
+                                writeMutex.lock();                                        //Lock file to write
+                                lseek(dFile, blk * blockSize, SEEK_SET);                  //Set the file pos for writing block
+                                writeToFile(dFile, buff[id], sizeof(char) * bytesToCopy); //Write block into file
+                                writeMutex.unlock();                                      //Unlock the destination file
+                            }
+                            else
+                                std::cout << "Failed to create buff size: " << blockSize << " blk: " << blk << std::endl;
                         }
                         else
-                            std::cout << "Failed to create buff size: " << blockSize << " blk: " << blk << std::endl;
-                    }
-                    else
-                        std::cout << "Failed to open " << sourceFileName << " blk: " << blk << std::endl;
-                });
+                            std::cout <<id << " Failed to open " << sourceFileName << " blk: " << blk <<" "<< strerror(errno)<< std::endl;
+                    });
+                }
+
+                pool.wait();      //Wait on writing threads
+                pool.terminate(); //Join writing threads
+
+                time = Timer::getCurrentTime() - time;
+                std::cout << "--------TIME: " << time << " ------------" << std::endl;
+
+                //Close files and free buffers
+                close(dFile);
+                for (int i = 0; i < idCount; i++) {
+                    close(sFiles[i]);
+                    delete[] buff[i];
+                }
             }
-
-            pool.wait();      //Wait on writing threads
-            pool.terminate(); //Join writing threads
-
-            time = Timer::getCurrentTime() - time;
-            std::cout << "--------TIME: " << time << " ------------" << std::endl;
-
-            //Close files and free buffers
-            close(dFile);
-            for (int i = 0; i < idCount; i++) {
-                close(sFiles[i]);
-                delete[] buff[i];
+            else {
+                std::cout <<"(source) File size is 0 (possibly failed to open or tazer server not running): " << sourceFileName <<std::endl;
             }
         }
-        else
+        else{
             std::cout << "Failed to open " << destFileName << std::endl;
+        }
     }
-    else
+    else{
         std::cout << "Incorrect number of arguments " << argc << std::endl;
+    }
     return 0;
 }
