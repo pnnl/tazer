@@ -142,13 +142,16 @@ void OutputFile::close() {
     *this << "Closing file " << _name << std::endl;
     //std::cout<<"[TAZER] " << "closing bi: " << _bufferIndex << " bc: " << _bufferCnt << " bfp: " << _bufferFp << " " << _totalCnt << std::endl;
     if (_bufferCnt > 0) {
+        std::unique_lock<std::mutex> bufLock(_bufferLock);
         uint32_t seqNum = _seqNum.fetch_add(1);
+        // std::cout<<"close: seq num"<<seqNum<<std::endl;
         char * buffer = new char[Config::outputFileBufferSize];
         if (_compress)
             addCompressTask(_buffer, _bufferCnt, _bufferFp, seqNum);
         else
             addTransferTask(_buffer, _bufferCnt, _bufferCnt, _bufferFp, seqNum);
         _buffer = buffer;
+        bufLock.unlock();
         //std::cout<<"[TAZER] " << "final add tx task" << std::endl;
     }
     std::unique_lock<std::mutex> lock(_openCloseLock);
@@ -205,6 +208,7 @@ ssize_t OutputFile::read(void *buf, size_t count, uint32_t index) {
 //void OutputFile::addTransferTask(char *buf, uint32_t size, uint32_t compSize, uint64_t fp, uint32_t seqNum) {
 ssize_t OutputFile::write(const void *buf, size_t count, uint32_t index) {
     if (_active.load()) {
+         std::unique_lock<std::mutex> bufLock(_bufferLock);
         trackWrites(count, index, 0, 0);
 
         uint64_t fp = _filePos[index];
@@ -230,6 +234,7 @@ ssize_t OutputFile::write(const void *buf, size_t count, uint32_t index) {
             _bufferCnt += spaceAvail;
             //if (_bufferCnt > 0) {
             uint32_t seqNum = _seqNum.fetch_add(1);
+            // std::cout<<"write: seq num"<<seqNum<<std::endl;
             char *buffer = new char[Config::outputFileBufferSize];
             if (_compress)
                 addCompressTask(_buffer, _bufferCnt, _bufferFp, seqNum);
@@ -252,6 +257,7 @@ ssize_t OutputFile::write(const void *buf, size_t count, uint32_t index) {
         _bufferCnt += bytesToSend;
         if (_transferPool.numTasks() == 0) {
             uint32_t seqNum = _seqNum.fetch_add(1);
+            // std::cout<<"write: seq num"<<seqNum<<std::endl;
             char *buffer = new char[Config::outputFileBufferSize];
             if (_compress)
                 addCompressTask(_buffer, _bufferCnt, _bufferFp, seqNum);
@@ -263,6 +269,7 @@ ssize_t OutputFile::write(const void *buf, size_t count, uint32_t index) {
             _bufferCnt = 0;
             _bufferFp = fp + count;
         }
+        bufLock.unlock();
         // std::cout << "[TAZER] "
         //           << "bi: " << _bufferIndex << " bc: " << _bufferCnt << " bfp: " << _bufferFp << " " << _totalCnt << std::endl;
 
@@ -341,7 +348,7 @@ void OutputFile::addCompressTask(char *buf, uint64_t size, uint64_t fp, uint32_t
 
 off_t OutputFile::seek(off_t offset, int whence, uint32_t index) {
     // std::cout << _name << " seek " << offset << " " << whence << " " << index << std::endl;
-
+    std::unique_lock<std::mutex> bufLock(_bufferLock);
     /// flush buffer because we are not sending consecutive data
     uint32_t seqNum = _seqNum.fetch_add(1);
     char *buffer = new char[Config::outputFileBufferSize];
@@ -369,6 +376,7 @@ off_t OutputFile::seek(off_t offset, int whence, uint32_t index) {
         _bufferFp = _filePos[index];
         break;
     }
+    bufLock.unlock();
     return _filePos[index];
 }
 
