@@ -44,7 +44,7 @@ add_executable(MapTest2 MapTest2.cpp)
 target_link_libraries(MapTest2 testLib)
 
 add_executable(TazerCp TazerCp.cpp )
-target_link_libraries(TazerCp threadPool testLib)
+target_link_libraries(TazerCp threadPool)
 
 configure_file(runTest.pl ${CMAKE_BINARY_DIR}/test/runTest.pl @ONLY)
 
@@ -82,3 +82,5 @@ endif()
 
 configure_file(FileStressTest.sh ${CMAKE_BINARY_DIR}/test/FileStressTest.sh @ONLY)
 
+add_executable(CopyRangeTest CopyRangeTest.cpp)
+target_link_libraries(CopyRangeTest testLib)

@@ -79,14 +79,15 @@ set(COMMON_FILES
     Prefetcher.cpp
     DeltaPrefetcher.cpp
     PerfectPrefetcher.cpp
-    
 )
 
 if(CURL)
     set(COMMON_HEADERS ${COMMON_HEADERS} ${CMAKE_SOURCE_DIR}/inc/UrlDownload.h 
-                                         ${CMAKE_SOURCE_DIR}/inc/UrlFileCache.h)
-    set(COMMON_FILES ${COMMON_FILES} UrlDownload.cpp UrlFileCache.cpp)
+                                         ${CMAKE_SOURCE_DIR}/inc/UrlFileCache.h
+                                         ${CMAKE_SOURCE_DIR}/inc/UrlCache.h)
+    set(COMMON_FILES ${COMMON_FILES} UrlDownload.cpp UrlFileCache.cpp UrlCache.cpp)
 endif()
 
 add_library(common OBJECT ${COMMON_HEADERS} ${COMMON_FILES})
 add_library(threadPool SHARED ThreadPool.cpp PriorityThreadPool.cpp Timer.cpp ReaderWriterLock.cpp FSReaderWriterLock.cpp Loggable.cpp)
+target_link_libraries(threadPool ${RDMACM_LIB} ${RT_LIB} ${CURL_LIB} ${SSL_LIB} stdc++fs)

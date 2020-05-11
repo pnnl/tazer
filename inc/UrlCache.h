@@ -72,47 +72,38 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef UnboundedCache_H
-#define UnboundedCache_H
-#include "Cache.h"
-#include "Loggable.h"
-#include "ReaderWriterLock.h"
-#include "Trackable.h"
-#include "UnixIO.h"
+#ifndef URLCACHE_H
+#define URLCACHE_H
+#include "UnboundedCache.h"
+#include "UrlDownload.h"
+#include <atomic>
 #include <future>
+#include <map>
+#include <unordered_map>
+#include <unordered_set>
 
-#define UBC_BLK_EMPTY 0
-#define UBC_BLK_PRE 1
-#define UBC_BLK_RES 2
-#define UBC_BLK_WR 3
-#define UBC_BLK_AVAIL 4
+#define URLCACHENAME "urlcache"
 
-class UnboundedCache : public Cache {
+class UrlCache : public UnboundedCache {
   public:
-    UnboundedCache(std::string cacheName, CacheType type, uint64_t blockSize);
-    virtual ~UnboundedCache();
+    UrlCache(std::string cacheName, CacheType type, uint64_t blockSize);
+    ~UrlCache();
 
-    virtual bool writeBlock(Request* req);
+    virtual void addFile(unsigned int index, std::string filename, uint64_t blockSize, uint64_t fileSize);
+    void removeFile(uint32_t index);
+    static Cache *addNewUrlCache(std::string cacheName, CacheType type, uint64_t blockSize);
 
-    virtual void readBlock(Request* req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request*>>> &reads, uint64_t priority);
-
-    virtual void addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
-
-  protected:
-    virtual bool blockSet(uint32_t index, uint32_t fileIndex, uint8_t byte) = 0;
-    virtual bool blockReserve(unsigned int index, unsigned int fileIndex) = 0;
-    // virtual bool blockReserve(uint32_t index, uint32_t fileIndex, bool prefetch = false)=0;
-    virtual void cleanReservation();
-
-    virtual bool blockAvailable(uint32_t index, uint32_t fileIndex, bool arg = false) = 0;
-    virtual bool blockWritable(uint32_t index, uint32_t fileIndex, bool arg = false) = 0;
-    virtual uint8_t *getBlockData(uint32_t blockIndex, uint32_t fileIndex) = 0;
-    virtual void setBlockData(uint8_t *data, uint32_t blockIndex, uint64_t size, uint32_t fileIndex) = 0;
-
-    uint64_t _blockSize;
-    std::atomic_uint _outstanding;
-    std::unordered_map<uint32_t, std::atomic<uint8_t> *> _blkIndex;
-    ReaderWriterLock *_lock;
+  private:
+    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool arg = false);
+    virtual bool blockWritable(unsigned int index, unsigned int fileIndex, bool arg = false);
+    virtual uint8_t *getBlockData(unsigned int blockIndex, unsigned int fileIndex);
+    
+    virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size, unsigned int fileIndex);
+    virtual bool blockSet(unsigned int index, unsigned int fileIndex,  uint8_t byte);
+    virtual bool blockReserve(unsigned int index, unsigned int fileIndex);
+    
+    virtual void cleanUpBlockData(uint8_t *data);
+    std::unordered_map<uint32_t, UrlDownload*> _urlMap;
 };
 
-#endif /* UnboundedCache_H */
+#endif /* URLCACHE_H */

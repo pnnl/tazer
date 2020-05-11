@@ -96,6 +96,8 @@
 #include "UnixIO.h"
 #include "lz4.h"
 #include "lz4hc.h"
+#include "UrlFileCache.h"
+#include "UrlCache.h"
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 //#define DPRINTF(...)
@@ -173,33 +175,45 @@ bool ServeFile::addConnections() {
 void ServeFile::cache_init(void) {
     uint64_t level = 0;
     Cache *c = MemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::serverCacheSize, Config::serverCacheBlocksize, Config::serverCacheAssociativity);
-    std::cerr << "[TAZER] "
-              << "mem cache: " << (void *)c << std::endl;
+    std::cerr << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
     ServeFile::_cache.addCacheLevel(c, ++level);
 
-    c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME, CacheType::local);
-    std::cerr << "[TAZER] "
-              << "local file cache: " << (void *)c << std::endl;
-    ServeFile::_cache.addCacheLevel(c, ++level);
+    #ifdef USE_CURL
+        if(Config::urlFileCacheOn) {
+             c = UrlFileCache::addNewUrlFileCache(URLFILECACHENAME, CacheType::local);
+            std::cerr << "[TAZER] " << "Url file cache: " << (void *)c << std::endl;
+            ServeFile::_cache.addCacheLevel(c, ++level);
+        }
+        else {
+            c = UrlCache::addNewUrlCache(URLCACHENAME, CacheType::urlCache, Config::sharedMemoryCacheBlocksize);
+            std::cerr << "[TAZER] " << "Url cache: " << (void *)c << std::endl;
+            ServeFile::_cache.addCacheLevel(c, ++level);
+
+            c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME, CacheType::local);
+            std::cerr << "[TAZER] " << "Local file cache: " << (void *)c << std::endl;
+            ServeFile::_cache.addCacheLevel(c, ++level);
+        }
+    #else
+        c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME, CacheType::local);
+        std::cerr << "[TAZER] " << "Local file cache: " << (void *)c << std::endl;
+        ServeFile::_cache.addCacheLevel(c, ++level);
+    #endif
 
     if (Config::useSharedMemoryCache) {
         c = SharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME, CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
-        std::cerr << "[TAZER] "
-                  << "shared mem  cache: " << (void *)c << std::endl;
+        std::cerr << "[TAZER] " << "shared mem  cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }
 
     if (Config::useBoundedFilelockCache) {
         c = BoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
-        std::cerr << "[TAZER] "
-                  << "bounded filelock cache: " << (void *)c << std::endl;
+        std::cerr << "[TAZER] " << "bounded filelock cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }
 
     if (Config::useServerNetworkCache) {
         c = NetworkCache::addNewNetworkCache(NETWORKCACHENAME, CacheType::network, ServeFile::_transferPool, ServeFile::_decompressionPool);
-        std::cerr << "[TAZER] "
-                  << "net cache: " << (void *)c << std::endl;
+        std::cerr << "[TAZER] " << "net cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
         addConnections();
         ServeFile::_transferPool.initiate();
@@ -219,28 +233,34 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
                                                                                                                                    _size(0),
                                                                                                                                    _numBlks(0),
                                                                                                                                    _open(false),
-                                                                                                                                   _outstandingWrites(0) {
+                                                                                                                                   _outstandingWrites(0),
+                                                                                                                                   _url(supportedUrlType(name)) {
     _pool.initiate();
+    ConnectionPool * pool = NULL;
 
     log(this) << "file: " << _name << std::endl;
-    // unsigned int retry = 0;
-    struct stat sbuf;
-    sbuf.st_size = 0;
-    ConnectionPool *pool = NULL;
-    if (stat(_name.c_str(), &sbuf) == 0) {
-        if (!output) {
-            _size = sbuf.st_size;
-        }
+    if(_url) {
+        _size = sizeUrlPath(name);
     }
-    if (_size == 0) {
-        if (Config::useServerNetworkCache && !output) {
-            // std::cout << "in  net: " << _name << std::endl;
-            bool created;
-            pool = ConnectionPool::addNewConnectionPool(_name, _compress, _connections, created);
-            _size = pool->openFileOnAllServers();
+    else {
+        // unsigned int retry = 0;
+        struct stat sbuf;
+        sbuf.st_size = 0;
+        if (stat(_name.c_str(), &sbuf) == 0) {
+            if (!output) {
+                _size = sbuf.st_size;
+            }
         }
-    }
 
+        if (_size == 0) {
+            if (Config::useServerNetworkCache && !output) {
+                // std::cout << "in  net: " << _name << std::endl;
+                bool created;
+                pool = ConnectionPool::addNewConnectionPool(_name, _compress, _connections, created);
+                _size = pool->openFileOnAllServers();
+            }
+        }
+    }
     log(this) << "size: " << _size << std::endl;
 
     if (_size || output) {
@@ -248,7 +268,7 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
         if (output) {
             std::experimental::filesystem::create_directories(std::experimental::filesystem::path(_name).parent_path());
         }
-        if (!output) {
+        else {
             if (_blkSize > _size) {
                 _blkSize = _size;
             }
@@ -262,6 +282,7 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
             FileCacheRegister *reg = FileCacheRegister::openFileCacheRegister();
             _regFileIndex = reg->registerFile(_name);
             _cache.addFile(_regFileIndex, _name, _blkSize, _size);
+
             if (Config::useServerNetworkCache) {
                 NetworkCache *nc = (NetworkCache *)_cache.getCacheByName(NETWORKCACHENAME);
                 if (nc) {
@@ -299,7 +320,20 @@ ServeFile::~ServeFile() {
     if (_output && _remove) {
         remove(_name.c_str());
     }
-    ((LocalFileCache*)_cache.getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
+
+    #ifdef USE_CURL
+        if(Config::urlFileCacheOn)
+            ((UrlFileCache*)(_cache.getCacheByName(URLFILECACHENAME)))->removeFile(_regFileIndex);
+        else 
+        {
+            if(_url)
+                ((UrlCache*)(_cache.getCacheByName(URLCACHENAME)))->removeFile(_regFileIndex);
+            else
+                ((LocalFileCache*)_cache.getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
+        }
+    #else
+        ((LocalFileCache*)_cache.getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
+    #endif 
     log(this) << _name << " closed" << std::endl;
 }
 

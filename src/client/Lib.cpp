@@ -98,6 +98,7 @@
 #include "Timer.h"
 #include "Trackable.h"
 #include "UnixIO.h"
+#include "UrlDownload.h"
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
@@ -165,6 +166,8 @@ void __attribute__((constructor)) tazerInit(void) {
                 track_files.emplace(f);
             }
         }
+        
+        curlInit;
 
         unixopen = (unixopen_t)dlsym(RTLD_NEXT, "open");
         unixopen64 = (unixopen_t)dlsym(RTLD_NEXT, "open64");
@@ -208,10 +211,11 @@ void __attribute__((destructor)) tazerCleanup(void) {
     timer.start();
     init = false; //set to false because we cant ensure our static members have not already been deleted.
 
-    if (Config::printStats) {
-        std::cout << "[TAZER] "
-                  << "Exiting Client" << std::endl;
+    curlEnd(Config::curlOnStartup);
+    curlDestroy;
 
+    if (Config::printStats) {
+        std::cout << "[TAZER] " << "Exiting Client" << std::endl;
         if (ConnectionPool::useCnt->size() > 0) {
             for (auto conUse : *ConnectionPool::useCnt) {
                 //if (conUse.second > 1) {
@@ -515,8 +519,17 @@ int tazerStat(std::string name, std::string metaName, TazerFile::Type type, int 
             buf->st_size = tempFile.fileSize();
         }
         else if(type == TazerFile::Type::Local) {
-            LocalFile tempFile(name, metaName, fd, false);
-            buf->st_size = tempFile.fileSize();
+            int urlSize = supportedUrlType(name) ? sizeUrlPath(name) : -1;
+            if(urlSize > -1) {
+                if(Config::downloadForSize)
+                    buf->st_size = urlSize;
+                else if(urlSize == 0)
+                    buf->st_size = 1;
+            }
+            else {
+                LocalFile tempFile(name, metaName, fd, false);
+                buf->st_size = tempFile.fileSize();
+            }
         }
         (*unixclose)(fd);
     }

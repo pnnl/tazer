@@ -95,6 +95,7 @@
 #include "xxhash.h"
 #include "UrlDownload.h"
 #include "UrlFileCache.h"
+#include "UrlCache.h"
 #include <fcntl.h>
 #include <fstream>
 #include <iomanip>
@@ -114,7 +115,7 @@
 std::once_flag local_init_flag;
 Cache *LocalFile::_cache = NULL;
 
-void LocalFile::cache_init(void) {
+void LocalFile::cache_init() {
     int level = 0;
     Cache *c = NULL;
 
@@ -131,29 +132,40 @@ void LocalFile::cache_init(void) {
     }
 
     #ifdef USE_CURL
-    c = UrlFileCache::addNewUrlFileCache(URLFILECACHENAME, CacheType::local);
-    #else
-    c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME, CacheType::local);
+        if(Config::urlFileCacheOn) {
+            c = UrlFileCache::addNewUrlFileCache(URLFILECACHENAME, CacheType::local);
+            std::cerr << "[TAZER] " << "Url file cache: " << (void *)c << std::endl;
+            LocalFile::_cache->addCacheLevel(c, ++level);
+            return;
+        }
+        else {
+            c = UrlCache::addNewUrlCache(URLCACHENAME, CacheType::local, Config::sharedMemoryCacheBlocksize);
+            std::cerr << "[TAZER] " << "Url cache: " << (void *)c << std::endl;
+            LocalFile::_cache->addCacheLevel(c, ++level);
+        }
     #endif
-    std::cerr << "[TAZER] " << "filelock cache: " << (void *)c << std::endl;
+    c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME, CacheType::local);
+    std::cerr << "[TAZER] " << "Local file cache: " << (void *)c << std::endl;
     LocalFile::_cache->addCacheLevel(c, ++level);
 }
 
 LocalFile::LocalFile(std::string name, std::string metaName, int fd, bool openFile) : TazerFile(TazerFile::Type::Local, name, metaName, fd),
                                                                                       _fileSize(0),
                                                                                       _numBlks(0),
-                                                                                      _regFileIndex(id()) { //This is if there is no file cache...
+                                                                                      _regFileIndex(id()), 
+                                                                                      _url(supportedUrlType(name)) { //This is if there is no file cache...
     std::call_once(local_init_flag, LocalFile::cache_init);
     std::unique_lock<std::mutex> lock(_openCloseLock);
-    
-    _fileSize = sizeUrlPath(name);
-    if(_fileSize == (uint64_t) -1) {
+    if(_url)
+        _fileSize = sizeUrlPath(name);
+    else {
         struct stat sbuf;
         if (stat(_name.c_str(), &sbuf) == 0)
             _fileSize = sbuf.st_size;
     }
+
     if(_fileSize == (uint64_t) -1)
-        std::cout << "Failed to open file" << _name << std::endl;
+        std::cout << "Failed to open file " << _name << std::endl;
     else if(openFile)
         open();
     else {
@@ -193,10 +205,19 @@ void LocalFile::close() {
     if (_active.compare_exchange_strong(prev, false)) {
         DPRINTF("CLOSE: _FC: %p _BC: %p\n", _fc, _bc);
         #ifdef USE_CURL
-        ((UrlFileCache*)(_cache->getCacheByName(URLFILECACHENAME)))->removeFile(_regFileIndex);
+            if(Config::urlFileCacheOn)
+                ((UrlFileCache*)(_cache->getCacheByName(URLFILECACHENAME)))->removeFile(_regFileIndex);
+            else 
+            {
+                if(_url) {
+                    ((UrlCache*)(_cache->getCacheByName(URLCACHENAME)))->removeFile(_regFileIndex);
+                }
+                else
+                    ((LocalFileCache*)_cache->getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
+            }
         #else
-        ((LocalFileCache*)_cache->getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
-        #endif
+            ((LocalFileCache*)_cache->getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
+        #endif 
     }
     lock.unlock();
 }
@@ -257,8 +278,15 @@ ssize_t LocalFile::read(void *buf, size_t count, uint32_t index) {
                 _cache->bufferWrite(request);
             }
             else {
-                std::cout << "Error reading local file" << std::endl;
-                return 0;
+                auto request = reads[blk].get().get();
+                if (request->ready) {
+                    copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
+                    _cache->bufferWrite(request);
+                }
+                else {
+                    std::cout << "Error reading local file: " << _name << " " << _fileSize << std::endl;
+                    return 0;
+                }
             }
         }
         _filePos[index] += count;
