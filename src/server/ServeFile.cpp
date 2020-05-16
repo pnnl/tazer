@@ -268,6 +268,9 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
 
         if (output) {
             std::experimental::filesystem::create_directories(std::experimental::filesystem::path(_name).parent_path());
+            std::ofstream file;
+            file.open(_name, std::fstream::binary);
+            file.close();
         }
         else {
             if (_blkSize > _size) {
@@ -319,9 +322,9 @@ ServeFile::~ServeFile() {
     _pool.terminate();
 
     if (_output && _remove) {
+        // std::cout<<"removing: "<<_name<<std::endl;
         remove(_name.c_str());
     }
-
     #ifdef USE_CURL
         if(Config::urlFileCacheOn)
             ((UrlFileCache*)(_cache.getCacheByName(URLFILECACHENAME)))->removeFile(_regFileIndex);
@@ -459,7 +462,7 @@ bool ServeFile::writeData(char *data, uint64_t size, uint64_t fp) {
             memcpy(odata, data, size);
             _pool.addTask([this, odata, size, fp] {
                 std::ofstream file;
-                file.open(_name, std::fstream::binary);
+                file.open(_name, std::fstream::binary|std::ofstream::app);
                 std::unique_lock<std::mutex> flock(_fileMutex);
                 file.seekp(fp, file.beg);
                 file.write(odata, size);
