@@ -98,6 +98,7 @@
 #include "lz4hc.h"
 #include "UrlFileCache.h"
 #include "UrlCache.h"
+#include "UrlDownload.h"
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 //#define DPRINTF(...)

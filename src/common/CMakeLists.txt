@@ -81,7 +81,7 @@ set(COMMON_FILES
     PerfectPrefetcher.cpp
 )
 
-if(CURL)
+if(CURL_LIB)
     set(COMMON_HEADERS ${COMMON_HEADERS} ${CMAKE_SOURCE_DIR}/inc/UrlDownload.h 
                                          ${CMAKE_SOURCE_DIR}/inc/UrlFileCache.h
                                          ${CMAKE_SOURCE_DIR}/inc/UrlCache.h)

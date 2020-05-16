@@ -74,6 +74,9 @@
 
 #ifndef URLCACHE_H
 #define URLCACHE_H
+
+#ifdef USE_CURL
+
 #include "UnboundedCache.h"
 #include "UrlDownload.h"
 #include <atomic>
@@ -106,4 +109,5 @@ class UrlCache : public UnboundedCache {
     std::unordered_map<uint32_t, UrlDownload*> _urlMap;
 };
 
+#endif
 #endif /* URLCACHE_H */

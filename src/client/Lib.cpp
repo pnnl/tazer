@@ -100,6 +100,9 @@
 #include "UnixIO.h"
 #include "UrlDownload.h"
 
+#define ADD_THROW __THROW
+// #define ADD_THROW
+
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
@@ -486,14 +489,14 @@ T tazerLseek(TazerFile *file, unsigned int fp, int fd, T offset, int whence) {
     return (T)file->seek(offset, whence, fp);
 }
 
-off_t lseek(int fd, off_t offset, int whence) {
+off_t lseek(int fd, off_t offset, int whence) ADD_THROW {
     vLock.readerLock();
     auto ret = outerWrapper("lseek", fd, Timer::Metric::seek, tazerLseek<off_t>, unixlseek, fd, offset, whence);
     vLock.readerUnlock();
     return ret;
 }
 
-off64_t lseek64(int fd, off64_t offset, int whence) {
+off64_t lseek64(int fd, off64_t offset, int whence) ADD_THROW {
     vLock.readerLock();
     auto ret = outerWrapper("lseek64", fd, Timer::Metric::seek, tazerLseek<off64_t>, unixlseek64, fd, offset, whence);
     vLock.readerUnlock();
@@ -536,22 +539,22 @@ int tazerStat(std::string name, std::string metaName, TazerFile::Type type, int 
     return ret;
 }
 
-int __xstat(int version, const char *filename, struct stat *buf) {
+int __xstat(int version, const char *filename, struct stat *buf) ADD_THROW {
     whichStat = unixxstat;
     return outerWrapper("__xstat", filename, Timer::Metric::stat, tazerStat<struct stat>, unixxstat, version, filename, buf);
 }
 
-int __xstat64(int version, const char *filename, struct stat64 *buf) {
+int __xstat64(int version, const char *filename, struct stat64 *buf) ADD_THROW {
     whichStat64 = unixxstat64;
     return outerWrapper("__xstat64", filename, Timer::Metric::stat, tazerStat<struct stat64>, unixxstat64, version, filename, buf);
 }
 
-int __lxstat(int version, const char *filename, struct stat *buf) {
+int __lxstat(int version, const char *filename, struct stat *buf) ADD_THROW {
     whichStat = unixxstat;
     return outerWrapper("__lxstat", filename, Timer::Metric::stat, tazerStat<struct stat>, unixlxstat, version, filename, buf);
 }
 
-int __lxstat64(int version, const char *filename, struct stat64 *buf) {
+int __lxstat64(int version, const char *filename, struct stat64 *buf) ADD_THROW {
     whichStat64 = unixlxstat64;
     return outerWrapper("__lxstat64", filename, Timer::Metric::stat, tazerStat<struct stat64>, unixlxstat64, version, filename, buf);
 }
@@ -737,7 +740,7 @@ int tazerFeof(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
     return file->eof();
 }
 
-int feof(FILE *fp) {
+int feof(FILE *fp) ADD_THROW {
     return outerWrapper("feof", fp, Timer::Metric::feof, tazerFeof, unixfeof, fp);
 }
 

@@ -75,12 +75,12 @@ configure_file(ConvertToRecords.py ${CMAKE_BINARY_DIR}/test/ConverToRecords.py @
 add_executable(PriorityThreadPoolTest PriorityThreadPoolTest.cpp)
 target_link_libraries(PriorityThreadPoolTest testLib)
 
-if(CURL)
+if(CURL_LIB)
     add_executable(SimpleUrlTest SimpleUrlTest.cpp)
     target_link_libraries(SimpleUrlTest testLib)
+
+    add_executable(CopyRangeTest CopyRangeTest.cpp)
+target_link_libraries(CopyRangeTest testLib)
 endif()
 
 configure_file(FileStressTest.sh ${CMAKE_BINARY_DIR}/test/FileStressTest.sh @ONLY)
-
-add_executable(CopyRangeTest CopyRangeTest.cpp)
-target_link_libraries(CopyRangeTest testLib)
