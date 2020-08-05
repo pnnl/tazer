@@ -321,7 +321,7 @@ void NetworkCache::addFile(uint32_t index, std::string filename, uint64_t blockS
     _lock->writerLock();
     if (_fileMap.count(index) == 0) {
         std::string hashstr(_name + filename); //should cause each level of the cache to have different indicies for a given file
-        uint64_t hash = (uint64_t)XXH32(hashstr.c_str(), filename.size(), 0);
+        uint64_t hash = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
 
         _fileMap.emplace(index, FileEntry{filename, blockSize, fileSize, hash});
 
