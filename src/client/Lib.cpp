@@ -198,7 +198,16 @@ void __attribute__((constructor)) tazerInit(void) {
         unixreadv = (unixreadv_t)dlsym(RTLD_NEXT, "readv");
         unixwritev = (unixwritev_t)dlsym(RTLD_NEXT, "writev");
 
-        //unsetenv("LD_PRELOAD"); //uncomment me if running into issues with an application that launches child shells
+        //enable if running into issues with an application that launches child shells
+        bool unsetLib = getenv("TAZER_UNSET_LIB") ? atoi(getenv("TAZER_UNSET_LIB")) : 0;
+        if (unsetLib){
+            std::cout<<"unloading lib"<<std::endl;
+            unsetenv("LD_PRELOAD"); 
+        }
+        else{
+            std::cout<<"doing nothing" <<" "<<unsetLib<<" "<<getenv("TAZER_UNSET_LIB")<<" "<<Config::useSharedMemoryCache<<" "<<getenv("TAZER_SHARED_MEM_CACHE")<<std::endl;
+        }    
+    
         timer.end(Timer::MetricType::tazer, Timer::Metric::constructor);
     });
     init = true;
