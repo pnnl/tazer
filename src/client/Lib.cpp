@@ -399,12 +399,28 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
             //Maintain the track_fd set
             addToSet(track_fd, retValue, posixFun);
             removeFromSet(track_fd, retValue, posixFun);
+            if (std::string("read").compare(std::string(name)) == 0 ||
+            std::string("write").compare(std::string(name)) == 0){
+                ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
+                if (ret != -1) {
+                    timer.addAmt(Timer::MetricType::local, metric,ret);
+                }
+            }
             timer.end(Timer::MetricType::local, metric);
         }
-        else if (isTazerFile)
+        else if (isTazerFile){
             timer.end(Timer::MetricType::tazer, metric);
-        else
+        }
+        else{
+            if (std::string("read").compare(std::string(name)) == 0 ||
+            std::string("write").compare(std::string(name)) == 0){
+                ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
+                if (ret != -1) {
+                    timer.addAmt(Timer::MetricType::system, metric,ret);
+                }
+            }
             timer.end(Timer::MetricType::system, metric);
+        }
     }
     return retValue;
 }
