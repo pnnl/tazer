@@ -161,12 +161,17 @@ SharedMemoryCache::~SharedMemoryCache() {
     if (false) {
         //code from FileCacheRegister...
     }
+    uint32_t numEmpty = 0;
     for (uint32_t i = 0; i < _numBlocks; i++) {
         if (_blkIndex[i].activeCnt > 0) {
             std::cout << "[TAZER] " << _name << " " << i << " " << _numBlocks << " " << _blkIndex[i].activeCnt << " " << _blkIndex[i].fileIndex - 1 << " " << _blkIndex[i].blockIndex - 1 << " "
                       << "prefetched" << _blkIndex[i].prefetched << std::endl;
         }
+        if(_blkIndex[i].status == BLK_EMPTY){
+            numEmpty+=1;
+        }
     }
+    std::cout<<_name<<" number of empty blocks: "<<numEmpty<<std::endl;
     stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
     std::cout << std::endl;

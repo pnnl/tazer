@@ -119,12 +119,19 @@ MemoryCache::~MemoryCache() {
     stats.start();
     // log(this) << "deleting " << _name << " in memory cache, collisions: " << _collisions << std::endl;
     // std::cout<<"[TAZER] " << "numBlks: " << _numBlocks << " numBins: " << _numBins << " cacheSize: " << _cacheSize << std::endl;
+    uint32_t numEmpty = 0;
     for (uint32_t i = 0; i < _numBlocks; i++) {
         if (_blkIndex[i].activeCnt > 0) { // this typically means we reserved a block via prefetching but never honored the reservation, so try to prefetch again... this should probably be read?
             std::cout
                 << "[TAZER] " << _name << " " << i << " " << _numBlocks << " " << _blkIndex[i].activeCnt << " " << _blkIndex[i].fileIndex << " " << _blkIndex[i].blockIndex << " prefetched: " << _blkIndex[i].prefetched << std::endl;
         }
+        if(_blkIndex[i].status == BLK_EMPTY){
+            numEmpty+=1;
+        }
     }
+
+    std::cout<<_name<<" number of empty blocks: "<<numEmpty<<std::endl;
+    
     delete[] _blocks;
     delete[] _blkIndex;
     delete _binLock;

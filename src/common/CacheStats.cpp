@@ -83,6 +83,11 @@
 #include <unistd.h>
 #include <unordered_map>
 
+
+// Note that when comparing stats for the different levels of cache, vs the "base cache"
+// the base cache values might not match the other caches, this is because base provides stats from user request point of view
+// not from the tazer request point of view, specifically a user request may result in multiple tazer requests (a read crosses a block boundary)
+
 extern char *__progname;
 
 thread_local uint64_t _depth_cs = 0;
