@@ -96,6 +96,9 @@ class OutputFile : public TazerFile {
     off_t seek(off_t offset, int whence, uint32_t index);
     uint64_t fileSize();
 
+    static PriorityThreadPool<std::function<void()>>* _transferPool;
+    static ThreadPool<std::function<void()>>* _decompressionPool;
+
   private:
     bool openFileOnServer();
     bool closeFileOnServer();
@@ -123,8 +126,7 @@ class OutputFile : public TazerFile {
     uint64_t _totalCnt;
     std::mutex _bufferLock;
 
-    static PriorityThreadPool<std::function<void()>> _transferPool;
-    static ThreadPool<std::function<void()>> _decompressionPool;
+    
 };
 
 #endif /* OutputFile_H_ */

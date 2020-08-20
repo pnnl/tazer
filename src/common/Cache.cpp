@@ -114,9 +114,9 @@ Cache::Cache(std::string name,  CacheType type) : Loggable(Config::CacheLog, nam
     //           << "Constructing " << _name << " in cache" << std::endl;
     if (_name == BASECACHENAME) {
         // _fm_lock = new ReaderWriterLock();
-        _writePool = new ThreadPool<std::function<void()>>(Config::numWriteBufferThreads, "write pool");
+        _writePool = new ThreadPool<std::function<void()>>(Config::numWriteBufferThreads, "cache write pool");
         _writePool->initiate();
-        _prefetchPool = new PriorityThreadPool<std::function<void()>>(Config::numPrefetchThreads, "prefetch pool");
+        _prefetchPool = new PriorityThreadPool<std::function<void()>>(Config::numPrefetchThreads, "cache prefetch pool");
         _prefetchPool->initiate();
         _base = this;
         _lastLevel = this;

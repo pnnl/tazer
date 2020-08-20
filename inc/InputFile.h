@@ -102,8 +102,8 @@ class InputFile : public TazerFile {
     off_t seek(off_t offset, int whence, uint32_t index = 0);
 
     static void printHits();
-    static PriorityThreadPool<std::packaged_task<std::shared_future<Request*>()>> _transferPool;
-    static PriorityThreadPool<std::packaged_task<Request*()>> _decompressionPool;
+    static PriorityThreadPool<std::packaged_task<std::shared_future<Request*>()>>* _transferPool;
+    static PriorityThreadPool<std::packaged_task<Request*()>>* _decompressionPool;
 
     static Cache *_cache;
 

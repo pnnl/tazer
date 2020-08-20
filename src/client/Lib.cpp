@@ -89,7 +89,9 @@
 #include <unordered_set>
 //#include "ErrorTester.h"
 #include "InputFile.h"
+#include "OutputFile.h"
 #include "RSocketAdapter.h"
+#include "Request.h"
 #include "ReaderWriterLock.h"
 #include "TazerFile.h"
 #include "TazerFileDescriptor.h"
@@ -97,6 +99,8 @@
 #include "Timer.h"
 #include "Trackable.h"
 #include "UnixIO.h"
+#include "ThreadPool.h"
+#include "PriorityThreadPool.h"
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
@@ -150,6 +154,11 @@ void __attribute__((constructor)) tazerInit(void) {
         timer.start();
         Loggable::mtx_cout = new std::mutex();
         InputFile::_cache = new Cache(BASECACHENAME, CacheType::base);
+        InputFile::_transferPool = new PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>>(1,"infile tx pool") ;
+        InputFile::_decompressionPool = new PriorityThreadPool<std::packaged_task<Request*()>>(Config::numClientDecompThreads,"infile comp pool");
+        OutputFile::_transferPool = new PriorityThreadPool<std::function<void()>>(1,"outfile tx pool");
+        OutputFile::_decompressionPool = new ThreadPool<std::function<void()>>(Config::numClientDecompThreads,"outfile comp pool");
+
         ConnectionPool::useCnt = new std::unordered_map<std::string, uint64_t>();
         ConnectionPool::consecCnt = new std::unordered_map<std::string, uint64_t>();
         ConnectionPool::stats = new std::unordered_map<std::string, std::pair<double, double>>();
@@ -233,6 +242,10 @@ void __attribute__((destructor)) tazerCleanup(void) {
 
     timer.end(Timer::MetricType::tazer, Timer::Metric::destructor);
     delete InputFile::_cache; //desturctor time tracked by each cache...
+    delete InputFile::_decompressionPool;
+    delete InputFile::_transferPool;
+    delete OutputFile::_decompressionPool;
+    delete OutputFile::_transferPool;
     timer.start();
     FileCacheRegister::closeFileCacheRegister();
     ConnectionPool::removeAllConnectionPools();

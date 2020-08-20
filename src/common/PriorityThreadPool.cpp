@@ -96,11 +96,11 @@ PriorityThreadPool<T>::PriorityThreadPool(uint32_t maxThreads, std::string name)
 
 template <class T>
 PriorityThreadPool<T>::~PriorityThreadPool() {
-    // std::cout << "[TAZER] "
-    //           << "deleting priority pool: " << _users << " " << _q.size() << " " << std::endl;
+    std::cout << "[TAZER] "
+              << "deleting priority pool before: "<<_name<<" " << _users << " " << _q.size() << " " << std::endl;
     terminate(true);
-    // std::cout << "[TAZER] "
-    //           << "deleting priority pool: " << _users << " " << _q.size() << " " << std::endl;
+    std::cout << "[TAZER] "
+              << "deleting priority pool: "<<_name<<" " << _users << " " << _q.size() << " " << std::endl;
 }
 
 template <class T>
@@ -134,6 +134,20 @@ bool PriorityThreadPool<T>::terminate(bool force) {
     if (_users) //So we can join and terminate if there are no users
         _users--;
     if (!_users || force) {
+        uint64_t cur_size = _q.size();
+        uint64_t timeout_cnt =0;
+        while (_q.size() && timeout_cnt < 10){ //let q drain as long as it appears to be making progress otherwise time out
+            timeout_cnt++;
+            std::this_thread::sleep_for (std::chrono::seconds(1));
+            if (cur_size != _q.size()){
+                timeout_cnt=0;
+                cur_size = _q.size();
+            }
+        }
+        if (_q.size()) {
+            std::cerr<<"[TAZER ERROR] priority thread pool: "<<_name<<" timed out with a non empty queue: "<<_q.size()<<std::endl;
+        }
+
         //This is to deal with the conditional variable
         _alive.store(false);
         while (_currentThreads.load())

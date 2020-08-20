@@ -90,8 +90,8 @@
 #include "lz4.h"
 #include "lz4hc.h"
 
-PriorityThreadPool<std::function<void()>> OutputFile::_transferPool(1);
-ThreadPool<std::function<void()>> OutputFile::_decompressionPool(Config::numClientDecompThreads);
+PriorityThreadPool<std::function<void()>>* OutputFile::_transferPool;
+ThreadPool<std::function<void()>>* OutputFile::_decompressionPool;
 
 OutputFile::OutputFile(std::string fileName, std::string metaName, int fd) : TazerFile(TazerFile::Type::Output, fileName, metaName, fd),
                                                        _compLevel(0),
@@ -121,8 +121,8 @@ void OutputFile::open() {
         if (_active.compare_exchange_strong(prev, true)) {
             //Open file on all possible servers.  Connections should already exist!
             if (openFileOnServer()) {
-                _transferPool.initiate();
-                _decompressionPool.initiate();
+                _transferPool->initiate();
+                _decompressionPool->initiate();
                 std::cerr << "[TAZER] "
                           << "output: " << _name << " opened" << std::endl;
             }
@@ -164,8 +164,8 @@ void OutputFile::close() {
         //std::cout<<"[TAZER] " << "closing bi: " << _bufferIndex << " bc: " << _bufferCnt << " bfp: " << _bufferFp << " " << _totalCnt << std::endl;
 
         //Kill threads
-        _transferPool.terminate();
-        _decompressionPool.terminate();
+        _transferPool->terminate();
+        _decompressionPool->terminate();
 
         //Close file
         closeFileOnServer();
@@ -213,7 +213,7 @@ ssize_t OutputFile::write(const void *buf, size_t count, uint32_t index) {
 
         uint64_t fp = _filePos[index];
         // std::cout << "[TAZER] "
-        //           << "write: i: " << fp << " cnt: " << count << " num tasks: " << _transferPool.numTasks() << " index: " << index << std::endl;
+        //           << "write: i: " << fp << " cnt: " << count << " num tasks: " << _transferPool->numTasks() << " index: " << index << std::endl;
         _filePos[index] += count;
         if (_filePos[index] > _fileSize)
             _fileSize = _filePos[index] + 1;
@@ -255,7 +255,7 @@ ssize_t OutputFile::write(const void *buf, size_t count, uint32_t index) {
         //memcpy(_buffer + _bufferIndex, buf, count);
         _bufferIndex += bytesToSend;
         _bufferCnt += bytesToSend;
-        if (_transferPool.numTasks() == 0) {
+        if (_transferPool->numTasks() == 0) {
             uint32_t seqNum = _seqNum.fetch_add(1);
             // std::cout<<"write: seq num"<<seqNum<<std::endl;
             char *buffer = new char[Config::outputFileBufferSize];
@@ -316,7 +316,7 @@ uint64_t OutputFile::compress(char **buffer, uint64_t offset, uint64_t size) {
 }
 
 void OutputFile::addTransferTask(char *buf, uint64_t size, uint64_t compSize, uint64_t fp, uint32_t seqNum) {
-    _transferPool.addTask(seqNum, [this, buf, size, compSize, fp, seqNum] {
+    _transferPool->addTask(seqNum, [this, buf, size, compSize, fp, seqNum] {
         if (seqNum == _sendNum.load()) {
             //Send the message
             _connections[0]->lock();
@@ -339,7 +339,7 @@ void OutputFile::addTransferTask(char *buf, uint64_t size, uint64_t compSize, ui
 }
 
 void OutputFile::addCompressTask(char *buf, uint64_t size, uint64_t fp, uint32_t seqNum) {
-    _decompressionPool.addTask([this, buf, size, fp, seqNum] {
+    _decompressionPool->addTask([this, buf, size, fp, seqNum] {
         char *temp = buf;
         uint32_t newSize = compress(&temp, fp, size);
         addTransferTask(temp, size, newSize, fp, seqNum);

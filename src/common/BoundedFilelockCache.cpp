@@ -165,7 +165,7 @@ BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, CacheType type
 
     _shared = true;
 
-    _writePool = new ThreadPool<std::function<void()>>(Config::numWriteBufferThreads, "write pool");
+    _writePool = new ThreadPool<std::function<void()>>(Config::numWriteBufferThreads, "bounded file lock cache write pool");
     _writePool->initiate();
 
     // does implementing a lock around disk ops improve i/o performance?

@@ -119,8 +119,8 @@
 
 std::once_flag init_flag;
 
-PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> InputFile::_transferPool(Config::numClientTransThreads, "transfer pool");
-PriorityThreadPool<std::packaged_task<Request *()>> InputFile::_decompressionPool(Config::numClientDecompThreads, "decompress pool");
+PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>>* InputFile::_transferPool;
+PriorityThreadPool<std::packaged_task<Request *()>>* InputFile::_decompressionPool;
 
 Cache *InputFile::_cache = NULL; //(BASECACHENAME);
 
@@ -185,15 +185,15 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     }
 
     if (Config::useNetworkCache) {
-        c = NetworkCache::addNewNetworkCache(NETWORKCACHENAME, CacheType::network, InputFile::_transferPool, InputFile::_decompressionPool);
+        c = NetworkCache::addNewNetworkCache(NETWORKCACHENAME, CacheType::network, *InputFile::_transferPool, *InputFile::_decompressionPool);
         std::cerr << "[TAZER] "
                   << "net cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }
 
     //TODO: think about the right way to terminate these (do we even need to or just let the OS destroy when the application exits?)
-    InputFile::_transferPool.initiate();
-    InputFile::_decompressionPool.initiate();
+    InputFile::_transferPool->initiate();
+    InputFile::_decompressionPool->initiate();
 }
 
 InputFile::InputFile(std::string name, std::string metaName, int fd, bool openFile) : TazerFile(TazerFile::Type::Input, name, metaName, fd),
@@ -292,7 +292,7 @@ void InputFile::open() {
     else {
         log(this) << "ERROR: " << _name << " has no connections!" << std::endl;
     }
-    // std::cout << "done open: " << _name << " " << servers_requested << " " << _transferPool.numTasks() << std::endl;
+    // std::cout << "done open: " << _name << " " << servers_requested << " " << _transferPool->numTasks() << std::endl;
 }
 
 //Close doesn't really do much, we hedge our bet that we will likey reopen the file thus we keep our connections to the servers active...but we do close a file descriptor if localfilecache is used

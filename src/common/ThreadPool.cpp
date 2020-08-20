@@ -95,7 +95,11 @@ ThreadPool<T>::ThreadPool(unsigned int maxThreads,std::string name) : _maxThread
 
 template <class T>
 ThreadPool<T>::~ThreadPool() {
+   std::cout << "[TAZER] "
+              << "deleting thread pool before: "<<_name<<" " << _users << " " << _currentThreads << " " << std::endl;
     terminate(true);
+    std::cout << "[TAZER] "
+              << "deleting thread pool: "<<_name<<" " << _users << " " << _currentThreads << " " << std::endl;
 }
 
 template <class T>
@@ -129,6 +133,19 @@ bool ThreadPool<T>::terminate(bool force) {
     if (_users) //So we can join and terminate if there are no users
         _users--;
     if (!_users || force) {
+        uint64_t cur_size = _q.size();
+        uint64_t timeout_cnt =0;
+        while(_q.size() && timeout_cnt < 10){ //let q drain as long as it appears to be making progress otherwise time out
+            timeout_cnt++;
+            std::this_thread::sleep_for (std::chrono::seconds(1));
+            if (cur_size != _q.size()){
+                timeout_cnt=0;
+                cur_size = _q.size();
+            }
+        }
+        if (timeout_cnt >= 10) {
+            std::cerr<<"[TAZER ERROR] priority thread pool: "<<_name<<" timed out with a non empty queue: "<<_q.size()<<std::endl;
+        }
         //This is to deal with the conditional variable
         _alive.store(false);
         while (_currentThreads.load())
