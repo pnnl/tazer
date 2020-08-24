@@ -105,6 +105,9 @@ class FileCache : public BoundedCache<MultiReaderWriterLock> {
     };
     void writeToFile(uint64_t size, uint8_t *buff);
     void readFromFile(uint64_t size, uint8_t *buff);
+    void preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
+    void pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
+    
     virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch);
     virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
     virtual void readBlockEntry(uint32_t blockIndex, BlockEntry *entry);

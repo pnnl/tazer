@@ -79,7 +79,7 @@
 #include <atomic>
 #include <string>
 
-#define NUMENTRIES 3000
+#define NUMENTRIES 10000
 #define MAXFILENAME 1024
 
 class FileCacheRegister {

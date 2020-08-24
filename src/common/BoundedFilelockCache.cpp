@@ -339,9 +339,9 @@ void BoundedFilelockCache::writeBlockEntry(uint32_t blockIndex, BlockEntry *entr
     std::string name = _fileMap[fEntry.fileIndex].name;
     _localLock->readerUnlock();
     int len = name.length();
-    int start = len < 100 ? 0 : len - 100;
-    auto fileName = name.substr(start, 100);
-    memset(fEntry.fileName, 0, 100);
+    int start = len < BFL_FILENAME_LEN ? 0 : len - BFL_FILENAME_LEN;
+    auto fileName = name.substr(start, BFL_FILENAME_LEN);
+    memset(fEntry.fileName, 0, BFL_FILENAME_LEN);
     memcpy(fEntry.fileName, fileName.c_str(), fileName.length());
 
     pwriteToFile(fd, sizeof(FileBlockEntry), (uint8_t *)&fEntry, blockIndex * sizeof(FileBlockEntry));
@@ -437,9 +437,9 @@ std::shared_ptr<typename BoundedCache<FcntlBoundedReaderWriterLock>::BlockEntry>
     std::string name = _fileMap[fileIndex].name;
     _localLock->readerUnlock();
     int len = name.length();
-    int start = len < 100 ? 0 : len - 100;
-    auto fileName = name.substr(start, 100);
-    memset(fEntry->fileName, 0, 100);
+    int start = len < BFL_FILENAME_LEN ? 0 : len - BFL_FILENAME_LEN;
+    auto fileName = name.substr(start, BFL_FILENAME_LEN);
+    memset(fEntry->fileName, 0, BFL_FILENAME_LEN);
     memcpy(fEntry->fileName, fileName.c_str(), fileName.length());
     return entry;
 }
@@ -472,9 +472,9 @@ void BoundedFilelockCache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t
     std::string name = _fileMap[fileIndex].name;
     _localLock->readerUnlock();
     int len = name.length();
-    int start = len < 100 ? 0 : len - 100;
-    auto fileName = name.substr(start, 100);
-    memset(entry.fileName, 0, 100);
+    int start = len < BFL_FILENAME_LEN ? 0 : len - BFL_FILENAME_LEN;
+    auto fileName = name.substr(start, BFL_FILENAME_LEN);
+    memset(entry.fileName, 0, BFL_FILENAME_LEN);
     memcpy(entry.fileName, fileName.c_str(), fileName.length());
     entry.fileIndex = 0;
     entry.blockIndex = blockIndex + 1;

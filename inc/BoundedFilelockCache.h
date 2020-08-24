@@ -79,6 +79,7 @@
 #include "ReaderWriterLock.h"
 
 #define BOUNDEDFILELOCKCACHENAME "boundedfilelock"
+#define BFL_FILENAME_LEN 1024
 
 class BoundedFilelockCache : public BoundedCache<FcntlBoundedReaderWriterLock> {
   public:
@@ -90,17 +91,17 @@ class BoundedFilelockCache : public BoundedCache<FcntlBoundedReaderWriterLock> {
 
   private:
     struct FileBlockEntry : BlockEntry {
-        char fileName[1024];
+        char fileName[BFL_FILENAME_LEN];
         FileBlockEntry(){
-          memset(fileName,0,1024);
+          memset(fileName,0,BFL_FILENAME_LEN);
         }
         FileBlockEntry(BoundedCache* c){
           BlockEntry::init(c);
-          memset(fileName,0,1024);
+          memset(fileName,0,BFL_FILENAME_LEN);
         }
         FileBlockEntry(FileBlockEntry* old){
           *(BlockEntry*)this = *(BlockEntry*)old;
-          memcpy(fileName,old->fileName,1024);
+          memcpy(fileName,old->fileName,BFL_FILENAME_LEN);
         }
         void init(BoundedCache* c){
           BlockEntry::init(c);

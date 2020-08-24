@@ -181,15 +181,21 @@ FileCache::FileCache(std::string cacheName, CacheType type, uint64_t cacheSize, 
         std::experimental::filesystem::create_directories(filePath, err);
         _blocksfd = (*_open)(_filePath.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644); //Open file for writing
         if (_blocksfd > -1) {
-            (*_lseek)(_blocksfd, _cacheSize, SEEK_SET);
-            //This is so we can read cat the data...
             uint8_t byte = '\0';
-            writeToFile(sizeof(uint8_t), &byte);
-            MemBlockEntry tmp = {};
-            for (uint32_t i = 0; i < _numBlocks; i++) {
-                writeToFile(sizeof(MemBlockEntry), (uint8_t *)&tmp);
-            }
-            (*_fsync)(_blocksfd); //flush changes
+            ftruncate(_blocksfd, _numBlocks * _blockSize * sizeof(uint8_t));
+            (*_lseek)(_blocksfd, _numBlocks * _blockSize * sizeof(uint8_t), SEEK_SET);
+            (*_write)(_blocksfd, &byte, sizeof(uint8_t));
+            //This is so we can read cat the data...
+            
+            // writeToFile(sizeof(uint8_t), &byte);
+            // MemBlockEntry tmp = {};
+            // for (uint32_t i = 0; i < _numBlocks; i++) {
+            //     writeToFile(sizeof(MemBlockEntry), (uint8_t *)&tmp);
+            // }
+            // auto ret = (*fsync)(_blocksfd);
+            // if (ret != 0) {
+            //     std::cerr << _name <<" error syncing to disk!"<<std::endl;
+            // }
             (*_lseek)(_blocksfd, 0, SEEK_SET);
             DPRINTF("Created file %s fileName: %s\n", _filePath.c_str(), _fileName.c_str());
         }
@@ -198,11 +204,11 @@ FileCache::FileCache(std::string cacheName, CacheType type, uint64_t cacheSize, 
                       << "Failed to open file cache: " << _filePath << " " << strerror(errno) << std::endl;
         }
     }
-    if (!(*indexInit)) {
-        (*_lseek)(_blocksfd, _cacheSize + 1, SEEK_SET);
-        readFromFile(_numBlocks * sizeof(MemBlockEntry), (uint8_t *)_blkIndex);
-        *indexInit = true;
-    }
+    // if (!(*indexInit)) {
+    //     // (*_lseek)(_blocksfd, _cacheSize + 1, SEEK_SET);
+    //      preadFromFile(_blocksfd,_numBlocks * sizeof(MemBlockEntry), (uint8_t *)_blkIndex, _cacheSize + 1);
+    //     *indexInit = true;
+    // }
     _binLock->writerUnlock(0);
     stats.end(false, CacheStats::Metric::constructor);
 }
@@ -217,14 +223,17 @@ FileCache::~FileCache() {
         }
     }
 
-    _binLock->writerLock(0);
-    (*_lseek)(_blocksfd, _cacheSize + 1, SEEK_SET);
-    writeToFile(_numBlocks * sizeof(MemBlockEntry), (uint8_t *)_blkIndex);
-    (*fsync)(_blocksfd);
-    _binLock->writerUnlock(0);
-    std::string cacheName("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".idx");
-    shm_unlink(cacheName.c_str());
-    _blkIndexfd = -1;
+    // _binLock->writerLock(0);
+    // (*_lseek)(_blocksfd, _cacheSize + 1, SEEK_SET);
+    // writeToFile(_numBlocks * sizeof(MemBlockEntry), (uint8_t *)_blkIndex);
+    // auto ret = (*fsync)(_blocksfd);
+    // if (ret != 0) {
+    //     std::cerr << _name <<" error syncing to disk!"<<std::endl;
+    // }
+    // _binLock->writerUnlock(0);
+    // std::string cacheName("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".idx");
+    // shm_unlink(cacheName.c_str());
+    // _blkIndexfd = -1;
     (*_close)(_blocksfd);
     _blocksfd = -1;
     stats.end(false, CacheStats::Metric::destructor);
@@ -232,21 +241,6 @@ FileCache::~FileCache() {
     std::cout << std::endl;
 }
 
-void FileCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size) {
-    (*_lseek)(_blocksfd, blockIndex * _blockSize, SEEK_SET);
-    writeToFile(size, data);
-    (*fsync)(_blocksfd);
-}
-
-uint8_t *FileCache::getBlockData(unsigned int blockIndex) {
-    // uint64_t dstart = Timer::getCurrentTime();
-    uint8_t *buff = new uint8_t[_blockSize];
-    (*_lseek)(_blocksfd, blockIndex * _blockSize, SEEK_SET);
-    readFromFile(_blockSize, buff);
-    //_dataTime += Timer::getCurrentTime() - dstart;
-    //_dataAmt += _blockSize;
-    return buff;
-}
 
 void FileCache::cleanUpBlockData(uint8_t *data) {
     delete[] data;
@@ -270,7 +264,7 @@ void FileCache::writeToFile(uint64_t size, uint8_t *buff) {
             size -= bytes;
         }
         else {
-            *this << "Failed a write " << _blocksfd << " " << size << std::endl;
+            std::cerr <<_name<< " Failed a write " << _blocksfd << " " << size << std::endl;
         }
     }
 }
@@ -287,8 +281,62 @@ void FileCache::readFromFile(uint64_t size, uint8_t *buff) {
             size -= bytes;
         }
         else {
-            *this << "Failed a read " << _blocksfd << " " << size << std::endl;
+            std::cerr<< _name << " Failed a read " << _blocksfd << " " << size << std::endl;
         }
+    }
+}
+
+void FileCache::pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset) {
+    uint8_t *local = buff;
+    while (size) {
+        int bytes = pwrite(fd, local, size, offset);
+        if (bytes >= 0) {
+            local += bytes;
+            size -= bytes;
+            offset += bytes;
+        }
+        else {
+            std::cerr <<_name<< " Failed a write " << fd << " " << size << std::endl;
+        }
+    }
+}
+
+void FileCache::preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset) {
+    uint8_t *local = buff;
+    // auto origSize = size;
+    // auto start = Timer::getCurrentTime();
+    while (size) {
+        // std::cout << "reading " << size << " from " << offset << std::endl;
+        int bytes = pread(fd, local, size, offset);
+        if (bytes >= 0) {
+            local += bytes;
+            size -= bytes;
+            offset += bytes;
+        }
+        else {
+           std::cerr<< _name << " Failed a read " << fd << " " << size << std::endl;
+        }
+    }
+    // auto elapsed = Timer::getCurrentTime() - start;
+    // updateIoRate(elapsed, origSize);
+}
+
+uint8_t *FileCache::getBlockData(unsigned int blockIndex) {
+    // uint64_t dstart = Timer::getCurrentTime();
+    uint8_t *buff = new uint8_t[_blockSize];
+    // (*_lseek)(_blocksfd, blockIndex * _blockSize, SEEK_SET);
+    // readFromFile(_blockSize, buff);
+    preadFromFile(_blocksfd, _blockSize, buff, blockIndex * _blockSize);
+    return buff;
+}
+
+void FileCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size) {
+    // (*_lseek)(_blocksfd, blockIndex * _blockSize, SEEK_SET);
+    // writeToFile(size, data);
+    pwriteToFile(_blocksfd, size, data, blockIndex * _blockSize);
+    auto ret = (*fsync)(_blocksfd);
+    if (ret != 0) {
+        std::cerr << _name <<" error syncing to disk!"<<std::endl;
     }
 }
 
@@ -360,32 +408,3 @@ int FileCache::decBlkCnt(uint32_t blk) {
 bool FileCache::anyUsers(uint32_t blk) {
     return _blkIndex[blk].activeCnt;
 }
-
-// TODO: reimplement this for current cache structure (note the below code was for the old structure)
-
-// void FileCache::cleanReservation() {
-//     if (Config::ReservationTimeOut != (unsigned int)-1) {
-//         unsigned int currentTime = getTime();
-//         _lock->writerLock();
-//         for (unsigned int i = 0; i < _numBlocks; i++) {
-//             (*_lseek)(_fd, _fileSize + 1 + i * BYTESPERBLOCK, SEEK_SET);
-//             readInt();
-//             readInt();
-//             unsigned int timeStamp = readInt();
-//             unsigned int pid = readInt();
-//             unsigned char byte = readByteFromFile();
-//             if (byte == 1) {
-//                 if (currentTime - timeStamp > Config::ReservationTimeOut) {
-//                     std::cerr<<"[TAZER] " << "SLOWNESS DETECTED " << pid << " " << _pid << std::endl;
-
-//                     if (pid == _pid) {
-//                         blockSet(i, 0, 0, 0);
-//                         _fullFlag->fetch_sub(1);
-//                         _outstanding.fetch_sub(1);
-//                     }
-//                 }
-//             }
-//         }
-//         _lock->writerUnlock();
-//     }
-// }
