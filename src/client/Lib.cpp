@@ -153,6 +153,7 @@ void __attribute__((constructor)) tazerInit(void) {
     std::call_once(log_flag, []() {
         timer.start();
         Loggable::mtx_cout = new std::mutex();
+        InputFile::_time_of_last_read = new std::chrono::time_point<std::chrono::high_resolution_clock>();
         InputFile::_cache = new Cache(BASECACHENAME, CacheType::base);
         InputFile::_transferPool = new PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>>(1,"infile tx pool") ;
         InputFile::_decompressionPool = new PriorityThreadPool<std::packaged_task<Request*()>>(Config::numClientDecompThreads,"infile comp pool");
@@ -210,14 +211,11 @@ void __attribute__((constructor)) tazerInit(void) {
         //enable if running into issues with an application that launches child shells
         bool unsetLib = getenv("TAZER_UNSET_LIB") ? atoi(getenv("TAZER_UNSET_LIB")) : 0;
         if (unsetLib){
-            std::cout<<"unloading lib"<<std::endl;
             unsetenv("LD_PRELOAD"); 
-        }
-        else{
-            std::cout<<"doing nothing" <<" "<<unsetLib<<" "<<getenv("TAZER_UNSET_LIB")<<" "<<Config::useSharedMemoryCache<<" "<<getenv("TAZER_SHARED_MEM_CACHE")<<std::endl;
         }    
     
         timer.end(Timer::MetricType::tazer, Timer::Metric::constructor);
+        *InputFile::_time_of_last_read = std::chrono::high_resolution_clock::now();
     });
     init = true;
 }

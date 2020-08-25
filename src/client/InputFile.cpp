@@ -123,6 +123,7 @@ PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>>* InputFi
 PriorityThreadPool<std::packaged_task<Request *()>>* InputFile::_decompressionPool;
 
 Cache *InputFile::_cache = NULL; //(BASECACHENAME);
+std::chrono::time_point<std::chrono::high_resolution_clock> *InputFile::_time_of_last_read = NULL;
 
 void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     int level = 0;
@@ -340,11 +341,14 @@ bool InputFile::trackRead(size_t count, uint32_t index, uint32_t startBlock, uin
         unixopen_t unixopen = (unixopen_t)dlsym(RTLD_NEXT, "open");
         unixclose_t unixclose = (unixclose_t)dlsym(RTLD_NEXT, "close");
         unixwrite_t unixwrite = (unixwrite_t)dlsym(RTLD_NEXT, "write");
+        auto cur_time = std::chrono::high_resolution_clock::now();
+        auto elapsed = (double)std::chrono::duration_cast<std::chrono::nanoseconds>(cur_time - *InputFile::_time_of_last_read).count()/1000000000.0;
+        *InputFile::_time_of_last_read = cur_time;
 
         int fd = (*unixopen)("access_new.txt", O_WRONLY | O_APPEND | O_CREAT, 0660);
         if (fd != -1) {
             std::stringstream ss;
-            ss << _name << " " << _filePos[index] << " " << count << " " << startBlock << " " << endBlock << std::endl;
+            ss << _name << " " << _filePos[index] << " " << count << " " << startBlock << " " << endBlock <<" "<<elapsed << std::endl;
             unixwrite(fd, ss.str().c_str(), ss.str().length());
             unixclose(fd);
             return true;

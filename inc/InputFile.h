@@ -106,6 +106,7 @@ class InputFile : public TazerFile {
     static PriorityThreadPool<std::packaged_task<Request*()>>* _decompressionPool;
 
     static Cache *_cache;
+    static std::chrono::time_point<std::chrono::high_resolution_clock>*  _time_of_last_read;
 
   private:
     uint64_t fileSizeFromServer();
@@ -119,6 +120,7 @@ class InputFile : public TazerFile {
     uint32_t _numBlks;
     uint32_t _regFileIndex;
     Prefetcher *_prefetcher;
+
 
 };
 
