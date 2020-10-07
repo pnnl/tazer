@@ -105,7 +105,6 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
     _eof(false),
     _compress(false),
     _prefetch(false),
-    _save_local(false),
     _blkSize(1),
     _initMetaTime(0),
     _active(false),
@@ -118,13 +117,31 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
 TazerFile::~TazerFile() {
 }
 
-//meta.in format:
-//server-ip-address:server-port:compression:prefetch:localfile:blk_size:file to read(location on the server)|
-//notes:
-//"prefetch" enables prefetching for this file
-//"localfile" is currently unused right now (should be set to 0)
-//the entry for a server must end in "|"
-//multiple servers can be provided (separated by "|")
+std::string TazerFile::findMetaParam(std::string param, std::string server, bool required){
+    size_t start = server.find(param);
+    if (start == std::string::npos){
+        if (required){
+            log(this) << "improperly formatted meta file, unable to find: "<< param << std::endl;
+            exit(0);
+        }
+        else{
+            return std::string("");
+        }
+    }
+    size_t end = server.find("\n",start);
+    start = start+param.size(); //only return the data part
+    size_t len = end;
+    if (end != std::string::npos){
+        len -= start;
+    }
+    std::string val = server.substr(start, len);
+    log(this) << param << val << std::endl;
+    return val;
+}
+
+
+
+
 bool TazerFile::readMetaInfo() {
     TIMEON(uint64_t t1 = Timer::getCurrentTime());
     auto start = Timer::getCurrentTime();
@@ -148,73 +165,37 @@ bool TazerFile::readMetaInfo() {
     meta[fileSize] = '\0';
     std::string metaStr(meta);
     uint32_t numServers = 0;
-    size_t cur = 0;
-    size_t l = metaStr.find("|");
-    while (l != std::string::npos) {
-        std::string line = metaStr.substr(cur, l - cur);
-        log(this) << cur << " " << line << std::endl;
-
-        uint32_t lcur = 0;
-        uint32_t next = line.find(":", lcur);
-        if (next == std::string::npos) {
-            log(this) << "0:improperly formatted meta file" << std::endl;
-            break;
+    size_t server_start = metaStr.find("[server]");
+    while (server_start != std::string::npos) {
+        size_t server_end = metaStr.find("[server]",server_start+1);
+        size_t len = server_end;
+        if (server_end != std::string::npos){
+            len -= start;
         }
-        std::string hostAddr = line.substr(lcur, next - lcur);
-        log(this) << "hostaddr: " << hostAddr << std::endl;
+        std::string server = metaStr.substr(server_start, len);
+        
+        //required params----------------------------------------------------
+        std::string hostAddr = findMetaParam("host=",server,true);
+        int port = atoi(findMetaParam("port=",server,true).c_str());
+        _name = findMetaParam("file=",server,true);
+        //-------------------------------------------------------------------
 
-        lcur = next + 1;
-        next = line.find(":", lcur);
-        if (next == std::string::npos) {
-            log(this) << "1:improperly formatted meta file" << std::endl;
-            break;
+        //optional params----------------------------------------------------
+        std::string compress = findMetaParam("compress=",server, false);
+        if (compress.size() > 0){
+            _compress = atoi(compress.c_str());
         }
-        int port = atoi(line.substr(lcur, next - lcur).c_str());
-        log(this) << "port: " << port << std::endl;
+        
+        std::string prefetch = findMetaParam("prefetch=",server, false); //maybe we specify prefetch mode here eventually....
+        if (prefetch.size() > 0){
+            _prefetch = atoi(prefetch.c_str());
+        }
 
-        lcur = next + 1;
-        next = line.find(":", lcur);
-        if (next == std::string::npos) {
-            log(this) << "2:improperly formatted meta file" << std::endl;
-            break;
+        std::string blkSize = findMetaParam("blocksize=",server, false); // I think this is currently overwritten based on the cache block size in config.h
+        if (prefetch.size() > 0){                                        // but we maybe able to explore per file block sizes (that are a multiple of the cache block size)
+            _blkSize = atoi(blkSize.c_str());
         }
-        _compress = atoi(line.substr(lcur, next - lcur).c_str());
-        log(this) << "compress: " << _compress << std::endl;
-
-        lcur = next + 1;
-        next = line.find(":", lcur);
-        if (next == std::string::npos) {
-            log(this) << "3:improperly formatted meta file" << std::endl;
-            break;
-        }
-        _prefetch = atoi(line.substr(lcur, next - lcur).c_str());
-        log(this) << "prefetch: " << _prefetch << std::endl;
-
-        lcur = next + 1;
-        next = line.find(":", lcur);
-        if (next == std::string::npos) {
-            log(this) << "4:improperly formatted meta file" << std::endl;
-            break;
-        }
-        _save_local = atoi(line.substr(lcur, next - lcur).c_str());
-        log(this) << "save_local: " << _save_local << std::endl;
-
-        lcur = next + 1;
-        next = line.find(":", lcur);
-        if (next == std::string::npos) {
-            log(this) << "5:improperly formatted meta file" << std::endl;
-            break;
-        }
-        _blkSize = atoi(line.substr(lcur, next - lcur).c_str());
-        log(this) << "blkSize: " << _blkSize << std::endl;
-
-        lcur = next + 1;
-        next = line.size();
-        std::string fileName = line.substr(lcur, next - lcur);
-        if(fileName.length()){
-            _name = fileName;
-            log(this) << "fileName: " << fileName << std::endl;
-        }
+        //-------------------------------------------------------------------
 
         if (_type != TazerFile::Local) {
             Connection *connection = Connection::addNewClientConnection(hostAddr, port);
@@ -227,10 +208,8 @@ bool TazerFile::readMetaInfo() {
                 _connections.push_back(connection);
                 numServers++;
             }
-        }
-
-        cur = l + 1;
-        l = metaStr.find("|", cur);
+        };
+        server_start = server_end;
     }
 
     delete[] meta;
@@ -238,6 +217,7 @@ bool TazerFile::readMetaInfo() {
     _initMetaTime = Timer::getCurrentTime()-start;
     return (numServers > 0);
 }
+
 
 TazerFile::Type TazerFile::type() {
     return _type;

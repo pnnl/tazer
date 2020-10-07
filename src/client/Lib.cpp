@@ -104,6 +104,10 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
+#define TAZER_ID "TAZER"
+#define TAZER_ID_LEN 5 
+#define TAZER_VERSION "0.1"
+#define TAZER_VERSION_LEN 3 //5+3
 
 static Timer timer;
 
@@ -277,19 +281,61 @@ inline bool splitter(std::string tok, std::string full, std::string &path, std::
 }
 
 inline bool checkMeta(const char *pathname, std::string &path, std::string &file, TazerFile::Type &type) {
-    if (strstr(pathname, ".meta.")) {
-        std::string full(pathname);
-        TazerFile::Type tokType[3] = {TazerFile::Input, TazerFile::Output, TazerFile::Local};
-        std::string tok[3] = {".meta.in", ".meta.out", ".meta.local"};
-        for (unsigned int i = 0; i < 3; i++) {
-            if (splitter(tok[i], full, path, file)) {
-                type = tokType[i];
-                DPRINTF("Path: %s File: %s\n", path.c_str(), file.c_str());
+    FILE * fp = unixfopen(pathname, "r");
+    if (fp){
+        size_t len = TAZER_ID_LEN + TAZER_VERSION_LEN + 1;
+        char* line = new char[len];
+        
+
+        if (fgets(line,len,fp) == NULL){
+            fclose(fp);
+            delete[] line;
+            return false; //we can assume this isnt a tazer file (or some other error occured that we will let the posixfunc report)
+        }
+        fgetc(fp); //consume newline
+        if ( strncmp(TAZER_ID,line,TAZER_ID_LEN) >= 0 && strncmp(TAZER_VERSION,&line[TAZER_ID_LEN],TAZER_VERSION_LEN) >= 0 ){ //valid tazer header
+            path = std::string(pathname);
+            file = std::string(pathname);
+            auto read = getline(&line,&len,fp);
+            if (read < 0 ){
+                fprintf(stderr,"ERROR: reading tazer type (set as input,output, or local... e.g. type=input\n");
+                fclose(fp);
+                delete[] line;
+                return false;
+            } 
+            if(strcasestr(line,"input") != NULL){
+                fclose(fp);
+                type = TazerFile::Input;
+                delete[] line;
                 return true;
             }
+            else if (strcasestr(line,"output") != NULL){
+                fclose(fp);
+                type = TazerFile::Output;
+                delete[] line;
+                return true;
+            }
+            else if (strcasestr(line,"local") != NULL){
+                fclose(fp);
+                type = TazerFile::Local;
+                delete[] line;
+                return true;
+            }
+            else{
+                fprintf(stderr,"ERROR: reading tazer type (set as input,output, or local... e.g. type=input\n");
+                fclose(fp);
+                delete[] line;
+                return false;
+            }
+
         }
+        else{ //we can assume this is not a tazer file.
+            fclose(fp);
+            delete[] line;
+            return false;
+        }
+
     }
-    DPRINTF("~ %s Path: %s File: %s\n", pathname, path.c_str(), file.c_str());
     return false;
 }
 
