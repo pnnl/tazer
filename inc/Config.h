@@ -122,7 +122,7 @@ const unsigned int fileOpenRetry = 1;
 
 //Serve file Parameters
 const unsigned int numCompressTask = 0;
-const unsigned int removeOutput = 1;
+const unsigned int removeOutput = 0;
 
 //architecure Parameters
 const bool enableSharedMem = getenv("TAZER_ENABLE_SHARED_MEMORY") ? atoi(getenv("TAZER_ENABLE_SHARED_MEMORY")) : 1;

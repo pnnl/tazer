@@ -101,53 +101,12 @@
 #include "UnixIO.h"
 #include "ThreadPool.h"
 #include "PriorityThreadPool.h"
+#include "Lib.h"
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-static Timer timer;
 
-std::once_flag log_flag;
-bool init = false;
-ReaderWriterLock vLock;
-
-std::unordered_set<std::string>* track_files = NULL; //this is a pointer cause we access in ((attribute)) constructor and initialization isnt guaranteed
-static std::unordered_set<int> track_fd;
-static std::unordered_set<FILE *> track_fp;
-static std::unordered_set<int> ignore_fd;
-static std::unordered_set<FILE *> ignore_fp;
-
-unixopen_t unixopen = NULL;
-unixopen_t unixopen64 = NULL;
-unixclose_t unixclose = NULL;
-unixread_t unixread = NULL;
-unixwrite_t unixwrite = NULL;
-unixlseek_t unixlseek = NULL;
-unixlseek64_t unixlseek64 = NULL;
-unixxstat_t unixxstat = NULL;
-unixxstat64_t unixxstat64 = NULL;
-unixxstat_t unixlxstat = NULL;
-unixxstat64_t unixlxstat64 = NULL;
-unixfsync_t unixfsync = NULL;
-unixfopen_t unixfopen = NULL;
-unixfopen_t unixfopen64 = NULL;
-unixfclose_t unixfclose = NULL;
-unixfread_t unixfread = NULL;
-unixfwrite_t unixfwrite = NULL;
-unixftell_t unixftell = NULL;
-unixfseek_t unixfseek = NULL;
-unixrewind_t unixrewind = NULL;
-unixfgetc_t unixfgetc = NULL;
-unixfgets_t unixfgets = NULL;
-unixfputc_t unixfputc = NULL;
-unixfputs_t unixfputs = NULL;
-unixflockfile_t unixflockfile = NULL;
-unixftrylockfile_t unixftrylockfile = NULL;
-unixfunlockfile_t unixfunlockfile = NULL;
-unixfflush_t unixfflush = NULL;
-unixfeof_t unixfeof = NULL;
-unixreadv_t unixreadv = NULL;
-unixwritev_t unixwritev = NULL;
 
 void __attribute__((constructor)) tazerInit(void) {
     std::call_once(log_flag, []() {
@@ -259,191 +218,191 @@ int removeStr(char *s, const char *r) {
     return 0;
 }
 
-/*Templating*************************************************************************************************/
+// /*Templating*************************************************************************************************/
 
-inline bool splitter(std::string tok, std::string full, std::string &path, std::string &file) {
-    size_t pos = full.find(tok);
-    if (pos != std::string::npos) {
-        path = full.substr(0, pos + tok.length());
-        if (path.length() < full.length())
-            file = full.substr(path.length() + 1);
-        else
-            file = full;
-        return true;
-    }
-    path = full;
-    file = full;
-    return false;
-}
+// inline bool splitter(std::string tok, std::string full, std::string &path, std::string &file) {
+//     size_t pos = full.find(tok);
+//     if (pos != std::string::npos) {
+//         path = full.substr(0, pos + tok.length());
+//         if (path.length() < full.length())
+//             file = full.substr(path.length() + 1);
+//         else
+//             file = full;
+//         return true;
+//     }
+//     path = full;
+//     file = full;
+//     return false;
+// }
 
-inline bool checkMeta(const char *pathname, std::string &path, std::string &file, TazerFile::Type &type) {
-    if (strstr(pathname, ".meta.")) {
-        std::string full(pathname);
-        TazerFile::Type tokType[3] = {TazerFile::Input, TazerFile::Output, TazerFile::Local};
-        std::string tok[3] = {".meta.in", ".meta.out", ".meta.local"};
-        for (unsigned int i = 0; i < 3; i++) {
-            if (splitter(tok[i], full, path, file)) {
-                type = tokType[i];
-                DPRINTF("Path: %s File: %s\n", path.c_str(), file.c_str());
-                return true;
-            }
-        }
-    }
-    DPRINTF("~ %s Path: %s File: %s\n", pathname, path.c_str(), file.c_str());
-    return false;
-}
+// inline bool checkMeta(const char *pathname, std::string &path, std::string &file, TazerFile::Type &type) {
+//     if (strstr(pathname, ".meta.")) {
+//         std::string full(pathname);
+//         TazerFile::Type tokType[3] = {TazerFile::Input, TazerFile::Output, TazerFile::Local};
+//         std::string tok[3] = {".meta.in", ".meta.out", ".meta.local"};
+//         for (unsigned int i = 0; i < 3; i++) {
+//             if (splitter(tok[i], full, path, file)) {
+//                 type = tokType[i];
+//                 DPRINTF("Path: %s File: %s\n", path.c_str(), file.c_str());
+//                 return true;
+//             }
+//         }
+//     }
+//     DPRINTF("~ %s Path: %s File: %s\n", pathname, path.c_str(), file.c_str());
+//     return false;
+// }
 
-inline bool trackFile(int fd) { return init ? track_fd.count(fd) : false; }
-inline bool trackFile(FILE *fp) { return init ? track_fp.count(fp) : false; }
-inline bool trackFile(const char *name) { return init ? track_files->count(name) : false; }
+// inline bool trackFile(int fd) { return init ? track_fd.count(fd) : false; }
+// inline bool trackFile(FILE *fp) { return init ? track_fp.count(fp) : false; }
+// inline bool trackFile(const char *name) { return init ? track_files->count(name) : false; }
 
-inline bool ignoreFile(uint64_t fd) { return init ? ignore_fd.count(fd) : false; }
-inline bool ignoreFile(FILE *fp) { return init ? ignore_fp.count(fp) : false; }
-inline bool ignoreFile(std::string pathname) {
-    if (init) {
-        if (pathname.find(Config::filelockCacheFilePath) != std::string::npos) {
-            return true;
-        }
-        if (pathname.find(Config::fileCacheFilePath) != std::string::npos) {
-            return true;
-        }
-        if (pathname.find(Config::burstBufferCacheFilePath) != std::string::npos) {
-            return true;
-        }
-    }
-    return false;
-}
+// inline bool ignoreFile(uint64_t fd) { return init ? ignore_fd.count(fd) : false; }
+// inline bool ignoreFile(FILE *fp) { return init ? ignore_fp.count(fp) : false; }
+// inline bool ignoreFile(std::string pathname) {
+//     if (init) {
+//         if (pathname.find(Config::filelockCacheFilePath) != std::string::npos) {
+//             return true;
+//         }
+//         if (pathname.find(Config::fileCacheFilePath) != std::string::npos) {
+//             return true;
+//         }
+//         if (pathname.find(Config::burstBufferCacheFilePath) != std::string::npos) {
+//             return true;
+//         }
+//     }
+//     return false;
+// }
 
-template <typename T>
-inline void removeFileStream(T posixFun, FILE *fp) {}
-inline void removeFileStream(unixfclose_t posixFun, FILE *fp) {
-    if (posixFun == unixfclose)
-        TazerFileStream::removeStream(fp);
-}
+// template <typename T>
+// inline void removeFileStream(T posixFun, FILE *fp) {}
+// inline void removeFileStream(unixfclose_t posixFun, FILE *fp) {
+//     if (posixFun == unixfclose)
+//         TazerFileStream::removeStream(fp);
+// }
 
-template <typename Func, typename FuncLocal, typename... Args>
-inline auto innerWrapper(int fd, bool &isTazerFile, Func tazerFun, FuncLocal localFun, Args... args) {
-    TazerFile *file = NULL;
-    unsigned int fp = 0;
-    if (init && TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, fp)) {
-        isTazerFile = true;
+// template <typename Func, typename FuncLocal, typename... Args>
+// inline auto innerWrapper(int fd, bool &isTazerFile, Func tazerFun, FuncLocal localFun, Args... args) {
+//     TazerFile *file = NULL;
+//     unsigned int fp = 0;
+//     if (init && TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, fp)) {
+//         isTazerFile = true;
 
-        return tazerFun(file, fp, args...);
-    }
-    return localFun(args...);
-}
+//         return tazerFun(file, fp, args...);
+//     }
+//     return localFun(args...);
+// }
 
-template <typename Func, typename FuncLocal, typename... Args>
-inline auto innerWrapper(FILE *fp, bool &isTazerFile, Func tazerFun, FuncLocal localFun, Args... args) {
-    if (init) {
-        ReaderWriterLock *lock = NULL;
-        int fd = TazerFileStream::lookupStream(fp, lock);
-        if (fd != -1) {
-            isTazerFile = true;
-            lock->writerLock();
-            TazerFile *file = NULL;
-            unsigned int pos = 0;
-            TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, pos);
-            auto ret = tazerFun(file, pos, fd, args...);
-            lock->writerUnlock();
-            removeFileStream(localFun, fp);
-            return ret;
-        }
-    }
-    return localFun(args...);
-}
+// template <typename Func, typename FuncLocal, typename... Args>
+// inline auto innerWrapper(FILE *fp, bool &isTazerFile, Func tazerFun, FuncLocal localFun, Args... args) {
+//     if (init) {
+//         ReaderWriterLock *lock = NULL;
+//         int fd = TazerFileStream::lookupStream(fp, lock);
+//         if (fd != -1) {
+//             isTazerFile = true;
+//             lock->writerLock();
+//             TazerFile *file = NULL;
+//             unsigned int pos = 0;
+//             TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, pos);
+//             auto ret = tazerFun(file, pos, fd, args...);
+//             lock->writerUnlock();
+//             removeFileStream(localFun, fp);
+//             return ret;
+//         }
+//     }
+//     return localFun(args...);
+// }
 
-template <typename Func, typename FuncPosix, typename... Args>
-inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun, FuncPosix posixFun, Args... args) {
-    std::string path;
-    std::string file;
-    TazerFile::Type type;
-    if (init && checkMeta(pathname, path, file, type)) {
-        isTazerFile = true;
-        return tazerFun(file, path, type, args...);
-    }
-    return posixFun(args...);
-}
+// template <typename Func, typename FuncPosix, typename... Args>
+// inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun, FuncPosix posixFun, Args... args) {
+//     std::string path;
+//     std::string file;
+//     TazerFile::Type type;
+//     if (init && checkMeta(pathname, path, file, type)) {
+//         isTazerFile = true;
+//         return tazerFun(file, path, type, args...);
+//     }
+//     return posixFun(args...);
+// }
 
-template <typename T1, typename T2>
-inline void addToSet(std::unordered_set<int> &set, T1 value, T2 posixFun) {}
-inline void addToSet(std::unordered_set<int> &set, int value, unixopen_t posixFun) {
-    if (posixFun == unixopen || posixFun == unixopen64)
-        set.emplace(value);
-}
-inline void addToSet(std::unordered_set<FILE *> &set, FILE *value, unixfopen_t posixFun) {
-    if (posixFun == unixfopen)
-        set.emplace(value);
-}
+// template <typename T1, typename T2>
+// inline void addToSet(std::unordered_set<int> &set, T1 value, T2 posixFun) {}
+// inline void addToSet(std::unordered_set<int> &set, int value, unixopen_t posixFun) {
+//     if (posixFun == unixopen || posixFun == unixopen64)
+//         set.emplace(value);
+// }
+// inline void addToSet(std::unordered_set<FILE *> &set, FILE *value, unixfopen_t posixFun) {
+//     if (posixFun == unixfopen)
+//         set.emplace(value);
+// }
 
-template <typename T1, typename T2>
-inline void removeFromSet(std::unordered_set<int> &set, T1 value, T2 posixFun) {}
-inline void removeFromSet(std::unordered_set<int> &set, int value, unixclose_t posixFun) {
-    if (posixFun == unixclose)
-        set.erase(value);
-}
-inline void removeFromSet(std::unordered_set<FILE *> &set, FILE *value, unixfclose_t posixFun) {
-    if (posixFun == unixfclose)
-        set.erase(value);
-}
+// template <typename T1, typename T2>
+// inline void removeFromSet(std::unordered_set<int> &set, T1 value, T2 posixFun) {}
+// inline void removeFromSet(std::unordered_set<int> &set, int value, unixclose_t posixFun) {
+//     if (posixFun == unixclose)
+//         set.erase(value);
+// }
+// inline void removeFromSet(std::unordered_set<FILE *> &set, FILE *value, unixfclose_t posixFun) {
+//     if (posixFun == unixfclose)
+//         set.erase(value);
+// }
 
-template <typename FileId, typename Func, typename FuncPosix, typename... Args>
-auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func tazerFun, FuncPosix posixFun, Args... args) {
-    if (!init) {
-        posixFun = (FuncPosix)dlsym(RTLD_NEXT, name);
-        return posixFun(args...);
-    }
+// template <typename FileId, typename Func, typename FuncPosix, typename... Args>
+// auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func tazerFun, FuncPosix posixFun, Args... args) {
+//     if (!init) {
+//         posixFun = (FuncPosix)dlsym(RTLD_NEXT, name);
+//         return posixFun(args...);
+//     }
 
-    timer.start();
+//     timer.start();
 
-    //Check if this is a special file to track (from environment variable)
-    bool track = trackFile(fileId);
+//     //Check if this is a special file to track (from environment variable)
+//     bool track = trackFile(fileId);
 
-    //Check for files internal to tazer
-    bool ignore = ignoreFile(fileId);
+//     //Check for files internal to tazer
+//     bool ignore = ignoreFile(fileId);
 
-    //Check if a tazer meta-file
-    bool isTazerFile = false;
+//     //Check if a tazer meta-file
+//     bool isTazerFile = false;
 
-    //Do the work
-    auto retValue = innerWrapper(fileId, isTazerFile, tazerFun, posixFun, args...);
+//     //Do the work
+//     auto retValue = innerWrapper(fileId, isTazerFile, tazerFun, posixFun, args...);
 
-    if (ignore) {
-        //Maintain the ignore_fd set
-        addToSet(ignore_fd, retValue, posixFun);
-        removeFromSet(ignore_fd, retValue, posixFun);
-        timer.end(Timer::MetricType::local, Timer::Metric::dummy); //to offset the call to start()
-    }
-    else { //End Timers!
-        if (track) {
-            //Maintain the track_fd set
-            addToSet(track_fd, retValue, posixFun);
-            removeFromSet(track_fd, retValue, posixFun);
-            if (std::string("read").compare(std::string(name)) == 0 ||
-            std::string("write").compare(std::string(name)) == 0){
-                ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
-                if (ret != -1) {
-                    timer.addAmt(Timer::MetricType::local, metric,ret);
-                }
-            }
-            timer.end(Timer::MetricType::local, metric);
-        }
-        else if (isTazerFile){
-            timer.end(Timer::MetricType::tazer, metric);
-        }
-        else{
-            if (std::string("read").compare(std::string(name)) == 0 ||
-            std::string("write").compare(std::string(name)) == 0){
-                ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
-                if (ret != -1) {
-                    timer.addAmt(Timer::MetricType::system, metric,ret);
-                }
-            }
-            timer.end(Timer::MetricType::system, metric);
-        }
-    }
-    return retValue;
-}
+//     if (ignore) {
+//         //Maintain the ignore_fd set
+//         addToSet(ignore_fd, retValue, posixFun);
+//         removeFromSet(ignore_fd, retValue, posixFun);
+//         timer.end(Timer::MetricType::local, Timer::Metric::dummy); //to offset the call to start()
+//     }
+//     else { //End Timers!
+//         if (track) {
+//             //Maintain the track_fd set
+//             addToSet(track_fd, retValue, posixFun);
+//             removeFromSet(track_fd, retValue, posixFun);
+//             if (std::string("read").compare(std::string(name)) == 0 ||
+//             std::string("write").compare(std::string(name)) == 0){
+//                 ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
+//                 if (ret != -1) {
+//                     timer.addAmt(Timer::MetricType::local, metric,ret);
+//                 }
+//             }
+//             timer.end(Timer::MetricType::local, metric);
+//         }
+//         else if (isTazerFile){
+//             timer.end(Timer::MetricType::tazer, metric);
+//         }
+//         else{
+//             if (std::string("read").compare(std::string(name)) == 0 ||
+//             std::string("write").compare(std::string(name)) == 0){
+//                 ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
+//                 if (ret != -1) {
+//                     timer.addAmt(Timer::MetricType::system, metric,ret);
+//                 }
+//             }
+//             timer.end(Timer::MetricType::system, metric);
+//         }
+//     }
+//     return retValue;
+// }
 
 /*Posix******************************************************************************************************/
 

@@ -222,7 +222,7 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
                                                                                                                                    _outstandingWrites(0) {
     _pool.initiate();
 
-    log(this) << "file: " << _name << std::endl;
+    log(this) << "file: " << _name << "output: "<<output<< std::endl;
     // unsigned int retry = 0;
     struct stat sbuf;
     sbuf.st_size = 0;
@@ -246,7 +246,8 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
     if (_size || output) {
 
         if (output) {
-            std::experimental::filesystem::create_directories(std::experimental::filesystem::path(_name).parent_path());
+            log(this) <<"creating file for writing"<<std::endl;
+            bool created = std::experimental::filesystem::create_directories(std::experimental::filesystem::path(_name).parent_path());
             std::ofstream file;
             file.open(_name, std::fstream::binary);
             file.close();

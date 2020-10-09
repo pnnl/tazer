@@ -19,4 +19,6 @@ jobs:
     - name: make
       working-directory: build
       run: make
+    - name: unit tests
+      run: unit_test/RunLibCppUnitTest.sh
   
