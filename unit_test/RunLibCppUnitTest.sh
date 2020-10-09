@@ -10,7 +10,7 @@ fi
 
 TAZER_BUILD_DIR=$1
 if [ -z "$TAZER_BUILD_DIR" ];  then
-    $TAZER_BUILD_DIR=build
+    TAZER_BUILD_DIR=build
 fi
 
 
@@ -21,6 +21,7 @@ echo "$TAZER_WORKSPACE_ROOT $TAZER_BUILD_DIR"
 cd unit_test
 
 workspace=$TAZER_WORKSPACE_ROOT/runner-test
+rm -r ${workspace}
 # tazer_path=`pwd`/..
 
 # sbatch -N1 start_tazer_server.sh $workspace $TAZER_WORKSPACE_ROOT
@@ -31,5 +32,12 @@ tazer_server_nodes=`squeue -j ${tazer_server_task_id} -h -o "%N"`
 done
 echo "id: $tazer_server_task_id server_nodes: $tazer_server_nodes"
 sbatch --wait --dependency after:${tazer_server_task_id} -N1 run_unit_test.sh $workspace $TAZER_WORKSPACE_ROOT $TAZER_BUILD_DIR $tazer_server_nodes
-
 cat ${workspace}/client/test_results/lib_unit_test_out.txt
+
+success=`grep -irn ${workspace}/client/test_results/lib_unit_test_out.txt -e "all tests passed" | wc -l`
+
+if [ "$success" -gt "0" ]; then
+exit 0
+else
+exit 1
+fi
