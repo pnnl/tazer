@@ -85,9 +85,9 @@ int main(int argc, char **argv) {
     int port = (argc > 2) ? atoi(argv[2]) : Config::serverPort;
     unsigned int attempts = (argc > 3) ? atoi(argv[3]) : 10;
     unsigned int sleepTime = (argc > 4) ? atoi(argv[4]) : 10;
-
+    std::cout<<"Pinging "<<name<<":"<<port<<std::endl;
     while(attempts) {
-        Connection *connection = Connection::addNewClientConnection(name, Config::serverPort, 1);
+        Connection *connection = Connection::addNewClientConnection(name, port, 1);
         if (connection) {
             connection->lock();
             std::cout << "<<<<<<<<<<<<<<<<<<Sending Ping>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
@@ -100,5 +100,6 @@ int main(int argc, char **argv) {
         attempts--;
         sleep(sleepTime);
     }
+    std::cout<<"failed to ping"<<std::endl;
     return 0;
 }

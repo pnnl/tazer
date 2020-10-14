@@ -7,7 +7,7 @@ cd $workspace/client
 tazer_path=$2
 build_dir=$3
 server_nodes=$4
-unit_test_path=$tazer_path/unit_test
+unit_test_path=$tazer_path/tests/unit_test
 
 SERVER_ADDR=$server_nodes #this currently assumes just a single server...
 SERVER_PORT="5001"

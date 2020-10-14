@@ -20,5 +20,7 @@ jobs:
       working-directory: build
       run: make
     - name: unit tests
-      run: unit_test/RunLibCppUnitTest.sh
+      run: tests/unit_test/RunLibCppUnitTest.sh
+    - name: integration tests
+      run: tests/integration_tests/RunIntegrationTests.sh
   

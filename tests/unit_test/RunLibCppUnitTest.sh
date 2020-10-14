@@ -14,14 +14,12 @@ if [ -z "$TAZER_BUILD_DIR" ];  then
 fi
 
 
-echo "$TAZER_WORKSPACE_ROOT $TAZER_BUILD_DIR"
-
 # mv $TAZER_JENKINS_WORKSPACE/libcpp_unit_test $TAZER_JENKINS_WORKSPACE/tazer
 # cd $TAZER_JENKINS_WORKSPACE/tazer/libcpp_unit_test
-cd unit_test
+cd tests/unit_test
 
-workspace=$TAZER_WORKSPACE_ROOT/runner-test
-rm -r ${workspace}
+workspace=$TAZER_WORKSPACE_ROOT/runner-test/unit
+# rm -r ${workspace}
 # tazer_path=`pwd`/..
 
 # sbatch -N1 start_tazer_server.sh $workspace $TAZER_WORKSPACE_ROOT
@@ -31,6 +29,7 @@ while [ -z "$tazer_server_nodes" ]; do
 tazer_server_nodes=`squeue -j ${tazer_server_task_id} -h -o "%N"`
 done
 echo "id: $tazer_server_task_id server_nodes: $tazer_server_nodes"
+$TAZER_WORKSPACE_ROOT/${TAZER_BUILD_DIR}/test/PingServer $tazer_server_nodes 5001 300 1
 sbatch --wait --dependency after:${tazer_server_task_id} -N1 run_unit_test.sh $workspace $TAZER_WORKSPACE_ROOT $TAZER_BUILD_DIR $tazer_server_nodes
 cat ${workspace}/client/test_results/lib_unit_test_out.txt
 
