@@ -242,6 +242,7 @@ Request *Cache::requestBlock(uint32_t index, uint64_t &size, uint32_t fileIndex,
     req->ready = false;
     log(this) << _name << " " << _nextLevel->name() << std::endl;
     if (_nextLevel) {
+        // std::cout << _name << " " << _nextLevel->name() << std::endl;
         _nextLevel->readBlock(req, reads, priority);
     }
     // log(this) << "req: " << (void *)req << std::endl;

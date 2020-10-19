@@ -87,7 +87,8 @@ enum CacheType{
     globalFileLock,
     globalFcntl,
     network,
-    local
+    local,
+    urlCache
 };
 
 static inline std::string cacheTypeName(CacheType type){
@@ -114,6 +115,8 @@ static inline std::string cacheTypeName(CacheType type){
             return "network";
         case CacheType::local:
             return "local";
+        case CacheType::urlCache:
+            return "urlCache";
         default:
             return "unknown cache type";
     }

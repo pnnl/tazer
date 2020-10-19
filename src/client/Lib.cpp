@@ -90,6 +90,7 @@
 //#include "ErrorTester.h"
 #include "InputFile.h"
 #include "OutputFile.h"
+#include "LocalFile.h"
 #include "RSocketAdapter.h"
 #include "Request.h"
 #include "ReaderWriterLock.h"
@@ -101,6 +102,10 @@
 #include "UnixIO.h"
 #include "ThreadPool.h"
 #include "PriorityThreadPool.h"
+#include "UrlDownload.h"
+
+#define ADD_THROW __THROW
+// #define ADD_THROW
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
@@ -160,6 +165,7 @@ void __attribute__((constructor)) tazerInit(void) {
         OutputFile::_transferPool = new PriorityThreadPool<std::function<void()>>(1,"outfile tx pool");
         OutputFile::_decompressionPool = new ThreadPool<std::function<void()>>(Config::numClientDecompThreads,"outfile comp pool");
 
+        LocalFile::_cache = new Cache(BASECACHENAME, CacheType::base);
         ConnectionPool::useCnt = new std::unordered_map<std::string, uint64_t>();
         ConnectionPool::consecCnt = new std::unordered_map<std::string, uint64_t>();
         ConnectionPool::stats = new std::unordered_map<std::string, std::pair<double, double>>();
@@ -175,6 +181,8 @@ void __attribute__((constructor)) tazerInit(void) {
                 track_files->insert(f);
             }
         }
+        
+        curlInit;
 
         unixopen = (unixopen_t)dlsym(RTLD_NEXT, "open");
         unixopen64 = (unixopen_t)dlsym(RTLD_NEXT, "open64");
@@ -224,10 +232,11 @@ void __attribute__((destructor)) tazerCleanup(void) {
     timer.start();
     init = false; //set to false because we cant ensure our static members have not already been deleted.
 
-    if (Config::printStats) {
-        std::cout << "[TAZER] "
-                  << "Exiting Client" << std::endl;
+    curlEnd(Config::curlOnStartup);
+    curlDestroy;
 
+    if (Config::printStats) {
+        std::cout << "[TAZER] " << "Exiting Client" << std::endl;
         if (ConnectionPool::useCnt->size() > 0) {
             for (auto conUse : *ConnectionPool::useCnt) {
                 //if (conUse.second > 1) {
@@ -244,6 +253,7 @@ void __attribute__((destructor)) tazerCleanup(void) {
     delete InputFile::_transferPool;
     delete OutputFile::_decompressionPool;
     delete OutputFile::_transferPool;
+    delete LocalFile::_cache; //desturctor time tracked by each cache...
     timer.start();
     FileCacheRegister::closeFileCacheRegister();
     ConnectionPool::removeAllConnectionPools();
@@ -327,7 +337,6 @@ inline auto innerWrapper(int fd, bool &isTazerFile, Func tazerFun, FuncLocal loc
     unsigned int fp = 0;
     if (init && TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, fp)) {
         isTazerFile = true;
-
         return tazerFun(file, fp, args...);
     }
     return localFun(args...);
@@ -519,14 +528,14 @@ T tazerLseek(TazerFile *file, unsigned int fp, int fd, T offset, int whence) {
     return (T)file->seek(offset, whence, fp);
 }
 
-off_t lseek(int fd, off_t offset, int whence) {
+off_t lseek(int fd, off_t offset, int whence) ADD_THROW {
     vLock.readerLock();
     auto ret = outerWrapper("lseek", fd, Timer::Metric::seek, tazerLseek<off_t>, unixlseek, fd, offset, whence);
     vLock.readerUnlock();
     return ret;
 }
 
-off64_t lseek64(int fd, off64_t offset, int whence) {
+off64_t lseek64(int fd, off64_t offset, int whence) ADD_THROW {
     vLock.readerLock();
     auto ret = outerWrapper("lseek64", fd, Timer::Metric::seek, tazerLseek<off64_t>, unixlseek64, fd, offset, whence);
     vLock.readerUnlock();
@@ -547,29 +556,44 @@ int tazerStat(std::string name, std::string metaName, TazerFile::Type type, int 
         buf->st_size = (off_t)file->fileSize();
     else {
         int fd = (*unixopen)(metaName.c_str(), O_RDONLY, 0);
-        InputFile tempFile(name, metaName, fd, false);
-        buf->st_size = tempFile.fileSize();
+        if(type == TazerFile::Type::Input) {
+            InputFile tempFile(name, metaName, fd, false);
+            buf->st_size = tempFile.fileSize();
+        }
+        else if(type == TazerFile::Type::Local) {
+            int urlSize = supportedUrlType(name) ? sizeUrlPath(name) : -1;
+            if(urlSize > -1) {
+                if(Config::downloadForSize)
+                    buf->st_size = urlSize;
+                else if(urlSize == 0)
+                    buf->st_size = 1;
+            }
+            else {
+                LocalFile tempFile(name, metaName, fd, false);
+                buf->st_size = tempFile.fileSize();
+            }
+        }
         (*unixclose)(fd);
     }
     return ret;
 }
 
-int __xstat(int version, const char *filename, struct stat *buf) {
+int __xstat(int version, const char *filename, struct stat *buf) ADD_THROW {
     whichStat = unixxstat;
     return outerWrapper("__xstat", filename, Timer::Metric::stat, tazerStat<struct stat>, unixxstat, version, filename, buf);
 }
 
-int __xstat64(int version, const char *filename, struct stat64 *buf) {
+int __xstat64(int version, const char *filename, struct stat64 *buf) ADD_THROW {
     whichStat64 = unixxstat64;
     return outerWrapper("__xstat64", filename, Timer::Metric::stat, tazerStat<struct stat64>, unixxstat64, version, filename, buf);
 }
 
-int __lxstat(int version, const char *filename, struct stat *buf) {
+int __lxstat(int version, const char *filename, struct stat *buf) ADD_THROW {
     whichStat = unixxstat;
     return outerWrapper("__lxstat", filename, Timer::Metric::stat, tazerStat<struct stat>, unixlxstat, version, filename, buf);
 }
 
-int __lxstat64(int version, const char *filename, struct stat64 *buf) {
+int __lxstat64(int version, const char *filename, struct stat64 *buf) ADD_THROW {
     whichStat64 = unixlxstat64;
     return outerWrapper("__lxstat64", filename, Timer::Metric::stat, tazerStat<struct stat64>, unixlxstat64, version, filename, buf);
 }
@@ -755,7 +779,7 @@ int tazerFeof(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
     return file->eof();
 }
 
-int feof(FILE *fp) {
+int feof(FILE *fp) ADD_THROW {
     return outerWrapper("feof", fp, Timer::Metric::feof, tazerFeof, unixfeof, fp);
 }
 

@@ -1,4 +1,4 @@
-// -*-Mode: C++;-*- // technically C99
+// -*-Mode: C++;-*-
 
 //*BeginLicense**************************************************************
 //
@@ -72,47 +72,123 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef UnboundedCache_H
-#define UnboundedCache_H
-#include "Cache.h"
-#include "Loggable.h"
+#include "UrlCache.h"
+#include "UrlDownload.h"
+#include "Config.h"
+#include "Connection.h"
+#include "ConnectionPool.h"
+#include "Message.h"
 #include "ReaderWriterLock.h"
-#include "Trackable.h"
-#include "UnixIO.h"
+#include "Timer.h"
+#include "lz4.h"
+#include "xxhash.h"
+
+#include <chrono>
+#include <fcntl.h>
 #include <future>
+#include <memory>
+#include <string.h>
+#include <string>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
-#define UBC_BLK_EMPTY 0
-#define UBC_BLK_PRE 1
-#define UBC_BLK_RES 2
-#define UBC_BLK_WR 3
-#define UBC_BLK_AVAIL 4
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+#define DPRINTF(...)
 
-class UnboundedCache : public Cache {
-  public:
-    UnboundedCache(std::string cacheName, CacheType type, uint64_t blockSize);
-    virtual ~UnboundedCache();
+UrlCache::UrlCache(std::string cacheName, CacheType type, uint64_t blockSize) : UnboundedCache(cacheName, type, blockSize) { 
+    _lock = new ReaderWriterLock();
+}
 
-    virtual bool writeBlock(Request* req);
+UrlCache::~UrlCache() { 
+    delete _lock;
+}
 
-    virtual void readBlock(Request* req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request*>>> &reads, uint64_t priority);
+void UrlCache::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
+    _lock->writerLock();
+    if(supportedUrlType(filename))
+    {
+        if(_fileMap.count(index) == 0) {
+            //We probable don't need a hash, but oh well for now...
+            std::string hashstr(_name + filename);
+            uint64_t hash = (uint64_t)XXH32(hashstr.c_str(), filename.size(), 0);
+            _fileMap.emplace(index, FileEntry{filename, blockSize, fileSize, hash});
+            
+            UrlDownload * url = new UrlDownload(filename, (int)fileSize);
+            if(!url->exists())
+                std::cout << "WARNING: " << filename << " is not downloadable" << std::endl;
+            _urlMap.emplace(index, url);
+        }
+        _lock->writerUnlock();
+    }
+    else if(_nextLevel)
+        _nextLevel->addFile(index, filename, blockSize, fileSize);
+}
 
-    virtual void addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
+void UrlCache::removeFile(uint32_t index){
+    _lock->writerLock();
+    UrlDownload * url = _urlMap[index];
+    _urlMap.erase(index);
+    _fileMap.erase(index);
+    if(url)
+        delete url;
+    _lock->writerUnlock();
+}
 
-  protected:
-    virtual bool blockSet(uint32_t index, uint32_t fileIndex, uint8_t byte) = 0;
-    virtual bool blockReserve(unsigned int index, unsigned int fileIndex) = 0;
-    // virtual bool blockReserve(uint32_t index, uint32_t fileIndex, bool prefetch = false)=0;
-    virtual void cleanReservation();
+bool UrlCache::blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs) { 
+    bool ret = false;
+    _lock->readerLock();
+    if(_urlMap.count(fileIndex))
+        ret = true;
+    _lock->readerUnlock();
+    return ret; 
+}
 
-    virtual bool blockAvailable(uint32_t index, uint32_t fileIndex, bool arg = false) = 0;
-    virtual bool blockWritable(uint32_t index, uint32_t fileIndex, bool arg = false) = 0;
-    virtual uint8_t *getBlockData(uint32_t blockIndex, uint32_t fileIndex) = 0;
-    virtual void setBlockData(uint8_t *data, uint32_t blockIndex, uint64_t size, uint32_t fileIndex) = 0;
+bool UrlCache::blockReserve(unsigned int index, unsigned int fileIndex) { 
+    return true; 
+}
 
-    uint64_t _blockSize;
-    std::atomic_uint _outstanding;
-    std::unordered_map<uint32_t, std::atomic<uint8_t> *> _blkIndex;
-    ReaderWriterLock *_lock;
-};
+//Gets the actual data
+uint8_t *UrlCache::getBlockData(unsigned int blockIndex, unsigned int fileIndex) {
+    uint8_t * buff = NULL;
+    _lock->readerLock();
+    UrlDownload * url = _urlMap[fileIndex];
+    uint64_t blockSize = _fileMap[fileIndex].blockSize;
+    uint64_t fileSize = url->size();
+    unsigned int start = blockIndex * blockSize;
+    unsigned int end = start + blockSize - 1;
+    if(end > fileSize)
+        end = fileSize - 1;
+    buff = (uint8_t*) url->downloadRange(start, end);
+    _lock->readerUnlock();
+    return buff;
+}
 
-#endif /* UnboundedCache_H */
+bool UrlCache::blockWritable(unsigned int index, unsigned int fileIndex, bool checkFs) { 
+    return false; 
+}
+
+void UrlCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size, unsigned int fileIndex) { 
+    std::cout << "Error UrlCache setBlockData" << std::endl; 
+}
+
+bool UrlCache::blockSet(unsigned int index, unsigned int fileIndex, uint8_t byte) {
+    std::cout << "Error UrlCache blockSet" << std::endl;
+    return false;
+}
+
+void UrlCache::cleanUpBlockData(uint8_t *data) {
+    delete[] data;
+}
+
+Cache *UrlCache::addNewUrlCache(std::string cacheName, CacheType type, uint64_t blockSize) {
+    return Trackable<std::string, Cache *>::AddTrackable(
+        cacheName, [=]() -> Cache * {
+            Cache *temp = new UrlCache(cacheName, type, blockSize);
+            if (temp)
+                return temp;
+            delete temp;
+            return NULL;
+        });
+}
