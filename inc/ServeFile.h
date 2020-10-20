@@ -137,6 +137,7 @@ class ServeFile : public Loggable, public Trackable<std::string, ServeFile *> {
     uint64_t _size;
     uint64_t _numBlks;
     bool _open;
+    bool _url;
 
     ReaderWriterLock _prefetchLock;
 

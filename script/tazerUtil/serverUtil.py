@@ -40,7 +40,7 @@ class TazerServer:
     #   (optional) attempts = Number of times to attempt a ping. Default is 10
     #   (optional) sleepTime = Time in seconds to sleep between attempts. Default is 10
     def ping(self, serverIpAddr=None, port=None, attempts=None, sleepTime=None):
-        serverIpAddr = serverIpAdd if serverIpAddr != None else self.serverIpAddr
+        serverIpAddr = serverIpAddr if serverIpAddr != None else self.serverIpAddr
         port = port if port != None else self.port 
         pingPath = self.path + "/test/PingServer"
         args = [pingPath]
@@ -65,7 +65,7 @@ class TazerServer:
     #   serverIpAddr = Ip address of the server.
     #   (optional) port = Port server is listening on. Default is 6023 (Config.h: serverPort)
     def close(self, serverIpAddr=None, port=None):
-        serverIpAddr = serverIpAdd if serverIpAddr != None else self.serverIpAddr
+        serverIpAddr = serverIpAddr if serverIpAddr != None else self.serverIpAddr
         port = port if port != None else self.port
         closePath = self.path + "/test/CloseServer"
         args = [closePath]

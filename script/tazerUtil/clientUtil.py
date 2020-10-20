@@ -32,12 +32,24 @@ class TazerClient:
             newLdPreload = self.path + ":" + oldLdPreload
         os.environ["LD_PRELOAD"] = newLdPreload
         util.printCommand(args)
-        process = sp.Popen(args, stdout=self.outFile, stderr=self.outFile, universal_newlines=True)
-        process.wait()
         if self.outputFileName == None:
-            print(process.stdout.read())
+            for progress in self.execute(args):
+                print(progress, end="")
+        else:
+            process = sp.Popen(args, stdout=self.outFile, stderr=self.outFile, universal_newlines=True)
+            process.wait()
         # Here we do the LD_PRELOAD restoration
         if oldLdPreload == None:
             del os.environ["LD_PRELOAD"]
         else:
             os.environ["LD_PRELOAD"] = oldLdPreload
+
+    #This is a trick to print the progress as we go
+    def execute(self, cmd):
+        # print("SHOULD SEE OUTPUT")
+        process = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True)
+        for outLine in iter(process.stdout.readline, ""):
+            yield outLine 
+        process.stdout.close()
+        process.wait()
+        print(process.stderr.read())

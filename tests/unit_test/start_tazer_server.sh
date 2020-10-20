@@ -30,8 +30,11 @@ if [ `ls $SERVER_DATA_PATH | wc -l` -gt 1 ]; then
     rm tazer_data/*.txt
 fi
 
+rm /dev/shm/*tazer*${USER}*
+
 TAZER_SERVER_PATH=$TAZER_BUILD_DIR/src/server/server
 
 TAZER_SERVER_CACHE_SIZE=$((128*1024*1024)) $TAZER_SERVER_PATH $SERVER_PORT "$SERVER_ADDR" 2>&1 | tee "server_${SERVER_ADDR}".log
+# TAZER_SERVER_CACHE_SIZE=$((128*1024*1024)) $tazer_path/tests/unit_test/server_gdb.sh $TAZER_SERVER_PATH $SERVER_PORT "$SERVER_ADDR" 2>&1 | tee "server_${SERVER_ADDR}".log
 
 

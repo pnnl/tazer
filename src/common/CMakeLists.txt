@@ -40,7 +40,6 @@ set(COMMON_HEADERS
     ${CMAKE_SOURCE_DIR}/inc/Prefetcher.h
     ${CMAKE_SOURCE_DIR}/inc/DeltaPrefetcher.h
     ${CMAKE_SOURCE_DIR}/inc/PerfectPrefetcher.h
-
 )
 
 set(COMMON_FILES
@@ -82,5 +81,13 @@ set(COMMON_FILES
     PerfectPrefetcher.cpp
 )
 
+if(CURL_LIB)
+    set(COMMON_HEADERS ${COMMON_HEADERS} ${CMAKE_SOURCE_DIR}/inc/UrlDownload.h 
+                                         ${CMAKE_SOURCE_DIR}/inc/UrlFileCache.h
+                                         ${CMAKE_SOURCE_DIR}/inc/UrlCache.h)
+    set(COMMON_FILES ${COMMON_FILES} UrlDownload.cpp UrlFileCache.cpp UrlCache.cpp)
+endif()
+
 add_library(common OBJECT ${COMMON_HEADERS} ${COMMON_FILES})
 add_library(threadPool SHARED ThreadPool.cpp PriorityThreadPool.cpp Timer.cpp ReaderWriterLock.cpp FSReaderWriterLock.cpp Loggable.cpp)
+target_link_libraries(threadPool ${RDMACM_LIB} ${RT_LIB} ${CURL_LIB} ${SSL_LIB} stdc++fs)

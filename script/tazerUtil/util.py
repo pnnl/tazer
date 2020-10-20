@@ -46,7 +46,14 @@ class TazerEnv:
             "TAZER_PREFETCHER_TYPE" : None,
             "TAZER_PREFETCH_NUM_BLKS" : None,
             "TAZER_PREFETCH_DELTA" : None,
-            "TAZER_PREFETCH_FILEDIR" : None
+            "TAZER_PREFETCH_FILEDIR" : None,
+            "TAZER_CURL_HANDLES" : None,
+            "TAZER_URL_TIMEOUT" : None,
+            "TAZER_DOWNLOAD_PATH" : None,
+            "TAZER_DELETE_DOWNLOADS" : None,
+            "TAZER_URL_TIMEOUT" : None,
+            "TAZER_DOWNLOAD_FOR_SIZE" : None,
+            "TAZER_CURL_ON_START" : None
         }
 
     #Sets a single Tazer environment variable

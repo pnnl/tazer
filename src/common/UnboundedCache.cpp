@@ -164,6 +164,8 @@ void UnboundedCache::readBlock(Request* req, std::unordered_map<uint32_t, std::s
             req->originating=this;
             req->reservedMap[this]=1;
             req->ready = true;
+            req->time = Timer::getCurrentTime() - req->time;
+            updateRequestTime(req->time);
         }
         else {
             // if (!prefetch) {

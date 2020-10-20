@@ -213,6 +213,15 @@ const std::string prefetchFileDir = getenv("TAZER_PREFETCH_FILEDIR") ? getenv("T
 //const bool prefetchNextBlks = getenv("TAZER_PREFETCH") ? atoi(getenv("TAZER_PREFETCH")) : 1;
 
 //-----------------------------------------------------
+//Curl parameters
+const unsigned int numCurlHandles = getenv("TAZER_CURL_HANDLES") ? atoi(getenv("TAZER_CURL_HANDLES")) : 10;
+const long UrlTimeOut = getenv("TAZER_URL_TIMEOUT") ? atol(getenv("TAZER_URL_TIMEOUT")) : 1; //Seconds
+const std::string DownloadPath(getenv("TAZER_DOWNLOAD_PATH") ? getenv("TAZER_DOWNLOAD_PATH") : ".");
+const bool deleteDownloads = getenv("TAZER_DELETE_DOWNLOADS") ? atoi(getenv("TAZER_DELETE_DOWNLOADS")) : 1;
+const bool downloadForSize = getenv("TAZER_DOWNLOAD_FOR_SIZE") ? atoi(getenv("TAZER_DOWNLOAD_FOR_SIZE")) : 1;
+const bool curlOnStartup = getenv("TAZER_CURL_ON_START") ? atoi(getenv("TAZER_CURL_ON_START")) : 0;
+const bool urlFileCacheOn = getenv("TAZER_URL_FILE_CACHE_ON") ? atoi(getenv("TAZER_URL_FILE_CACHE_ON")) : 0;
+//-----------------------------------------------------
 
 const uint64_t outputFileBufferSize = 16UL * 1024 * 1024;
 

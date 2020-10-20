@@ -101,7 +101,8 @@
 #include "UnixIO.h"
 #include "ThreadPool.h"
 #include "PriorityThreadPool.h"
-// #include ""
+
+#define ADD_THROW __THROW
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
@@ -355,17 +356,17 @@ ssize_t write(int fd, const void *buf, size_t count);
 
 template <typename T>
 T tazerLseek(TazerFile *file, unsigned int fp, int fd, T offset, int whence);
-off_t lseek(int fd, off_t offset, int whence);
-off64_t lseek64(int fd, off64_t offset, int whence);
+off_t lseek(int fd, off_t offset, int whence) ADD_THROW;
+off64_t lseek64(int fd, off64_t offset, int whence) ADD_THROW;
 
 int innerStat(int version, const char *filename, struct stat *buf);
 int innerStat(int version, const char *filename, struct stat64 *buf);
 template <typename T>
 int tazerStat(std::string name, std::string metaName, TazerFile::Type type, int version, const char *filename, T *buf);
-int __xstat(int version, const char *filename, struct stat *buf);
-int __xstat64(int version, const char *filename, struct stat64 *buf);
-int __lxstat(int version, const char *filename, struct stat *buf);
-int __lxstat64(int version, const char *filename, struct stat64 *buf);
+int __xstat(int version, const char *filename, struct stat *buf) ADD_THROW;
+int __xstat64(int version, const char *filename, struct stat64 *buf) ADD_THROW;
+int __lxstat(int version, const char *filename, struct stat *buf) ADD_THROW;
+int __lxstat64(int version, const char *filename, struct stat64 *buf) ADD_THROW;
 
 int tazerFsync(TazerFile *file, unsigned int fp, int fd);
 int fsync(int fd);
@@ -408,7 +409,7 @@ int tazerFputs(TazerFile *file, unsigned int pos, int fd, const char *__restrict
 int fputs(const char *__restrict s, FILE *__restrict fp);
 
 int tazerFeof(TazerFile *file, unsigned int pos, int fd, FILE *fp);
-int feof(FILE *fp);
+int feof(FILE *fp) ADD_THROW;
 
 off_t tazerRewind(TazerFile *file, unsigned int pos, int fd, int fd2, off_t offset, int whence);
 void rewind(FILE *fp);

@@ -123,8 +123,8 @@ void OutputFile::open() {
             if (openFileOnServer()) {
                 _transferPool->initiate();
                 _decompressionPool->initiate();
-                std::cerr << "[TAZER] "
-                          << "output: " << _name << " opened" << std::endl;
+                // std::cerr << "[TAZER] "
+                //           << "output: " << _name << " opened" << std::endl;
             }
             else { //We failed to open the file kill the threads we started...
                 _active.store(false);

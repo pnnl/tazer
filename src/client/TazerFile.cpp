@@ -89,6 +89,7 @@
 #include "InputFile.h"
 #include "TazerFile.h"
 #include "OutputFile.h"
+#include "LocalFile.h"
 #include "Timer.h"
 #include "UnixIO.h"
 
@@ -218,7 +219,7 @@ bool TazerFile::readMetaInfo() {
 
         if (_type != TazerFile::Local) {
             Connection *connection = Connection::addNewClientConnection(hostAddr, port);
-            log(this) << hostAddr << " " << port << " " << connection << std::endl;
+            // std::cout << hostAddr << " " << port << " " << connection << std::endl;
             if (connection) {
                 if (ConnectionPool::useCnt->count(connection->addrport()) == 0) {
                     ConnectionPool::useCnt->emplace(connection->addrport(), 0);
@@ -294,7 +295,8 @@ void TazerFile::setFilePos(uint32_t index, uint64_t pos) {
 TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName, std::string metaName, int fd, bool open) {
     if (type == TazerFile::Input) {
         return Trackable<std::string, TazerFile *>::AddTrackable(
-            fileName, [=]() -> TazerFile * {
+            metaName, [=]() -> TazerFile * {
+                // std::cout << "new input " <<fileName<<" "<<metaName<<" "<<std::endl;
                 TazerFile *temp = new InputFile(fileName, metaName, fd, open);
                 if (open && temp && temp->active() == 0) {
                     delete temp;
@@ -305,7 +307,8 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
     }
     else if (type == TazerFile::Output) {
         return Trackable<std::string, TazerFile *>::AddTrackable(
-            fileName, [=]() -> TazerFile * {
+            metaName, [=]() -> TazerFile * {
+                // std::cout << "new output " <<fileName<<" "<<metaName<<" "<<std::endl;
                 TazerFile *temp = new OutputFile(fileName, metaName, fd);
                 if (temp && temp->active() == 0) {
                     delete temp;
@@ -314,18 +317,18 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
                 return temp;
             });
     }
-    // TODO: reimplement local file with new cache structure
-    // else if (type == TazerFile::Local) {
-    //     return Trackable<std::string, TazerFile *>::AddTrackable(
-    //         fileName, [=]() -> TazerFile * {
-    //             TazerFile *temp = new LocalFile(fileName, fd, open);
-    //             if (open && temp && temp->active() == 0) {
-    //                 delete temp;
-    //                 return NULL;
-    //             }
-    //             return temp;
-    //         });
-    // }
+    else if (type == TazerFile::Local) {
+        return Trackable<std::string, TazerFile *>::AddTrackable(
+            metaName, [=]() -> TazerFile * {
+                // std::cout << "new local " <<fileName<<" "<<metaName<<" "<<std::endl;
+                TazerFile *temp = new LocalFile(fileName, metaName, fd, open);
+                if (open && temp && temp->active() == 0) {
+                    delete temp;
+                    return NULL;
+                }
+                return temp;
+            });
+    }
     return NULL;
 }
 
@@ -335,14 +338,17 @@ bool TazerFile::removeTazerFile(std::string fileName) {
         char temp[1000];
         strcpy(temp, fileName.c_str());
         removeStr(temp, ".tmp");
+        // std::cout<<" remove tazer 1: "<<fileName<<std::endl;
         return Trackable<std::string, TazerFile *>::RemoveTrackable(temp);
     }
     else {
+        // std::cout<<" remove tazer 2: "<<fileName<<std::endl;
         return Trackable<std::string, TazerFile *>::RemoveTrackable(fileName);
     }
 }
 
 bool TazerFile::removeTazerFile(TazerFile *file) {
+    // std::cout<<" remove: "<<file->_name<<" "<<file->_metaName<<std::endl;
     return removeTazerFile(file->_metaName);
 }
 

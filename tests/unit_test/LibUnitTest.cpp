@@ -1107,18 +1107,22 @@ TEST_CASE("feof test", "[Lib.cpp]") {
     fgetc(fp);
     REQUIRE(feof(fp) > 0);
 
+    printf("feof test!!!!!!!!!!!!!!!!!!\n");
     FILE *fp2 = fopen("local_data/tazer1GB.dat.meta.in","r");
+    printf("after open\n");
     REQUIRE(feof(fp2) == 0);
-
+    printf("after eof 1\n");
     fseek(fp2, 1, SEEK_END);
     fgetc(fp2);
     REQUIRE(feof(fp2) > 0);
+    printf("after eof 2\n");
 
     fclose(fp);
     fclose(fp2);
 }
 
 TEST_CASE("tazerRewind test","[Lib.cpp]") {
+    printf("tazer rewind test...\n");
     int fd = open("local_data/tazer1GB.dat.meta.in",O_RDONLY);
     int fd2 = 0;
     
