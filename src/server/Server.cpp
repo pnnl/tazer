@@ -117,7 +117,10 @@ void openFile(Connection *connection, char *buff) {
     bool compress;
     bool output;
     std::string fileName = parseOpenFileMsg(buff, blkSize, compress, output);
-    ServeFile *file = ServeFile::addNewServeFile(fileName, compress, blkSize, (output) ? 0 : Config::numCompressTask, output, Config::removeOutput);
+    ServeFile *file = ServeFile::addNewServeFile(fileName, compress, blkSize, (compress) ? 0 : Config::numCompressTask, output, Config::removeOutput);
+    // if (file){
+    //     std::cout<<"opened: "<<file->name()<<std::endl;
+    // }
     bool opened = (file != NULL);
     uint64_t size = (opened) ? file->size() : 0;
     if (sendFileSizeMsg(connection, fileName, size, opened)) {
@@ -134,6 +137,7 @@ void openFile(Connection *connection, char *buff) {
 
 void closeFile(Connection *connection, char *buff) {
     std::string fileName = parseCloseFileMsg(buff);
+    // std::cout<<"[TAZER] "<<"close file"<<fileName<<" "<<connection->addr()<<":"<<connection->port()<<std::endl;
     if (!sendAckMsg(connection, CLOSE_FILE_MSG)) {
         PRINTF("Failed ack close %s\n", fileName.c_str());
     }

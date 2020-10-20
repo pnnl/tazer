@@ -247,7 +247,7 @@ InputFile::~InputFile() {
 
 void InputFile::open() {
     //   std::cout << "[TAZER] "
-    //             << "InputFile: " << _connections.size() << std::endl;
+    //             << "InputFile: " << _name<<" eof "<<_eof << std::endl;
     if (_connections.size()) {
         std::unique_lock<std::mutex> lock(_openCloseLock);
         bool prev = false;

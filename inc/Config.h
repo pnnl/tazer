@@ -122,7 +122,7 @@ const unsigned int fileOpenRetry = 1;
 
 //Serve file Parameters
 const unsigned int numCompressTask = 0;
-const unsigned int removeOutput = 1;
+const unsigned int removeOutput = 0;
 
 //architecure Parameters
 const bool enableSharedMem = getenv("TAZER_ENABLE_SHARED_MEMORY") ? atoi(getenv("TAZER_ENABLE_SHARED_MEMORY")) : 1;
@@ -219,8 +219,8 @@ const long UrlTimeOut = getenv("TAZER_URL_TIMEOUT") ? atol(getenv("TAZER_URL_TIM
 const std::string DownloadPath(getenv("TAZER_DOWNLOAD_PATH") ? getenv("TAZER_DOWNLOAD_PATH") : ".");
 const bool deleteDownloads = getenv("TAZER_DELETE_DOWNLOADS") ? atoi(getenv("TAZER_DELETE_DOWNLOADS")) : 1;
 const bool downloadForSize = getenv("TAZER_DOWNLOAD_FOR_SIZE") ? atoi(getenv("TAZER_DOWNLOAD_FOR_SIZE")) : 1;
-const bool curlOnStartup = getenv("TAZER_CURL_ON_START") ? atoi(getenv("TAZER_CURL_ON_START")) : 1;
-const bool urlFileCacheOn = getenv("TAZER_URL_FILE_CACHE_ON") ? atoi(getenv("TAZER_URL_FILE_CACHE_ON")) : 1;
+const bool curlOnStartup = getenv("TAZER_CURL_ON_START") ? atoi(getenv("TAZER_CURL_ON_START")) : 0;
+const bool urlFileCacheOn = getenv("TAZER_URL_FILE_CACHE_ON") ? atoi(getenv("TAZER_URL_FILE_CACHE_ON")) : 0;
 //-----------------------------------------------------
 
 const uint64_t outputFileBufferSize = 16UL * 1024 * 1024;

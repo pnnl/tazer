@@ -199,6 +199,7 @@ Cache *LocalFileCache::addNewLocalFileCache(std::string cacheName, CacheType typ
 }
 
 void LocalFileCache::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
+    std::cout<<_name<<" adding file: "<<filename<<std::endl;
     // //log(this) /*std::cout*/<<"[TAZER] " << "adding file: " << filename << " " << (void *)this << " " << (void *)_nextLevel << std::endl;
     // //log(this) /*std::cout*/ << "[TAZER] " << _name << " " << filename << " " << fileSize << " " << blockSize << std::endl;
     _lock->writerLock();

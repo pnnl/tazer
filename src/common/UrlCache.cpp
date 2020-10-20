@@ -120,10 +120,12 @@ void UrlCache::addFile(uint32_t index, std::string filename, uint64_t blockSize,
                 std::cout << "WARNING: " << filename << " is not downloadable" << std::endl;
             _urlMap.emplace(index, url);
         }
-        _lock->writerUnlock();
+       
     }
-    else if(_nextLevel)
+    _lock->writerUnlock();
+    if(_nextLevel){
         _nextLevel->addFile(index, filename, blockSize, fileSize);
+    }
 }
 
 void UrlCache::removeFile(uint32_t index){

@@ -269,7 +269,8 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
     if (_size || output) {
 
         if (output) {
-            std::experimental::filesystem::create_directories(std::experimental::filesystem::path(_name).parent_path());
+            // std::cout <<"creating file for writing"<<std::endl;
+            bool created = std::experimental::filesystem::create_directories(std::experimental::filesystem::path(_name).parent_path());
             std::ofstream file;
             file.open(_name, std::fstream::binary);
             file.close();
@@ -305,12 +306,12 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
                 addCompressTask(i);
             }
         }
-        log(this) << "Opened " << _name << " " << output << " size: " << _size << std::endl;
+        std::cout << "Opened " << _name << " " << output << " size: " << _size << std::endl;
         _open = true;
     }
 
     else {
-        log(this) << "ERROR: file " << _name << " does not exists" << std::endl;
+        std::cout << "ERROR: file " << _name << " does not exists" << std::endl;
     }
 }
 
@@ -324,9 +325,10 @@ ServeFile::~ServeFile() {
     _pool.terminate();
 
     if (_output && _remove) {
-        // std::cout<<"removing: "<<_name<<std::endl;
+        std::cout<<"removing: "<<_name<<std::endl;
         remove(_name.c_str());
     }
+    if(!_output){ //output files arent actually present withing the caching structure
     #ifdef USE_CURL
         if(Config::urlFileCacheOn)
             ((UrlFileCache*)(_cache.getCacheByName(URLFILECACHENAME)))->removeFile(_regFileIndex);
@@ -340,6 +342,7 @@ ServeFile::~ServeFile() {
     #else
         ((LocalFileCache*)_cache.getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
     #endif 
+    }
     log(this) << _name << " closed" << std::endl;
 }
 
@@ -504,6 +507,7 @@ bool ServeFile::open() {
 
 ServeFile *ServeFile::addNewServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t initialCompressTask, bool output, bool remove) {
     return Trackable<std::string, ServeFile *>::AddTrackable(name, [=] {
+        // std::cout<<"add new server file: "<<name<<std::endl;
         ServeFile *newFile = new ServeFile(name, compress, blkSize, initialCompressTask, output, remove);
         if (newFile->open()) {
             return newFile;
