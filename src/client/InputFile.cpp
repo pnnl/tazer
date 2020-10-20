@@ -365,7 +365,7 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
 
         if (_filePos[index] >= _fileSize) {
             log(this) << "[TAZER] " << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
-            _eof = true;
+            _eof[index] = true;
             _cache->stats.end(false, CacheStats::Metric::ovh);
             _cache->stats.end(false, CacheStats::Metric::hits);
             _cache->stats.end(false, CacheStats::Metric::read);
@@ -538,7 +538,7 @@ off_t InputFile::seek(off_t offset, int whence, uint32_t index) {
         break;
     }
 
-    _eof = false;
+    _eof[index] = false;
     return _filePos[index];
 }
 

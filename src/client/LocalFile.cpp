@@ -252,7 +252,7 @@ ssize_t LocalFile::read(void *buf, size_t count, uint32_t index) {
     if (_active.load() && _numBlks) {
         if (_filePos[index] >= _fileSize) {
             // std::cerr << "[TAZER]" << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
-            _eof = true;
+            _eof[index] = true;
             return 0;
         }
         
@@ -320,7 +320,7 @@ off_t LocalFile::seek(off_t offset, int whence, uint32_t index) {
         _filePos[index] = _fileSize + offset;
         break;
     }
-    _eof = false;
+    _eof[index] = false;
     return _filePos[index];
 }
 

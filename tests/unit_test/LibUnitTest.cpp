@@ -1117,8 +1117,13 @@ TEST_CASE("feof test", "[Lib.cpp]") {
     REQUIRE(feof(fp2) > 0);
     printf("after eof 2\n");
 
+    FILE *fp3 = fopen("local_data/tazer1GB.dat.meta.in","r");
+    printf("after open\n");
+    REQUIRE(feof(fp3) == 0);
+
     fclose(fp);
     fclose(fp2);
+    fclose(fp3);
 }
 
 TEST_CASE("tazerRewind test","[Lib.cpp]") {

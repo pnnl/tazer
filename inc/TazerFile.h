@@ -125,7 +125,7 @@ class TazerFile : public Loggable, public Trackable<std::string, TazerFile *> {
     bool compress();
     bool prefetch();
     bool active();
-    bool eof();
+    bool eof(uint32_t index);
 
   protected:
     bool readMetaInfo();
@@ -136,7 +136,7 @@ class TazerFile : public Loggable, public Trackable<std::string, TazerFile *> {
 
     std::mutex _fpMutex;
     std::vector<uint64_t> _filePos;
-    bool _eof;
+    std::vector<bool> _eof;
 
     //Properties from meta data file
     bool _compress;
