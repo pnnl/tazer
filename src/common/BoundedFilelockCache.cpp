@@ -216,8 +216,8 @@ BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, CacheType type
     _binLock = new FcntlBoundedReaderWriterLock(sizeof(FileBlockEntry) * _associativity, _numBins, _lockPath,"bin");
     _blkLock = new FcntlBoundedReaderWriterLock(_blockSize, _numBlocks, _cachePath,"blk");
 
-    _binFd = (*_open)(_lockPath.c_str(), O_RDWR);
-    _blkFd = (*_open)(_cachePath.c_str(), O_RDWR);
+    _binFd = (*_open)(_lockPath.c_str(), O_RDWR| O_DIRECT| O_SYNC);
+    _blkFd = (*_open)(_cachePath.c_str(), O_RDWR| O_DIRECT| O_SYNC);
 
     _shared = true;
 
