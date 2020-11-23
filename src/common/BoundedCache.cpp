@@ -101,7 +101,7 @@ BoundedCache<Lock>::BoundedCache(std::string cacheName, CacheType type, uint64_t
                                                                                                                           _prefetchCollisions(0),
                                                                                                                           _outstanding(0) {
 
-    // log(this) /*std::cout*/<< "Constructing " << _name << " in Boundedcache" << std::endl;
+    // log(this) /*debug()*/<< "Constructing " << _name << " in Boundedcache" << std::endl;
     stats.start();
     log(this) << _name << " " << _cacheSize << " " << _blockSize << " " << _numBlocks << std::endl;
     if (_associativity == 0 || _associativity > _numBlocks) { //make fully associative
@@ -122,14 +122,18 @@ BoundedCache<Lock>::~BoundedCache() {
     _terminating = true;
     log(this) << _name << " cache collisions: " << _collisions.load() << " prefetch collisions: " << _prefetchCollisions.load() << std::endl;
     // for (uint32_t i = 0; i < _numBlocks; i++) {
-    //     log(this) /*std::cout*/<< i << std::endl;
+    //     log(this) /*debug()*/<< i << std::endl;
     //     if (_blkIndex[i].activeCnt > 0) {
-    //         log(this) /*std::cout*/<< i << " " << _numBlocks << " " << _blkIndex[i].activeCnt.load() << " " << _blkIndex[i].status << std::endl;
+    //         log(this) /*debug()*/<< i << " " << _numBlocks << " " << _blkIndex[i].activeCnt.load() << " " << _blkIndex[i].status << std::endl;
     //     }
     // }
 
     log(this) << "deleting " << _name << " in Boundedcache" << std::endl;
     delete _localLock;
+}
+template <class Lock>
+std::string BoundedCache<Lock>::blockEntryStr(uint32_t index){
+    return _name+" block entry str";
 }
 
 template <class Lock>
@@ -190,7 +194,7 @@ int BoundedCache<Lock>::getBlockIndex(uint32_t index, uint32_t fileIndex, BlockE
 }
 
 template <class Lock>
-int BoundedCache<Lock>::oldestBlockIndex(uint32_t index, uint32_t fileIndex, bool &found) {
+int BoundedCache<Lock>::oldestBlockIndex(uint32_t index, uint32_t fileIndex, bool &found, Request* req) {
     found = false;
     uint32_t minTime = -1; //this is max uint32_t
     uint32_t minIndex = -1;
@@ -202,7 +206,7 @@ int BoundedCache<Lock>::oldestBlockIndex(uint32_t index, uint32_t fileIndex, boo
     BlockEntry *entry = cmpBlk.get();
     auto blkEntries = readBin(binIndex);
 
-    for (uint32_t i = 0; i < _associativity; i++) {
+    for (uint32_t i = 0; i < _associativity; i++) { // maybe we want to split this into two loops--first to check if any empty or if its here, then a lru pass, other wise we require checking the number of active users on every block which can be expensive for file backed caches
         //Find actual, empty, or oldest
         if (blkEntries[i]->status == BLK_EMPTY) { //The space is empty!!!
             found = false;
@@ -228,7 +232,7 @@ int BoundedCache<Lock>::oldestBlockIndex(uint32_t index, uint32_t fileIndex, boo
             }
             //LRU
             if (blkEntries[i]->timeStamp < minTime) { //Look for an old one
-                if (!anyUsers(i + binOffset)) {
+                if (!anyUsers(i + binOffset,req)) { //can optimize a read since we already have the blkEntry, pass the pointer to the entry?
                     minTime = blkEntries[i]->timeStamp;
                     minIndex = i + binOffset;
                 }
@@ -236,7 +240,7 @@ int BoundedCache<Lock>::oldestBlockIndex(uint32_t index, uint32_t fileIndex, boo
 
             //PrefetchEvict policy evicts prefetched blocks first
             if (Config::prefetchEvict && blkEntries[i]->prefetched && blkEntries[i]->timeStamp < minPrefetchTime) {
-                if (!anyUsers(i + binOffset)) {
+                if (!anyUsers(i + binOffset,req)) {
                     minPrefetchTime = blkEntries[i]->timeStamp;
                     minPrefetchIndex = i + binOffset;
                 }
@@ -255,21 +259,21 @@ int BoundedCache<Lock>::oldestBlockIndex(uint32_t index, uint32_t fileIndex, boo
         _collisions++;
         trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 0);
 
-        // log(this) /*std::cout*/<< _name << " evicting: " << minIndex << " " << _blkIndex[minIndex].blockIndex - 1 << " (" << _blkIndex[minIndex].activeCnt.load() << ") "
+        // log(this) /*debug()*/<< _name << " evicting: " << minIndex << " " << _blkIndex[minIndex].blockIndex - 1 << " (" << _blkIndex[minIndex].activeCnt.load() << ") "
         //           << " for " << index << std::endl;
         return minIndex;
     }
-    log(this) << _name << " All space is reserved..." << std::endl;
+    log(this)<< _name << " All space is reserved..." << std::endl;
     return -1;
 }
 
 //Must lock first!
 template <class Lock>
-bool BoundedCache<Lock>::blockReserve(uint32_t index, uint32_t fileIndex, bool &found, int &reservedIndex, bool prefetch) {
+bool BoundedCache<Lock>::blockReserve(uint32_t index, uint32_t fileIndex, bool &found, int &reservedIndex, Request* req, bool prefetch) {
     bool ret = false;
     DPRINTF("beg br blk: %u out: %u ret %u fi %u Full: %u < %u\n", index, _outstanding.load(), ret, fileIndex, _fullFlag->load(), _numBlocks);
-    reservedIndex = oldestBlockIndex(index, fileIndex, found);
-    // log(this) /*std::cout*/ << " " << _name << "reserving: " << index << " " << reservedIndex << " " << found << " p: " << prefetch << std::endl;
+    reservedIndex = oldestBlockIndex(index, fileIndex, found, req);
+    // log(this) /*debug()*/ << " " << _name << "reserving: " << index << " " << reservedIndex << " " << found << " p: " << prefetch << std::endl;
     if (!found && reservedIndex > -1) {
         if (prefetch) {
             blockSet(reservedIndex, fileIndex, index, BLK_PRE, _type, prefetch);
@@ -286,90 +290,158 @@ bool BoundedCache<Lock>::blockReserve(uint32_t index, uint32_t fileIndex, bool &
 
 template <class Lock>
 bool BoundedCache<Lock>::writeBlock(Request *req) {
-    // log(this) /*std::cout*/<< _name << " entering write: " << index << " " << size << " " << _blockSize << " " << (void *)buffer << " " << (void *)originating << " " << (void *)_nextLevel << std::endl;
+    req->trace()<<_name<<" WRITE BLOCK"<<std::endl;
+    // log(this) /*debug()*/<< _name << " entering write: " << index << " " << size << " " << _blockSize << " " << (void *)buffer << " " << (void *)originating << " " << (void *)_nextLevel << std::endl;
     // log(this) << "write " << _name << " fi: " << req->fileIndex << " i: " << req->blkIndex << " orig: " << req->originating->name() <<" "<<(uint32_t)req->reservedMap[this]<< std::endl;
-
+    
     bool ret = false;
     if (req->reservedMap[this] > 0 || !_terminating) { //when terminating dont waste time trying to write orphan requests
         auto index = req->blkIndex;
         auto fileIndex = req->fileIndex;
         auto binIndex = getBinIndex(index, fileIndex);
         if (req->originating == this) {
-            _binLock->readerLock(binIndex);
+            req->trace()<<"originating cache"<<std::endl;
+            
+            req->trace(_type == CacheType::boundedGlobalFile)<<"wlocking bin "<<binIndex<<std::endl;
+            _binLock->writerLock(binIndex,req);
+            req->trace(_type == CacheType::boundedGlobalFile)<<"wlocked bin "<<binIndex<<std::endl;
+
+            req->trace(_type == CacheType::boundedGlobalFile)<<"find allocated entry ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<std::endl;
             int blockIndex = getBlockIndex(index, fileIndex);
-            _binLock->readerUnlock(binIndex);
+            req->trace(_type == CacheType::boundedGlobalFile)<<"blockindex returned: "<<blockIndex<<::getpid()<<std::endl;
+            // req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocking bin "<<binIndex<<std::endl;
+            // _binLock->writerUnlock(binIndex,req);
+            // req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocked bin "<<binIndex<<std::endl;
             if (blockIndex >= 0) {
+                req->trace(_type == CacheType::boundedGlobalFile)<<"entry found ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
                 if (req->reservedMap[this] > 0) {
-                    auto t_cnt = decBlkCnt(blockIndex);
+                    req->trace(_type == CacheType::boundedGlobalFile)<<"decrement "<<blockIndex<<" ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                    auto t_cnt = decBlkCnt(blockIndex, req);
                     if (t_cnt == 0) {
                         log(this) << _name << " underflow in orig activecnt (" << t_cnt - 1 << ") for blkIndex: " << blockIndex << " fileIndex: " << fileIndex << " index: " << index << std::endl;
                     }
                 }
             }
+            // the "else" would trigger in the case this cache was completely filled and active when the request was initiated so we didnt have a reservation for this block
             else {
-                std::cout << "[TAZER] " << _name << "writeblock should1 this even be possible?" << std::endl;
+                req->trace() << "entry not found ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                req->trace() << "writeblock should this even be possible?" << std::endl;
+                req->trace() << blockEntryStr(req->indexMap[this]) << std::endl;
             }
+            req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocking bin "<<binIndex<<std::endl;
+            _binLock->writerUnlock(binIndex,req);
+            req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocked bin "<<binIndex<<std::endl;
             cleanUpBlockData(req->data);
+            req->trace()<<"deleting req"<<std::endl;            
             delete req;
+            
             ret = true;
         }
         else {
+            req->trace()<<"not originating cache"<<std::endl;
             bool found = false;
 
             DPRINTF("beg wb blk: %u out: %u\n", index, _outstanding.load());
 
             if (req->size <= _blockSize) {
+                 req->trace(_type == CacheType::boundedGlobalFile)<<"wlocking bin "<<binIndex<<std::endl;
+                _binLock->writerLock(binIndex,req);
+                req->trace(_type == CacheType::boundedGlobalFile)<<"wlocked bin "<<binIndex<<std::endl;
+                
+                req->trace(_type == CacheType::boundedGlobalFile)<<"find oldest ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<std::endl;
+                int blockIndex = oldestBlockIndex(index, fileIndex, found, req);
+                req->trace(_type == CacheType::boundedGlobalFile)<<"find oldest result: bi: "<<blockIndex<<", found"<<found<<::getpid()<<std::endl;
 
-                _binLock->writerLock(binIndex);
-                int blockIndex = oldestBlockIndex(index, fileIndex, found);
-                // log(this) << "going to write  index: " << index << " fi: " << fileIndex << " found: " << found << " binIndex: " << binIndex <<" blockIndex: "<<blockIndex<< std::endl;
-                //DPRINTF("here! %u %d %u fi: %u\n",index,blockIndex,found,fileIndex);
                 trackBlock(_name, "[BLOCK_WRITE]", fileIndex, index, 0);
 
-                if (blockIndex >= 0) { //a slot for the block is present in the cache
+                if (blockIndex >= 0) { //a slot for the block is present in the cache and has not been marked present
+                    
+                    req->trace(_type == CacheType::boundedGlobalFile)<<"slot avail ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                    
                     BlockEntry entry;
                     readBlockEntry(blockIndex, &entry);
-                    if (entry.status != BLK_WR || entry.status != BLK_AVAIL) {
+                    
+                    if (entry.status != BLK_WR || entry.status != BLK_AVAIL || !found) { //not found means we evicted some block
+                        if(!found){
+                            req->trace(_type == CacheType::boundedGlobalFile)<<"evicted ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                            req->trace(_type == CacheType::boundedGlobalFile)<<"is this the problem? blockIndex: "<<blockIndex<<" entry"<<std::endl;
+                            req->trace(_type == CacheType::boundedGlobalFile)<<blockEntryStr(blockIndex);
+                        }
+                        
+                        req->trace(_type == CacheType::boundedGlobalFile)<<"update entry to writing ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
                         blockSet(blockIndex, fileIndex, index, BLK_WR, req->originating->type(), entry.prefetched);
-                        _binLock->writerUnlock(binIndex);
+                        
+                        // req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocking bin "<<binIndex<<std::endl;
+                        // _binLock->writerUnlock(binIndex,req);
+                        // req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocked bin "<<binIndex<<std::endl;
+                        
+                        req->trace(_type == CacheType::boundedGlobalFile)<<"writing data ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
                         setBlockData(req->data, blockIndex, req->size);
-                        _binLock->writerLock(binIndex);
+
+                        // req->trace(_type == CacheType::boundedGlobalFile)<<"wlocking bin "<<binIndex<<std::endl;                        
+                        // _binLock->writerLock(binIndex,req);
+                        // req->trace(_type == CacheType::boundedGlobalFile)<<"wlockedbin "<<binIndex<<std::endl;
+
+                        req->trace(_type == CacheType::boundedGlobalFile)<<"update entry to avail ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
                         blockSet(blockIndex, fileIndex, index, BLK_AVAIL, req->originating->type(), entry.prefetched); //write the name of the originating cache so we can properly attribute stall time...
-                        _binLock->writerUnlock(binIndex);
+                        
+                        // req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocking bin "<<binIndex<<std::endl;
+                        // _binLock->writerUnlock(binIndex,req);
+                        // req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocked bin "<<binIndex<<std::endl;
+
+                        if(!found){
+                             req->trace(_type == CacheType::boundedGlobalFile)<<"new entry "<<std::endl;
+                             req->trace(_type == CacheType::boundedGlobalFile)<<blockEntryStr(blockIndex);                             
+                        }
                     }
-                    else if (entry.status == BLK_AVAIL) {
+                    else if (entry.status == BLK_AVAIL) {//is this possible?
+                        req->trace(_type == CacheType::boundedGlobalFile)<<"update time ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
                         blockSet(blockIndex, fileIndex, index, BLK_AVAIL, req->originating->type(), entry.prefetched); //update timestamp
-                        _binLock->writerUnlock(binIndex);
+
+                        // req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocking bin "<<binIndex<<std::endl;
+                        // _binLock->writerUnlock(binIndex,req);
+                        // req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocked bin "<<binIndex<<std::endl;
                     }
                     else { //the writer will update the timestamp
-                        _binLock->writerUnlock(binIndex);
+                        req->trace(_type == CacheType::boundedGlobalFile)<<"other will update ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                        // req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocking bin "<<binIndex<<std::endl;                        
+                        // _binLock->writerUnlock(binIndex,req);
+                        // req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocked bin "<<binIndex<<std::endl;
                     }
                     if (found) {
+                        req->trace(_type == CacheType::boundedGlobalFile)<<"found entry("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                        
                         if (req->reservedMap[this] > 0) {
-                            auto t_cnt = decBlkCnt(blockIndex);
+                            req->trace(_type == CacheType::boundedGlobalFile)<<"decrememt ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                            auto t_cnt = decBlkCnt(blockIndex, req);
                             // auto t_cnt = _blkIndex[blockIndex].activeCnt.fetch_sub(1);
                             if (t_cnt == 0) {
                                 log(this) << _name << " underflow in write activecnt (" << t_cnt - 1 << ") for blkIndex: " << blockIndex << " fileIndex: " << fileIndex << " index: " << index << std::endl;
                             }
                         }
 
-                        // std::cout << "[TAZER]" << _name << " write: blkIndex: " << blockIndex << " fi: " << fileIndex << " i:" << index << " cnt: " << t_cnt - 1 << std::endl;
+                        // debug() << "[TAZER]" << _name << " write: blkIndex: " << blockIndex << " fi: " << fileIndex << " i:" << index << " cnt: " << t_cnt - 1 << std::endl;
                     }
-                    else {
-                        //log(this) /*std::cout*/ << "[TAZER]" << _name << " possible? blkIndex : " << blockIndex << " fi: " << fileIndex << " i:" << index << " cnt : " << _blkIndex[blockIndex].activeCnt.load() << std::endl;
-                    }
+                    // else { //this would happen if there wasnt a cache entry avail when we first requested, but there is now
+                    //     //log(this) /*debug()*/ << "[TAZER]" << _name << " possible? blkIndex : " << blockIndex << " fi: " << fileIndex << " i:" << index << " cnt : " << _blkIndex[blockIndex].activeCnt.load() << std::endl;
+                    // }
                     ret = true;
                 }
-                else {
-
+                else { //either no space in cache or block is already present
+                    req->trace(_type == CacheType::boundedGlobalFile)<<"no new space, looking for block ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
                     blockIndex = getBlockIndex(index, fileIndex);
-                    _binLock->writerUnlock(binIndex);
-                    if (blockIndex >= 0 && found) {
-                        if (req->reservedMap[this] > 0) {
-                            auto t_cnt = decBlkCnt(blockIndex);
-                            // auto t_cnt = _blkIndex[blockIndex].activeCnt.fetch_sub(1);
-                            // log(this) /*std::cout*/ <<   _name << " nowrite: blkIndex: " << blockIndex << " fi: (" << fileIndex + 1 << "," << _blkIndex[blockIndex].fileIndex << ") i: (" << index + 1 << "," << _blkIndex[blockIndex].blockIndex << ") prev cnt: " << t_cnt << " cur cnt: " << _blkIndex[blockIndex].activeCnt.load() << std::endl;
+                    req->trace(_type == CacheType::boundedGlobalFile)<<"block index: "<<blockIndex<<std::endl;
 
+                    // req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocking bin "<<binIndex<<std::endl;
+                    // _binLock->writerUnlock(binIndex,req);
+                    // req->trace(_type == CacheType::boundedGlobalFile)<<" wunlocked bin "<<binIndex<<std::endl;
+
+                    if (blockIndex >= 0 && found) {
+                        req->trace(_type == CacheType::boundedGlobalFile)<<" found old ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                        if (req->reservedMap[this] > 0) {
+                            req->trace(_type == CacheType::boundedGlobalFile)<<" decrement "<<blockIndex<<" ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                            auto t_cnt = decBlkCnt(blockIndex, req);
+                            // log(this) /*debug()*/ <<   _name << " nowrite: blkIndex: " << blockIndex << " fi: (" << fileIndex + 1 << "," << _blkIndex[blockIndex].fileIndex << ") i: (" << index + 1 << "," << _blkIndex[blockIndex].blockIndex << ") prev cnt: " << t_cnt << " cur cnt: " << _blkIndex[blockIndex].activeCnt.load() << std::endl;
                             if (t_cnt == 0) {
                                 log(this) << _name << " underflow nowrite: blkIndex: " << blockIndex << " fi: (" << fileIndex + 1 << ","
                                           << ") i: (" << index + 1 << ","
@@ -377,12 +449,23 @@ bool BoundedCache<Lock>::writeBlock(Request *req) {
                             }
                         }
                     }
+                    else{
+                        req->trace(_type == CacheType::boundedGlobalFile)<<"  no space, not found ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                    }
+
                     // else{} we probably didnt have space in the cache so no need to decrement the block
                 }
+                req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocking bin "<<binIndex<<std::endl;
+                _binLock->writerUnlock(binIndex,req);
+                req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocked bin "<<binIndex<<std::endl;
             }
             DPRINTF("end wb blk: %u out: %u\n", index, _outstanding.load());
             if (_nextLevel) {
                 ret &= _nextLevel->writeBlock(req);
+            }
+            else{
+                req->trace(_type == CacheType::boundedGlobalFile)<<"not sure how I got here"<<std::endl;
+                delete req;
             }
         }
     }
@@ -395,6 +478,10 @@ bool BoundedCache<Lock>::writeBlock(Request *req) {
         if (_nextLevel) {
             ret &= _nextLevel->writeBlock(req);
         }
+        else{
+            req->trace(_type == CacheType::boundedGlobalFile)<<"not sure how I got here"<<std::endl;
+            delete req;
+        }
     }
     return ret;
 }
@@ -404,17 +491,22 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
     stats.start(); //read
     stats.start(); //ovh
     bool prefetch = priority != 0;
+    req->trace()<<_name<<" READ BLOCK"<<std::endl;
+    if (_type == CacheType::boundedGlobalFile){
+        req->printTrace=true;
+    }
     log(this) << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << " nl: " << _nextLevel->name() << std::endl;
     trackBlock(_name, (priority != 0 ? " [BLOCK_PREFETCH_REQUEST] " : " [BLOCK_REQUEST] "), req->fileIndex, req->blkIndex, priority);
-    if ((_nextLevel->name() == NETWORKCACHENAME && getRequestTime() > _nextLevel->getRequestTime()) && Timer::getCurrentTime() % 1000 < 999) {
-        // if (getRequestTime() > _lastLevel->getRequestTime()) {
-        // log(this) << _name << "time: " << getRequestTime()  << " "  << _lastLevel->name() << " time: " << _lastLevel->getRequestTime() << std::endl;
-        // log(this) << " skipping: " << _name << std::endl;
-        stats.end(prefetch, CacheStats::Metric::ovh);
-        _lastLevel->readBlock(req, reads, priority);
-        stats.end(prefetch, CacheStats::Metric::read);
-        return;
-    }
+    // if ((_nextLevel->name() == NETWORKCACHENAME && getRequestTime() > _nextLevel->getRequestTime()) && Timer::getCurrentTime() % 1000 < 999) {
+    //     // if (getRequestTime() > _lastLevel->getRequestTime()) {
+    //     // log(this) << _name << "time: " << getRequestTime()  << " "  << _lastLevel->name() << " time: " << _lastLevel->getRequestTime() << std::endl;
+    //     // log(this) << " skipping: " << _name << std::endl;
+    //     req->trace+=" skipping->";
+    //     stats.end(prefetch, CacheStats::Metric::ovh);
+    //     _lastLevel->readBlock(req, reads, priority);
+    //     stats.end(prefetch, CacheStats::Metric::read);
+    //     return;
+    // }
 
     req->time = Timer::getCurrentTime();
 
@@ -434,11 +526,18 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
     }
 
     if (req->size <= _blockSize) {
-        _binLock->writerLock(binIndex);
+        req->trace(_type == CacheType::boundedGlobalFile)<<"wlocking bin "<<binIndex<<std::endl;
+        _binLock->writerLock(binIndex,req);
+        req->trace(_type == CacheType::boundedGlobalFile)<<"wlocked bin "<<binIndex<<std::endl;
+
         BlockEntry entry;
+        req->trace(_type == CacheType::boundedGlobalFile)<<"check if present ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<std::endl;
         int blockIndex = getBlockIndex(index, fileIndex, &entry);
+        req->trace(_type == CacheType::boundedGlobalFile)<<"entry: "<<blockIndex<<std::endl;
         if (blockIndex >= 0) { //block is present in cache HIT
-            incBlkCnt(blockIndex);
+            req->trace(_type == CacheType::boundedGlobalFile)<<"hit ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<std::endl;
+            req->trace(_type == CacheType::boundedGlobalFile)<<"increment "<<blockIndex<<std::endl;
+            incBlkCnt(blockIndex, req);
             // log(this) << " " << _name << " read hit: blkIndex: " << blockIndex << " fi: " << fileIndex << " i:" << index << " prev cnt: " << t_cnt << std::endl;
             trackBlock(_name, "[BLOCK_READ_HIT]", fileIndex, index, priority);
 
@@ -449,7 +548,8 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
             else {
                 stats.addAmt(prefetch, CacheStats::Metric::hits, req->size);
             }
-            blockSet(blockIndex, fileIndex, index, BLK_AVAIL, _type, entry.prefetched);
+            req->trace(_type == CacheType::boundedGlobalFile)<<"update access time"<<std::endl;
+            blockSet(blockIndex, fileIndex, index, BLK_AVAIL, _type, entry.prefetched); // add an additional param for updating the active count...
             stats.end(prefetch, CacheStats::Metric::ovh);
             stats.start(); // hits
             buff = getBlockData(blockIndex);
@@ -460,32 +560,63 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
             req->reservedMap[this] = 1;
             req->ready = true;
             req->time = Timer::getCurrentTime() - req->time;
+            readBlockEntry(blockIndex,&entry);
+            req->indexMap[this]=blockIndex;
+            req->blkIndexMap[this]=entry.blockIndex;
+            req->fileIndexMap[this]=entry.fileIndex;
+            req->statusMap[this]=entry.status;
             updateRequestTime(req->time);
-        }
-        _binLock->writerUnlock(binIndex);
-        
+            req->trace(_type == CacheType::boundedGlobalFile)<<"done in hit ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+            req->trace(_type == CacheType::boundedGlobalFile)<<"wlocking bin "<<binIndex<<std::endl;
+            _binLock->writerUnlock(binIndex,req);
+            req->trace(_type == CacheType::boundedGlobalFile)<<"wlocked bin "<<binIndex<<std::endl;  
+        }    
+
         if (!buff) { // data not currently present //miss
+            req->trace(_type == CacheType::boundedGlobalFile)<<"miss ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<std::endl;
             trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
 
             stats.addAmt(prefetch, CacheStats::Metric::misses, 1);
-
             bool found = false;
-            _binLock->writerLock(binIndex);
-            bool reserved = blockReserve(index, fileIndex, found, blockIndex, prefetch);
+            // req->trace(_type == CacheType::boundedGlobalFile)<<"wlocking bin "<<binIndex<<std::endl;
+            // _binLock->writerLock(binIndex,req);
+            // req->trace(_type == CacheType::boundedGlobalFile)<<"wlocked bin "<<binIndex<<std::endl;
+
+            
+            req->trace(_type == CacheType::boundedGlobalFile)<<"trying reserve ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<std::endl;
+            bool reserved = blockReserve(index, fileIndex, found, blockIndex, req, prefetch);
+            req->trace(_type == CacheType::boundedGlobalFile)<<"reserve results: "<<reserved<<" found: "<<found<<" bi: "<<blockIndex<<std::endl;
             if (blockIndex == -1 && found) {
+                req->trace(_type == CacheType::boundedGlobalFile)<<"found, getting index ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<std::endl;
                 blockIndex = getBlockIndex(index, fileIndex);
+                req->trace(_type == CacheType::boundedGlobalFile)<<"found ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                
             }
             if (blockIndex >= 0) {
-                incBlkCnt(blockIndex);
+                req->trace(_type == CacheType::boundedGlobalFile)<<"entry avail ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                req->trace(_type == CacheType::boundedGlobalFile)<<"incrememt "<<blockIndex<< " ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+                incBlkCnt(blockIndex, req);
+                req->indexMap[this]=blockIndex;
+                BlockEntry entry;
+                readBlockEntry(blockIndex,&entry);
+                req->blkIndexMap[this]=entry.blockIndex;
+                req->fileIndexMap[this]=entry.fileIndex;
+                req->statusMap[this]=entry.status;
                 req->reservedMap[this] = 1; //we will need to decrement active count on the cache entry when we write back
             }
             else {
+                req->trace(_type == CacheType::boundedGlobalFile)<<"no entry ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<std::endl;
                 req->reservedMap[this] = 0;
             }
-            _binLock->writerUnlock(binIndex);
+
+            req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocking bin "<<binIndex<<std::endl;
+            _binLock->writerUnlock(binIndex,req);
+            req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocked bin "<<binIndex<<std::endl;
+            
 
             if (reserved) { // we reserved a space, now we are responsible for getting the block from a higher level...
                 req->time = Timer::getCurrentTime() - req->time;
+                req->trace(_type == CacheType::boundedGlobalFile)<<"reserved go to next level ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<std::endl;
                 updateRequestTime(req->time);
                 stats.end(prefetch, CacheStats::Metric::ovh);
                 stats.start(); //miss
@@ -496,6 +627,7 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
             else {            //someone else has reserved or we did not have space in the cache
                 if (!found) { //didnt have space at this level so try at the next;
                     req->time = Timer::getCurrentTime() - req->time;
+                    req->trace(_type == CacheType::boundedGlobalFile)<<"no space got to next level ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<std::endl;
                     updateRequestTime(req->time);
                     stats.end(prefetch, CacheStats::Metric::ovh);
                     stats.start(); //miss
@@ -504,6 +636,7 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                     stats.start(); //ovh
                 }
                 else { // some else has reserved the block (meaning they are responsible for writing to the cache), we can wait for it to showup
+                    req->trace(_type == CacheType::boundedGlobalFile)<<"wait for someone else to fetch block ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi:"<<blockIndex<<std::endl;
                     auto fut = std::async(std::launch::deferred, [this, req, blockIndex, prefetch] {
                         // log(this) << _name << " read wait: blkIndex: " << blockIndex << " fi: " << fileIndex << " i:" << index << std::endl;
                         uint64_t stime = Timer::getCurrentTime();
@@ -521,6 +654,7 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                             curTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
                         }
                         if (avail) {
+                            req->trace(_type == CacheType::boundedGlobalFile)<<"received, get data ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi:"<<blockIndex<<std::endl;
                             buff = getBlockData(blockIndex);
                             req->data = buff;
                             req->originating = this;
@@ -533,8 +667,9 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                             std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> reads;
                             double reqTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
                             req->retryTime = Timer::getCurrentTime();
+                            req->trace(_type == CacheType::boundedGlobalFile)<<" retrying ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi:"<<blockIndex<<std::endl;
                             _lastLevel->readBlock(req, reads, 0); //rerequest block from next level, note this updates the request data structure so we do not need to update it manually;
-                            log(this) << Timer::printTime() << " " << _name << " timeout, rereqeusting block " << req->blkIndex <<" from "<<_lastLevel->name()<< " " << req->fileIndex << " " << getRequestTime() << " " << _lastLevel->getRequestTime() << " " << reqTime << " " << reads.size() << std::endl;
+                            log(this) << Timer::printTime() << " " << _name << "timeout, rereqeusting block " << req->blkIndex <<" from "<<_lastLevel->name()<< " " << req->fileIndex << " " << getRequestTime() << " " << _lastLevel->getRequestTime() << " " << reqTime << " " << reads.size() << std::endl;
                             req->retryTime = Timer::getCurrentTime()-req->retryTime;
                             if (!req->ready){
                                 reads[req->blkIndex].get().get();
@@ -543,7 +678,10 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                             else{
                                 waitingCacheType = _lastLevel->type();
                             }
-                            log(this) <<"got block after "<<req->blkIndex<<" retrying! from: "<<req->originating->name()<<" waiting on cache type: "<<cacheTypeName(waitingCacheType)<<" "<<req->retryTime<<std::endl;        
+                            req->trace(_type == CacheType::boundedGlobalFile)<<"recieved"<<std::endl;
+                            log(this) <<"[TAZER] got block "<<req->blkIndex<<" after retrying! from: "<<req->originating->name()<<" waiting on cache type: "<<cacheTypeName(waitingCacheType)<<" "<<req->retryTime<<std::endl;
+                                
+
                         }
 
                         req->waitingCache = waitingCacheType;
@@ -575,8 +713,8 @@ void BoundedCache<Lock>::cleanReservation() {
 
 template <class Lock>
 void BoundedCache<Lock>::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
-    // log(this) /*std::cout*/<< "adding file: " << filename << " " << (void *)this << " " << (void *)_nextLevel << std::endl;
-    // log(this) /*std::cout*/ <<  _name << " " << filename << " " << fileSize << " " << blockSize << std::endl;
+    // log(this) /*debug()*/<< "adding file: " << filename << " " << (void *)this << " " << (void *)_nextLevel << std::endl;
+    // log(this) /*debug()*/ <<  _name << " " << filename << " " << fileSize << " " << blockSize << std::endl;
     trackBlock(_name, "[ADD_FILE]", index, blockSize, fileSize);
 
     _localLock->writerLock();

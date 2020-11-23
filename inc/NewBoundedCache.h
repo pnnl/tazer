@@ -72,8 +72,8 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef BOUNDEDCACHE_H
-#define BOUNDEDCACHE_H
+#ifndef NewBoundedCache_H
+#define NewBoundedCache_H
 #include "Cache.h"
 #include "Loggable.h"
 #include "ReaderWriterLock.h"
@@ -87,15 +87,16 @@
 #define BLK_RES 2
 #define BLK_WR 3
 #define BLK_AVAIL 4
+#define BLK_EVICT 5
 
-const uint64_t MAX_CACHE_NAME_LEN = 30;
+// const uint64_t MAX_CACHE_NAME_LEN = 30;
 
-struct dummy {};
+// struct dummy {};
 template <class Lock>
-class BoundedCache : public Cache {
+class NewBoundedCache : public Cache {
   public:
-    BoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
-    virtual ~BoundedCache();
+    NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
+    virtual ~NewBoundedCache();
 
     virtual bool writeBlock(Request *req);
     virtual void readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority);
@@ -106,6 +107,7 @@ class BoundedCache : public Cache {
 
   protected:
     struct BlockEntry {
+        uint32_t id;
         uint32_t fileIndex;
         uint32_t blockIndex;
         uint32_t timeStamp;
@@ -120,8 +122,9 @@ class BoundedCache : public Cache {
         // there is a potential race between when a block is available and when we capture the originating cache
         // having origCache be atomic ensures we always get a valid ID (even though it may not always be 100% acurate)
         // we are willing to accept some small error in attribution of stats
-        void init(BoundedCache* c){
+        void init(NewBoundedCache* c,uint32_t entryId){
           // memset(this,0,sizeof(BlockEntry));
+          id=entryId;
           fileIndex =0;
           blockIndex = 0;
           timeStamp = 0;
@@ -133,44 +136,49 @@ class BoundedCache : public Cache {
           if (this == &entry){
             return *this;
           }
+          id = entry.id;
           fileIndex = entry.fileIndex;
           blockIndex = entry.blockIndex;
           timeStamp = entry.timeStamp;
           status = entry.status;
           prefetched= entry.prefetched;
           origCache.store(entry.origCache.load());
+          
           return *this;
+        }
+        std::string str(){
+          std::stringstream ss;
+          ss<<"id: "<<id<<" fi: "<<fileIndex<<" bi: "<<blockIndex<<" status: "<<status<<" oc: "<<cacheTypeName(origCache);
+          return ss.str();
         }
         // std::atomic<uint32_t> activeCnt;
     };
 
-    virtual bool blockReserve(uint32_t index, uint32_t fileIndex, bool &found, int &reservedIndex, Request* req, bool prefetch = false);
+    // virtual BlockEntry* blockReserve(uint32_t index, uint32_t fileIndex, Request* req, bool prefetch = false);
+    virtual BlockEntry* getBlock(uint32_t index, uint32_t fileIndex, Request* req);
+    virtual BlockEntry* oldestBlock(uint32_t index, uint32_t fileIndex, Request* req);
 
-    // virtual int getBlockIndex(uint32_t index, uint32_t fileIndex);
-    virtual int getBlockIndex(uint32_t index, uint32_t fileIndex, BlockEntry *entry = NULL);
-    virtual int oldestBlockIndex(uint32_t index, uint32_t fileIndex, bool &found, Request* req);
+    
+
     virtual uint32_t getBinIndex(uint32_t index, uint32_t fileIndex);
     virtual uint32_t getBinOffset(uint32_t index, uint32_t fileIndex);
 
     //TODO: eventually when we create a flag for stat keeping we probably dont need to store the cacheName...
-    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte,  CacheType type, int32_t prefetch) = 0;
-
+    virtual void blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte,  CacheType type, int32_t prefetch, int32_t activeUpdate,Request* req) = 0;
     virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL) = 0;
 
     // virtual char *blockMiss(uint32_t index, uint64_t &size, uint32_t fileIndex, std::unordered_map<uint64_t,std::future<std::future<Request*>>> &reads);
     virtual uint8_t *getBlockData(uint32_t blockIndex) = 0;
     virtual void setBlockData(uint8_t *data, uint32_t blockIndex, uint64_t size) = 0;
-    virtual void readBlockEntry(uint32_t blockIndex, BlockEntry *entry) = 0;
-    virtual std::string blockEntryStr(uint32_t blockIndex);
-    virtual void writeBlockEntry(uint32_t blockIndex, BlockEntry *entry) = 0;
-    virtual void readBin(uint32_t binIndex, BlockEntry *entries) = 0;
-    virtual std::vector<std::shared_ptr<BlockEntry>> readBin(uint32_t binIndex) = 0;
-    virtual int incBlkCnt(uint32_t blk, Request* req) = 0;
-    virtual int decBlkCnt(uint32_t blk, Request* req) = 0;
-    virtual bool anyUsers(uint32_t blk, Request* req) = 0;
-    // virtual bool anyUsers(BlockEntry * entry, Request* req) = 0;
+    virtual BlockEntry* getBlockEntry(uint32_t blockIndex, Request* req) = 0;
+    virtual std::vector<BlockEntry*> readBin(uint32_t binIndex) = 0;
+    virtual std::string blockEntryStr(BlockEntry *entry) = 0;
+   
+    virtual int incBlkCnt(BlockEntry * entry, Request* req) = 0;
+    virtual int decBlkCnt(BlockEntry * entry, Request* req) = 0;
+    virtual bool anyUsers(BlockEntry * entry, Request* req) = 0;
 
-    virtual void getCompareBlkEntry(uint32_t index, uint32_t fileIndex, BlockEntry *entry);
+    // virtual void getCompareBlkEntry(uint32_t index, uint32_t fileIndex, BlockEntry *entry);
 
     virtual std::shared_ptr<BlockEntry> getCompareBlkEntry(uint32_t index, uint32_t fileIndex);
 
@@ -195,4 +203,4 @@ class BoundedCache : public Cache {
     void trackBlock(std::string cacheName, std::string action, uint32_t fileIndex, uint32_t blockIndex, uint64_t priority);
 };
 
-#endif /* BOUNDEDCACHE_H */
+#endif /* NewBoundedCache_H */

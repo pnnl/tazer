@@ -132,7 +132,7 @@ class Cache : public Loggable, public Trackable<std::string, Cache *> {
 
   protected:
     virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex);
-    virtual bool blockReserve(uint32_t index, uint32_t fileIndex, int &reservedIndex, bool prefetch = false);
+    // virtual bool blockReserve(uint32_t index, uint32_t fileIndex, int &reservedIndex, bool prefetch = false);
     virtual void setBase(Cache *base);
 
     virtual void cleanUpBlockData(uint8_t *data);

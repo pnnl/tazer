@@ -75,6 +75,7 @@
 #ifndef READERWRITERLOCK_H
 #define READERWRITERLOCK_H
 
+#include "Request.h"
 #include <atomic>
 #include <thread>
 
@@ -104,14 +105,14 @@ class ReaderWriterLock {
 
 class MultiReaderWriterLock {
   public:
-    void readerLock(uint64_t entry);
-    void readerUnlock(uint64_t entry);
+    void readerLock(uint64_t entry, Request* req = NULL);
+    void readerUnlock(uint64_t entry, Request* req = NULL);
 
-    void writerLock(uint64_t entry);
+    void writerLock(uint64_t entry, Request* req = NULL);
     void fairWriterLock(uint64_t entry);
-    void writerUnlock(uint64_t entry);
+    void writerUnlock(uint64_t entry, Request* req = NULL);
     void fairWriterUnlock(uint64_t entry);
-    int lockAvail(uint64_t entry);
+    int lockAvail(uint64_t entry, Request* req = NULL);
 
     MultiReaderWriterLock(uint32_t numEntries);
     MultiReaderWriterLock(uint32_t numEntries, uint8_t *dataAddr, bool init = false);

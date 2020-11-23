@@ -153,6 +153,7 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
     auto fileIndex = req->fileIndex;
     auto blkStart = req->blkIndex;
     auto blkEnd = blkStart;
+    // req->trace+=", requesting";
     // std::cerr << "[TAZER] " << fileIndex << " " << _fileMap[fileIndex].name << " Requesting blks: " << blkStart << " " << blkEnd << " " << Config::networkBlockSize << std::dec << std::endl;
     // bool success = false;
     server->lock();
@@ -248,7 +249,7 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
     stats.start(); //ovh
     stats.start(); //hits
     // std::cout << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << std::endl;
-
+    // req->trace+=_name+":";
     req->time = Timer::getCurrentTime();
     req->originating = this;
     bool prefetch = priority != 0;
@@ -281,6 +282,7 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
         }
         pool->pushConnection(sev, true);
         stats.addAmt(prefetch, CacheStats::Metric::hits, req->size);
+        // req->trace+=", received->";
         return fut.share();
     });
     auto fut = task.get_future();

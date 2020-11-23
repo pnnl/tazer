@@ -192,6 +192,7 @@ void __attribute__((destructor)) tazerCleanup(void) {
     curlDestroy;
 
     if (Config::printStats) {
+        
         std::cout << "[TAZER] " << "Exiting Client" << std::endl;
         if (ConnectionPool::useCnt->size() > 0) {
             for (auto conUse : *ConnectionPool::useCnt) {
@@ -235,6 +236,7 @@ int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, cons
     if (file)
         TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
     // std::cout << "tazer open "<<metaName<<" "<<fd<<std::endl;
+
     return fd;
 }
 

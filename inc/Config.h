@@ -99,7 +99,7 @@ const std::string InputsDir(INPUTS_DIR);
 
 const int maxSystemFd = 19459526;
 
-#define NUMTHREADS 4
+#define NUMTHREADS 1
 
 //Thread Pools
 const unsigned int numServerThreads = 16;
@@ -123,6 +123,8 @@ const unsigned int fileOpenRetry = 1;
 //Serve file Parameters
 const unsigned int numCompressTask = 0;
 const unsigned int removeOutput = 0;
+
+static int64_t referenceTime = getenv("TAZER_REF_TIME") ? atol(getenv("TAZER_REF_TIME")) : 0;
 
 //architecure Parameters
 const bool enableSharedMem = getenv("TAZER_ENABLE_SHARED_MEMORY") ? atoi(getenv("TAZER_ENABLE_SHARED_MEMORY")) : 1;
@@ -231,6 +233,10 @@ const bool bufferFileCacheWrites = true;
 const unsigned int ReservationTimeOut = -1;
 
 const std::string sharedMemName("/" + tazer_id + "ioCache");
+
+
+
+
 
 const bool TrackBlockStats = false;
 const bool TrackReads = false;

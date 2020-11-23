@@ -40,6 +40,14 @@ set(COMMON_HEADERS
     ${CMAKE_SOURCE_DIR}/inc/Prefetcher.h
     ${CMAKE_SOURCE_DIR}/inc/DeltaPrefetcher.h
     ${CMAKE_SOURCE_DIR}/inc/PerfectPrefetcher.h
+    ${CMAKE_SOURCE_DIR}/inc/Request.h
+    ${CMAKE_SOURCE_DIR}/inc/FileLinkReaderWriterLock.h
+    ${CMAKE_SOURCE_DIR}/inc/NewBoundedCache.h
+    ${CMAKE_SOURCE_DIR}/inc/NewMemoryCache.h
+    ${CMAKE_SOURCE_DIR}/inc/NewSharedMemoryCache.h
+    ${CMAKE_SOURCE_DIR}/inc/NewBoundedFilelockCache.h
+    ${CMAKE_SOURCE_DIR}/inc/NewBoundedLinkfileCache.h
+
 )
 
 set(COMMON_FILES
@@ -79,6 +87,13 @@ set(COMMON_FILES
     Prefetcher.cpp
     DeltaPrefetcher.cpp
     PerfectPrefetcher.cpp
+    Request.cpp
+    FileLinkReaderWriterLock.cpp
+    NewBoundedCache.cpp
+    NewMemoryCache.cpp
+    NewSharedMemoryCache.cpp
+    NewBoundedFilelockCache.cpp
+    NewBoundedLinkfileCache.cpp
 )
 
 if(CURL_LIB)
@@ -89,5 +104,5 @@ if(CURL_LIB)
 endif()
 
 add_library(common OBJECT ${COMMON_HEADERS} ${COMMON_FILES})
-add_library(threadPool SHARED ThreadPool.cpp PriorityThreadPool.cpp Timer.cpp ReaderWriterLock.cpp FSReaderWriterLock.cpp Loggable.cpp)
-target_link_libraries(threadPool ${RDMACM_LIB} ${RT_LIB} ${CURL_LIB} ${SSL_LIB} stdc++fs)
+add_library(threadPool SHARED ThreadPool.cpp PriorityThreadPool.cpp Timer.cpp ReaderWriterLock.cpp FSReaderWriterLock.cpp Loggable.cpp Request.cpp)
+#target_link_libraries(threadPool ${RDMACM_LIB} ${RT_LIB} ${CURL_LIB} ${SSL_LIB} stdc++fs)

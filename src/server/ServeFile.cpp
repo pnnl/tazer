@@ -464,6 +464,7 @@ bool ServeFile::writeData(char *data, uint64_t size, uint64_t fp) {
         if (_prefetchLock.tryReaderLock()) {
             _outstandingWrites++;
             char *odata = new char[size];
+            log(this)<<"writing: "<<size<<" into "<<_name<<std::endl;
             memcpy(odata, data, size);
             _pool.addTask([this, odata, size, fp] {
                 std::ofstream file;

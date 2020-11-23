@@ -91,10 +91,17 @@ class Loggable {
         log(Loggable *me)
             : lk(std::unique_lock<std::mutex>(*mtx_cout)), _parent(me) {
             if (_parent->_log) {
-                *_parent->_o << "[TAZER] " << Timer::printTime() << " ";
+                *_parent->_o << "[TAZER] " << Timer::getCurrentTime() << " ";
             }
         }
+        log(): lk(std::unique_lock<std::mutex>(*mtx_cout)){
+            _parent = new Loggable();
+            *_parent->_o << "[TAZER] " ;
+        }
         ~log() {
+            if(_parent->_freestanding){
+                delete _parent;
+            }
         }
 
         template <typename T>
@@ -116,13 +123,57 @@ class Loggable {
         Loggable *_parent;
     };
 
+    struct debug {
+        std::unique_lock<std::mutex> lk;
+        debug(Loggable *me)
+            : lk(std::unique_lock<std::mutex>(*mtx_cout)), _parent(me) {
+            if (_parent->_log) {
+                *_parent->_o << "[TAZER DEBUG] " << Timer::printTime() << " ";
+            }
+        }
+        debug(): lk(std::unique_lock<std::mutex>(*mtx_cout)){
+            _parent = new Loggable();
+            *_parent->_o << "[TAZER DEBUG] " ;
+        }
+        ~debug() {
+            if(_parent->_freestanding){
+                delete _parent;
+            }
+        }
+
+        template <typename T>
+        debug &operator<<(const T &_t) {
+            if (_parent->_log) {
+                *_parent->_o << _t;
+            }
+            return *this;
+        }
+
+        debug &operator<<(std::ostream &(*fp)(std::ostream &)) {
+            if (_parent->_log) {
+                *_parent->_o << fp;
+            }
+            return *this;
+        }
+
+      private:
+        Loggable *_parent;
+    };
+
     struct err {
         std::unique_lock<std::mutex> lk;
         err(Loggable *me)
             : lk(std::unique_lock<std::mutex>(*mtx_cout)), _parent(me) {
             *_parent->_o << "[TAZER ERROR] " << Timer::printTime() << " ";
         }
+        err(): lk(std::unique_lock<std::mutex>(*mtx_cout)){
+            _parent = new Loggable();
+            *_parent->_o << "[TAZER ERROR] " ;
+        }
         ~err() {
+            if(_parent->_freestanding){
+                delete _parent;
+            }
         }
 
         template <typename T>
@@ -141,7 +192,7 @@ class Loggable {
     };
     static std::mutex *mtx_cout;
 
-    Loggable(bool log, std::string fileName) : _log(log), _o(NULL) {
+    Loggable(bool log, std::string fileName) : _log(log), _freestanding(false), _o(NULL) {
         if (!mtx_cout) {
             Loggable::mtx_cout = new std::mutex();
         }
@@ -179,8 +230,11 @@ class Loggable {
         }
     }
 
-    Loggable() : _log(false), _o(NULL) {
-        _o = &std::cerr;
+    Loggable() : _log(true), _freestanding(true), _o(NULL) {
+        if (!mtx_cout) {
+            Loggable::mtx_cout = new std::mutex();
+        }
+        _o = &std::cout;
         // std::cout << &std::cout << " 2 " << _o << std::endl;
     }
 
@@ -244,8 +298,10 @@ class Loggable {
   private:
     std::ofstream _of;
     bool _log;
+    bool _freestanding;
     std::ostream *_o;
     friend log;
+    friend debug;
     friend err;
 
     // static std::atomic<bool> _initiated;

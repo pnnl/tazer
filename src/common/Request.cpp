@@ -1,4 +1,4 @@
-// -*-Mode: C++;-*- // technically C99
+// -*-Mode: C++;-*-
 
 //*BeginLicense**************************************************************
 //
@@ -72,67 +72,59 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef FileCache_H
-#define FileCache_H
-#include "BoundedCache.h"
-#include <atomic>
-#include <future>
-#include <map>
-#include <unordered_map>
-#include <unordered_set>
 
-#define FILECACHENAME "filecache"
+#include "Cache.h"
+#include "Request.h"
+#include "Loggable.h"
+#include "Timer.h"
 
-class FileCache : public BoundedCache<MultiReaderWriterLock> {
-  public:
-    FileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string filePath);
-    ~FileCache();
+std::atomic<uint64_t> Request::ID_CNT(0);
 
-    static Cache *addNewFileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string filePath);
+RequestTrace Request::trace( bool trigger){
+    if (trigger && globalTrigger){
+        return RequestTrace(&ss,true) << "[" <<Timer::getCurrentTime()<<"]";
+    }
+    else{
+        return RequestTrace(&ss,false);
+    }    
+}
 
-  protected:
-    virtual uint8_t *getBlockData(unsigned int blockIndex);
-    virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size);
-    virtual void cleanUpBlockData(uint8_t *data);
+std::string Request::str(){
+    std::stringstream tss;
+    tss<<"Req ["<<id<<"]"<<std::endl
+    <<"orignal cache: "<<originating->name()<<std::endl
+    <<"blk: " <<blkIndex<<std::endl
+    <<"file: "<<fileIndex<<std::endl
+    <<"size: "<<size<<std::endl
+    <<"time: "<<(double)time/ 1000000000.0<<std::endl
+    <<"retry time: "<<(double)retryTime/ 1000000000.0<<std::endl
+    <<"waitingCache: "<<waitingCache <<std::endl
+    <<"Reserved Map: [";
+    for (auto vals : reservedMap){
+        tss<<vals.first->name()<<" : "<<(int)vals.second<<", ";
+    }
+    tss<<"]"<<std::endl
+    <<" index Map: [";
+    for (auto vals : indexMap){
+        tss<<vals.first->name()<<" : "<<(int)vals.second<<", ";
+    }
+    tss<<"]"<<std::endl
+    <<"blkindex Map: [";
+    for (auto vals : blkIndexMap){
+        tss<<vals.first->name()<<" : "<<(int)vals.second<<", ";
+    }
+    tss<<"]"<<std::endl
+    <<" fileindex Map: [";
+    for (auto vals : fileIndexMap){
+        tss<<vals.first->name()<<" : "<<(int)vals.second<<", ";
+    }
+    tss<<"]"<<std::endl
+    <<" status Map: [";
+    for (auto vals : statusMap){
+        tss<<vals.first->name()<<" : "<<(int)vals.second<<", ";
+    }
+    tss<<"]"<<std::endl;
+    tss<<ss.str()<<std::endl;;
+    return tss.str();
 
-  private:
-    struct MemBlockEntry : BlockEntry {
-        std::atomic<uint32_t> activeCnt;
-        void init(BoundedCache* c){
-          BlockEntry::init(c);
-          std::atomic_init(&activeCnt, (uint32_t)0);
-        }
-    };
-    void writeToFile(uint64_t size, uint8_t *buff);
-    void readFromFile(uint64_t size, uint8_t *buff);
-    void preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
-    void pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
-    
-    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch);
-    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
-    virtual void readBlockEntry(uint32_t blockIndex, BlockEntry *entry);
-    virtual void writeBlockEntry(uint32_t blockIndex, BlockEntry *entry);
-    virtual void readBin(uint32_t binIndex, BlockEntry *entries);
-    virtual std::vector<std::shared_ptr<BlockEntry>> readBin(uint32_t binIndex);
-
-    virtual int incBlkCnt(uint32_t blk, Request* req);
-    virtual int decBlkCnt(uint32_t blk, Request* req);
-    virtual bool anyUsers(uint32_t blk, Request* req);
-
-    MemBlockEntry *_blkIndex;
-
-    uint32_t _pid;
-    std::string _filePath;
-    std::atomic_uint *_fullFlag;
-    int _blocksfd;
-    int _blkIndexfd;
-
-    unixopen_t _open;
-    unixclose_t _close;
-    unixread_t _read;
-    unixwrite_t _write;
-    unixlseek_t _lseek;
-    unixfsync_t _fsync;
-};
-
-#endif /* BUSTBUFFERCACHE_H */
+}

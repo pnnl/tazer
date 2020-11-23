@@ -167,7 +167,6 @@ bool PriorityThreadPool<T>::terminate(bool force) {
 
 template <class T>
 void PriorityThreadPool<T>::addTask(uint32_t priority, T f) {
-
     std::unique_lock<std::mutex> lock(_qMutex);
     TaskEntry entry(priority, 0, std::move(f));
     entry.timeStamp = _index++;

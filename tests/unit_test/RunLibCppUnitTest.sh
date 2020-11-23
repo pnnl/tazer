@@ -34,6 +34,7 @@ sbatch --wait --dependency after:${tazer_server_task_id} -N1 run_unit_test.sh $w
 cat ${workspace}/client/test_results/lib_unit_test_out.txt
 
 success=`grep -irn ${workspace}/client/test_results/lib_unit_test_out.txt -e "all tests passed" | wc -l`
+$TAZER_WORKSPACE_ROOT/${TAZER_BUILD_DIR}/test/CloseServer $tazer_server_nodes 5001
 
 if [ "$success" -gt "0" ]; then
 exit 0

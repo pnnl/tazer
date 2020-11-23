@@ -76,10 +76,50 @@
 #define REQUEST_H
 #include "Timer.h"
 #include "CacheTypes.h"
+#include "Loggable.h"
+
 #include <string.h>
 #include <unordered_map>
 
 class Cache;
+
+struct RequestTrace{
+    RequestTrace(std::ostream *o, bool trigger): _o(o), _trigger(trigger){ }
+
+    template <class T>
+    RequestTrace &operator<<(const T &val) {
+        if (_trigger){
+            *_o << val;
+        }
+        return *this;
+    }
+
+    RequestTrace &operator<<(std::ostream &(*f)(std::ostream &)) {
+        if (_trigger){
+            *_o << f;
+        }
+        return *this;
+    }
+
+    RequestTrace &operator<<(std::ostream &(*f)(std::ios &)) {
+        if (_trigger){
+            *_o << f;
+        }
+        return *this;
+    }
+
+    RequestTrace &operator<<(std::ostream &(*f)(std::ios_base &)) {
+        if (_trigger){
+            *_o << f;
+        }
+        return *this;
+    }
+    private:
+    std::ostream *_o;
+    bool _trigger;
+
+};
+
 struct Request {
     uint8_t *data;
     Cache *originating;
@@ -90,13 +130,33 @@ struct Request {
     uint64_t retryTime;
     std::unordered_map<Cache *, uint8_t> reservedMap;
     bool ready;
-    // std::string waitingCache;
+    bool printTrace;
+    bool globalTrigger;
     CacheType waitingCache;
+    std::unordered_map<Cache *, uint64_t> indexMap;
+    std::unordered_map<Cache *, uint64_t> blkIndexMap;
+    std::unordered_map<Cache *, uint64_t> fileIndexMap;
+    std::unordered_map<Cache *, uint64_t> statusMap;
+    uint64_t id;
+    std::stringstream ss;
 
-    // Request() : data(NULL),originating(NULL),blkIndex(0),fileIndex(0),size(0){
-
-    // }
-    Request(uint32_t blk, uint32_t fileIndex, uint64_t size, Cache *orig, uint8_t *data) : data(data), originating(orig), blkIndex(blk), fileIndex(fileIndex), size(size), time(Timer::getCurrentTime()),retryTime(0), ready(false), waitingCache(CacheType::empty) {
+    Request() : data(NULL),originating(NULL),blkIndex(0),fileIndex(0),size(0){ }
+    Request(uint32_t blk, uint32_t fileIndex, uint64_t size, Cache *orig, uint8_t *data) : data(data), originating(orig), blkIndex(blk), fileIndex(fileIndex), 
+                                                                                           size(size), time(Timer::getCurrentTime()),retryTime(0), ready(false), 
+                                                                                           printTrace(false),globalTrigger(false), waitingCache(CacheType::empty),id(Request::ID_CNT.fetch_add(1)) {
     }
+    ~Request(){
+        if (printTrace){
+            Loggable::log()<<str();
+        }
+    }
+    std::string str();
+    RequestTrace trace(bool trigger = true);
+    private:
+        
+        static std::atomic<uint64_t> ID_CNT;
 };
+
+
+
 #endif //REQUEST_H

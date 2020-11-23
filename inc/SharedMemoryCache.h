@@ -102,9 +102,9 @@ class SharedMemoryCache : public BoundedCache<MultiReaderWriterLock> {
     virtual void readBin(uint32_t binIndex, BlockEntry *entries);
     virtual std::vector<std::shared_ptr<BlockEntry>> readBin(uint32_t binIndex);
 
-    virtual int incBlkCnt(uint32_t blk);
-    virtual int decBlkCnt(uint32_t blk);
-    virtual bool anyUsers(uint32_t blk);
+    virtual int incBlkCnt(uint32_t blk, Request* req);
+    virtual int decBlkCnt(uint32_t blk, Request* req);
+    virtual bool anyUsers(uint32_t blk, Request* req);
 
   private:
     MemBlockEntry *_blkIndex;

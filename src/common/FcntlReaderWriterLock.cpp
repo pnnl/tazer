@@ -75,6 +75,7 @@
 #include "FcntlReaderWriterLock.h"
 #include "AtomicHelper.h"
 #include "Config.h"
+#include "Loggable.h"
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
@@ -82,6 +83,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <random>
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 
@@ -139,7 +141,7 @@ void FcntlReaderWriterLock::writerLock(int fd, uint64_t blk, std::atomic<uint32_
         fcntl(fd, F_SETLKW, &lock);
     }
     else {
-        std::cout << "fcntlwritelock This should not be possible" << std::endl;
+        Loggable::debug() << "fcntlwritelock This should not be possible" << std::endl;
     }
 }
 
@@ -204,7 +206,7 @@ void FcntlReaderWriterLock::writerUnlock(int fd, uint64_t blk, std::atomic<uint3
         fcntl(fd, F_SETLKW, &lock);
     }
     else {
-        std::cout << "fcntlwriteunlock This should not be possible" << std::endl;
+        Loggable::debug() << "fcntlwriteunlock This should not be possible" << std::endl;
     }
     _lock.writerUnlock();
 }
@@ -212,7 +214,7 @@ void FcntlReaderWriterLock::writerUnlock(int fd, uint64_t blk, std::atomic<uint3
 void FcntlReaderWriterLock::writerUnlock2(int fd, uint64_t blk, std::atomic<uint32_t> &blkCnt) {
     _fdMutex.writerLock();
     // uint32_t prev = blkCnt.fetch_sub(1);
-    // std::cout << "trying to unlock " << fd << " " << blk << " " << prev << std::endl;
+    // Loggable::debug() << "trying to unlock " << fd << " " << blk << " " << prev << std::endl;
     uint32_t one = 1;
     if (blkCnt.compare_exchange_strong(one, 2)) { //i think this should always be true...
         struct flock lock = {};
@@ -222,10 +224,10 @@ void FcntlReaderWriterLock::writerUnlock2(int fd, uint64_t blk, std::atomic<uint
         lock.l_len = 1;
         fcntl(fd, F_SETLKW, &lock);
         blkCnt = 0;
-        // std::cout << "unlocking: " << fd << " " << blk << "ret: " << ret << std::endl;
+        // Loggable::debug() << "unlocking: " << fd << " " << blk << "ret: " << ret << std::endl;
     }
     else {
-        std::cout << "fcntlwriteunlock why am i here?" << std::endl;
+        Loggable::debug() << "fcntlwriteunlock why am i here?" << std::endl;
     }
     _fdMutex.writerUnlock();
 }
@@ -234,13 +236,13 @@ void FcntlReaderWriterLock::writerUnlock3(int fd, uint64_t blk, std::atomic<uint
     rmdir((blkPath + "/" + std::to_string(blk)).c_str());
 }
 
-// FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, uint32_t numEntries, std::string lockPath) : _entrySize(entrySize),
+// OldLock::OldLock(uint32_t entrySize, uint32_t numEntries, std::string lockPath) : _entrySize(entrySize),
 //                                                                                                                             _numEntries(numEntries),
 //                                                                                                                             _lockPath(lockPath) {
 
 //     std::string filePath = Config::sharedMemName + "_" + Config::tazer_id  + "_lock_" + std::to_string(_entrySize) + "_" + std::to_string(_numEntries);
 //     std::atomic<uint16_t> temp[4096];
-//     std::cout << _numEntries << " " << 2 * _numEntries * sizeof(std::atomic<uint16_t>) << " " << sizeof(temp) << " " << 2 * sizeof(temp) << std::endl;
+//     Loggable::debug() << _numEntries << " " << 2 * _numEntries * sizeof(std::atomic<uint16_t>) << " " << sizeof(temp) << " " << 2 * sizeof(temp) << std::endl;
 
 //     int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
 //     if (fd == -1) {
@@ -286,35 +288,45 @@ void FcntlReaderWriterLock::writerUnlock3(int fd, uint64_t blk, std::atomic<uint
 //     _fd = (*(unixopen_t)dlsym(RTLD_NEXT, "open"))(_lockPath.c_str(), O_RDWR);
 // }
 
-FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, uint32_t numEntries, std::string lockPath) : _entrySize(entrySize),
+OldLock::OldLock(uint32_t entrySize, uint32_t numEntries, std::string lockPath, std::string id) : _entrySize(entrySize),
                                                                                                                             _numEntries(numEntries),
-                                                                                                                            _lockPath(lockPath) {
+                                                                                                                            _lockPath(lockPath),
+                                                                                                                            _id(id) {
 
+    
+
+    size_t shmLen= sizeof(uint32_t) + sizeof(ReaderWriterLock);// + 2 * sizeof(std::atomic<uint16_t>) * _numEntries + sizeof(std::atomic<uint8_t>) * _numEntries;
+    _shmLock = new ReaderWriterLock();
     _readers = new std::atomic<uint16_t>[_numEntries];
     // memset(_readers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
     init_atomic_array(_readers,_numEntries,(uint16_t)0);
     _writers = new std::atomic<uint16_t>[_numEntries];
     // memset(_writers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
     init_atomic_array(_writers,_numEntries,(uint16_t)0);
-
+    _readerMutex = new std::atomic<uint8_t>[_numEntries];
+    init_atomic_array(_readerMutex,_numEntries,(uint8_t)0);
     _fdMutex = new ReaderWriterLock();
     _fd = (*(unixopen_t)dlsym(RTLD_NEXT, "open"))(_lockPath.c_str(), O_RDWR);
     if (Config::enableSharedMem){
         
 
-        std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
+        std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck."+_id);
+        Loggable::debug()<<shmPath<<std::endl;
         int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
         if (shmFd == -1) {
             shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
             if (shmFd != -1) {
-                std::cout << "resusing fcntl shm lock" << std::endl;
-                ftruncate(shmFd, sizeof(uint32_t) + sizeof(ReaderWriterLock));
-                void *ptr = mmap(NULL, sizeof(uint32_t) + sizeof(ReaderWriterLock), PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
+                Loggable::debug() << "resusing fcntl shm lock" << std::endl;
+                ftruncate(shmFd, shmLen);
+                void *ptr = mmap(NULL, shmLen, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
                 uint32_t *init = (uint32_t *)ptr;
                 while (!*init) {
                     sched_yield();
                 }
                 _shmLock = (ReaderWriterLock *)((uint8_t *)init + sizeof(uint32_t));
+                // _readers  = (std::atomic<uint16_t>*)(uint8_t*)_shmLock + sizeof(ReaderWriterLock);
+                // _writers  = (std::atomic<uint16_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
+                // _readerMutex = (std::atomic<uint8_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
             }
             else {
                 std::cerr << "[TAZER]"
@@ -322,38 +334,66 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
             }
         }
         else {
-            std::cout << "creating fcntl shm lock" << std::endl;
-            ftruncate(shmFd, sizeof(uint32_t) + sizeof(ReaderWriterLock));
-            void *ptr = mmap(NULL, sizeof(uint32_t) + sizeof(ReaderWriterLock), PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
+            Loggable::debug() << "creating fcntl shm lock" << std::endl;
+            ftruncate(shmFd, shmLen);
+            void *ptr = mmap(NULL, shmLen, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
 
             uint32_t *init = (uint32_t *)ptr;
             _shmLock = new ((uint8_t *)init + sizeof(uint32_t)) ReaderWriterLock();
+            // _readers  = (std::atomic<uint16_t>*)(uint8_t*)_shmLock + sizeof(ReaderWriterLock);
+            // _writers  = (std::atomic<uint16_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
+            // _readerMutex = (std::atomic<uint8_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
+            // init_atomic_array(_readers,_numEntries,(uint16_t)0);
+            // init_atomic_array(_writers,_numEntries,(uint16_t)0);
+            // init_atomic_array(_readerMutex,_numEntries,(uint8_t)0);
             *init = 1;
         }
     }
     else{
         _shmLock = new ReaderWriterLock();
+        _readers = new std::atomic<uint16_t>[_numEntries];
+        // memset(_readers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+        init_atomic_array(_readers,_numEntries,(uint16_t)0);
+        _writers = new std::atomic<uint16_t>[_numEntries];
+        // memset(_writers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+        init_atomic_array(_writers,_numEntries,(uint16_t)0);
+        _readerMutex = new std::atomic<uint8_t>[_numEntries];
+        init_atomic_array(_readerMutex,_numEntries,(uint8_t)0);
     }
 }
 
 //todo better delete aka make sure all readers/writers are done...
-FcntlBoundedReaderWriterLock::~FcntlBoundedReaderWriterLock() {
-    delete[] _readers;
-    delete[] _writers;
+OldLock::~OldLock() {
+    
     if (Config::enableSharedMem){
-        std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
-        shm_unlink(shmPath.c_str());
+        // std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
+        // shm_unlink(shmPath.c_str());
         (*(unixclose_t)dlsym(RTLD_NEXT, "close"))(_fd);
     }
     else{
         delete _shmLock;
+        delete[] _readers;
+        delete[] _writers;
+        delete[] _readerMutex;
     }
+
+    delete[] _readers;
+    delete[] _writers;
+    delete[] _readerMutex;
+
     delete _fdMutex;
     
 }
 
-void FcntlBoundedReaderWriterLock::readerLock(uint64_t entry) {
-    // std::cout << "read locking " << entry << " " << _readers[entry] << std::endl;
+void OldLock::readerLock(uint64_t entry,bool debug) {
+    // Loggable::debug() << "read locking " << entry << " " << _readers[entry] << std::endl;
+    uint16_t check = 1;
+    while (_readerMutex[entry].exchange(check) == 1) {
+        std::this_thread::yield();
+    }
+    if (debug){
+        Loggable::debug()<<"["<<Timer::getCurrentTime()<<"] "<<_id<<" trying to rlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
     int cnt = 0;
     while (1) {
         cnt++;
@@ -364,7 +404,7 @@ void FcntlBoundedReaderWriterLock::readerLock(uint64_t entry) {
         auto prev = _readers[entry].fetch_add(1);
         if (!_writers[entry].load()) {
             if (prev == 0) {
-                // std::cout << "got memory readlock " << entry << std::endl;
+                // Loggable::debug() << "got memory readlock " << entry << std::endl;
                 _fdMutex->writerLock();
                 struct flock lock = {};
                 lock.l_type = F_RDLCK;
@@ -378,13 +418,27 @@ void FcntlBoundedReaderWriterLock::readerLock(uint64_t entry) {
                 if (ret == -1) {
                     std::this_thread::sleep_for(std::chrono::microseconds(1));
                     if (errno != EACCES && errno != EAGAIN) {
-                        std::cout << "[TAZER] R LOCK ERROR!!! " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
+                        Loggable::debug() << "[TAZER] R LOCK ERROR!!! "<<_id<<" " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
                     }
                 }
                 else {
-                    // std::cout << "read locking " << entry << " (" << (entry * _entrySize) << "-" << (entry * _entrySize) + _entrySize << ")"
-                    //           << " " << ::getpid() << std::endl;
-                    break;
+                    lock.l_type = F_RDLCK;
+                    lock.l_whence = SEEK_SET;
+                    lock.l_start = entry * _entrySize;
+                    lock.l_len = _entrySize;
+                    _shmLock->writerLock();
+                    int ret = fcntl(_fd, F_SETLK, &lock);
+                    _shmLock->writerUnlock();
+                    _fdMutex->writerUnlock();
+                    if (ret == -1) {
+                        std::this_thread::sleep_for(std::chrono::microseconds(1));
+                        if (errno != EACCES && errno != EAGAIN) {
+                            Loggable::debug() << "[TAZER] R LOCK ERROR!!! "<<_id<<" " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
+                        }
+                    }
+                    else{
+                        break;
+                    }
                 }
             }
             else {
@@ -393,11 +447,22 @@ void FcntlBoundedReaderWriterLock::readerLock(uint64_t entry) {
         }
         _readers[entry].fetch_sub(1);
     }
-    // std::cout << "leaving read locking " << entry << " " << _readers[entry] << std::endl;
+    _readerMutex[entry].store(0);
+    if (debug){
+        Loggable::debug()<<"["<<Timer::getCurrentTime()<<"] "<<_id<<" leaving rlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
+    // Loggable::debug() << "leaving read locking " << entry << " " << _readers[entry] << std::endl;
 }
 
-void FcntlBoundedReaderWriterLock::readerUnlock(uint64_t entry) {
-    // std::cout << "read unlocking " << entry << " " << _readers[entry] << std::endl;
+void OldLock::readerUnlock(uint64_t entry,bool debug) {
+    uint16_t check = 1;
+    while (_readerMutex[entry].exchange(check) == 1) {
+        std::this_thread::yield();
+    }
+    // Loggable::debug() << "read unlocking " << entry << " " << _readers[entry] << std::endl;
+    if (debug){
+        Loggable::debug()<<"["<<Timer::getCurrentTime()<<"] "<<_id<<" trying to runlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
     uint16_t one = 1;
     if (_readers[entry].compare_exchange_strong(one, 0)) {
         _fdMutex->writerLock();
@@ -410,36 +475,67 @@ void FcntlBoundedReaderWriterLock::readerUnlock(uint64_t entry) {
         int ret = fcntl(_fd, F_SETLK, &lock);
         _shmLock->writerUnlock();
         int cnt = 0;
-        while (ret == -1) {
+        while ( ret == -1) {
             _fdMutex->writerUnlock();
             cnt++;
-            // if (cnt == 100000) {
-            //     cnt = 0;
-            std::cout << "[TAZER] R UNLOCK ERROR!!! " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
-            // }
+            if (cnt == 10000000) {
+                cnt = 0;
+            Loggable::debug() << "[TAZER] R UNLOCK ERROR!!! " <<_id<<" "<< entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
+            }
             std::this_thread::sleep_for(std::chrono::microseconds(1));
             _fdMutex->writerLock();
             _shmLock->writerLock();
+            lock.l_type = F_UNLCK;
             ret = fcntl(_fd, F_SETLK, &lock);
             _shmLock->writerUnlock();
         }
-        // std::cout << "lock ret: " << ret << std::endl;
-        // std::cout << "read unlocking " << entry << " (" << (entry * _entrySize) << "-" << (entry * _entrySize) + _entrySize << ")"
+
+        lock.l_type = F_UNLCK;
+        lock.l_whence = SEEK_SET;
+        lock.l_start = entry * _entrySize;
+        lock.l_len = _entrySize;
+        _shmLock->writerLock();
+         ret = fcntl(_fd, F_SETLK, &lock);
+        _shmLock->writerUnlock();
+        cnt = 0;
+        while ( ret == -1) {
+            _fdMutex->writerUnlock();
+            cnt++;
+            if (cnt == 10000000) {
+                cnt = 0;
+            Loggable::debug() << "[TAZER] R UNLOCK ERROR!!! " <<_id<<" "<< entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
+            }
+            std::this_thread::sleep_for(std::chrono::microseconds(1));
+            _fdMutex->writerLock();
+            _shmLock->writerLock();
+            lock.l_type = F_UNLCK;
+            ret = fcntl(_fd, F_SETLK, &lock);
+            _shmLock->writerUnlock();
+        }
+        // Loggable::debug() << "lock ret: " << ret << std::endl;
+        // Loggable::debug() << "read unlocking " << entry << " (" << (entry * _entrySize) << "-" << (entry * _entrySize) + _entrySize << ")"
         //           << " " << ::getpid() << std::endl;
         _fdMutex->writerUnlock();
     }
     else {
         _readers[entry].fetch_sub(1);
     }
+    _readerMutex[entry].store(0);
+    if (debug){
+        Loggable::debug()<<"["<<Timer::getCurrentTime()<<"] "<<_id<<" leaving runlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
+    
 }
 
-void FcntlBoundedReaderWriterLock::writerLock(uint64_t entry) {
-
+void OldLock::writerLock(uint64_t entry, bool debug) {
+    if (debug){
+        Loggable::debug()<<"["<<Timer::getCurrentTime()<<"] "<<_id<<" trying to wlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
     uint16_t check = 1;
     while (_writers[entry].exchange(check) == 1) {
         std::this_thread::yield();
     }
-    // std::cout << "got memory writelock " << entry << std::endl;
+    // Loggable::debug() << "got memory writelock " << entry << std::endl;
     while (_readers[entry].load()) {
         std::this_thread::yield();
     }
@@ -462,10 +558,10 @@ void FcntlBoundedReaderWriterLock::writerLock(uint64_t entry) {
         fcntl(_fd, F_GETLK, &lock2);
         _fdMutex->writerUnlock();
         cnt++;
-        if (cnt % 10000 == 0) {
+        if (cnt % 10000000 == 0) {
             // cnt = 0;
-            std::cout << "[TAZER] W LOCK ERROR!!! " << entry << " " << __LINE__ << " " << strerror(errno) << " " << ::getpid() << std::endl;
-            std::cout << "[TAZER] lock info " << lock2.l_type << " (" << F_RDLCK << "," << F_WRLCK << "," << F_UNLCK << ") " << lock2.l_start << " " << lock2.l_len << " " << lock2.l_pid << std::endl;
+            Loggable::debug() << "[TAZER] W LOCK ERROR!!! "<<_id<<" " << entry << " " << __LINE__ << " r: "<<_readers[entry].load()<<" writers: "<<_writers[entry].load() << strerror(errno) << " " << ::getpid() << std::endl;
+            Loggable::debug() << "[TAZER] lock info " <<_id<<" "<< lock2.l_type << " (" << F_RDLCK << "," << F_WRLCK << "," << F_UNLCK << ") " << lock2.l_start << " " << lock2.l_len << " " << lock2.l_pid << std::endl;
         }
         std::this_thread::sleep_for(std::chrono::microseconds(1));
         _fdMutex->writerLock();
@@ -473,14 +569,49 @@ void FcntlBoundedReaderWriterLock::writerLock(uint64_t entry) {
         ret = fcntl(_fd, F_SETLK, &lock);
         _shmLock->writerUnlock();
     }
-    // std::cout << "write locking " << entry << " (" << (entry * _entrySize) << "-" << (entry * _entrySize) + _entrySize << ")"
+
+    lock.l_type = F_WRLCK;
+    lock.l_whence = SEEK_SET;
+    lock.l_start = entry * _entrySize;
+    lock.l_len = _entrySize;
+    _shmLock->writerLock();
+    ret = fcntl(_fd, F_SETLK, &lock);
+    _shmLock->writerUnlock();
+    cnt = 0;
+    while (ret == -1) {
+        struct flock lock2 = {};
+        lock2.l_type = F_WRLCK;
+        lock2.l_whence = SEEK_SET;
+        lock2.l_start = entry * _entrySize;
+        lock2.l_len = _entrySize;
+        fcntl(_fd, F_GETLK, &lock2);
+        _fdMutex->writerUnlock();
+        cnt++;
+        if (cnt % 10000000 == 0) {
+            // cnt = 0;
+            Loggable::debug() << "[TAZER] W LOCK ERROR!!! "<<_id<<" " << entry << " " << __LINE__ << " r: "<<_readers[entry].load()<<" writers: "<<_writers[entry].load() << strerror(errno) << " " << ::getpid() << std::endl;
+            Loggable::debug() << "[TAZER] lock info " <<_id<<" "<< lock2.l_type << " (" << F_RDLCK << "," << F_WRLCK << "," << F_UNLCK << ") " << lock2.l_start << " " << lock2.l_len << " " << lock2.l_pid << std::endl;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(1));
+        _fdMutex->writerLock();
+        _shmLock->writerLock();
+        ret = fcntl(_fd, F_SETLK, &lock);
+        _shmLock->writerUnlock();
+    }
+    // Loggable::debug() << "write locking " << entry << " (" << (entry * _entrySize) << "-" << (entry * _entrySize) + _entrySize << ")"
     //           << " " << ::getpid() << std::endl;
-    // std::cout << "lock ret: " << ret << std::endl;
+    // Loggable::debug() << "lock ret: " << ret << std::endl;
     _fdMutex->writerUnlock();
+    if (debug){
+        Loggable::debug()<<"["<<Timer::getCurrentTime()<<"] "<<_id<<" leaving wlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
 }
 
-void FcntlBoundedReaderWriterLock::writerUnlock(uint64_t entry) {
-    // std::cout << "write unlocking " << entry << std::endl;
+void OldLock::writerUnlock(uint64_t entry, bool debug) {
+    if (debug){
+        Loggable::debug()<<"["<<Timer::getCurrentTime()<<"] "<<_id<<" trying to wunlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
+    // Loggable::debug() << "write unlocking " << entry << std::endl;
     _fdMutex->writerLock();
     struct flock lock = {};
     lock.l_type = F_UNLCK;
@@ -494,24 +625,54 @@ void FcntlBoundedReaderWriterLock::writerUnlock(uint64_t entry) {
     while (ret == -1) {
         _fdMutex->writerUnlock();
         cnt++;
-        if (cnt == 1000000) {
+        if (cnt == 10000000) {
             cnt = 0;
-            std::cout << "[TAZER] W UNLOCK ERROR!!! " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
+            Loggable::debug() << "[TAZER] W UNLOCK ERROR!!! " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
         }
         std::this_thread::sleep_for(std::chrono::microseconds(1));
         _fdMutex->writerLock();
         _shmLock->writerLock();
+        lock.l_type=F_UNLCK;
         ret = fcntl(_fd, F_SETLK, &lock);
         _shmLock->writerUnlock();
     }
-    // std::cout << "write unlocking " << entry << " (" << (entry * _entrySize) << "-" << (entry * _entrySize) + _entrySize << ")"
+
+    lock.l_type = F_UNLCK;
+    lock.l_whence = SEEK_SET;
+    lock.l_start = entry * _entrySize;
+    lock.l_len = _entrySize;
+    _shmLock->writerLock();
+    ret = fcntl(_fd, F_SETLK, &lock);
+    _shmLock->writerUnlock();
+    cnt = 0;
+    while (ret == -1) {
+        _fdMutex->writerUnlock();
+        cnt++;
+        if (cnt == 10000000) {
+            cnt = 0;
+            Loggable::debug() << "[TAZER] W UNLOCK ERROR!!! " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(1));
+        _fdMutex->writerLock();
+        _shmLock->writerLock();
+        lock.l_type=F_UNLCK;
+        ret = fcntl(_fd, F_SETLK, &lock);
+        _shmLock->writerUnlock();
+    }
+    // Loggable::debug() << "write unlocking " << entry << " (" << (entry * _entrySize) << "-" << (entry * _entrySize) + _entrySize << ")"
     //           << " " << ::getpid() << std::endl;
     _fdMutex->writerUnlock();
     _writers[entry].store(0);
+    if (debug){
+        Loggable::debug()<<"["<<Timer::getCurrentTime()<<"] "<<_id<<" leaving wunlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
 }
 
-int FcntlBoundedReaderWriterLock::lockAvail(uint64_t entry) {
-
+int OldLock::lockAvail(uint64_t entry,bool debug) {
+    if (debug){
+        Loggable::debug()<<"["<<Timer::getCurrentTime()<<"] "<<_id<<" checking avail: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
+    _fdMutex->writerLock();
     int ret = -1;
     if (_readers[entry] == 0 && _writers[entry] == 0) {
         struct flock lock = {};
@@ -521,11 +682,298 @@ int FcntlBoundedReaderWriterLock::lockAvail(uint64_t entry) {
         lock.l_len = _entrySize;
         lock.l_pid = 0;
         _shmLock->writerLock();
-        fcntl(_fd, F_GETLK, &lock);
+        ret = fcntl(_fd, F_GETLK, &lock);
         _shmLock->writerUnlock();
+        int cnt = 0;
+        while (ret == -1) {
+            _fdMutex->writerUnlock();
+            cnt++;
+            if (cnt == 1000000) {
+                cnt = 0;
+                Loggable::debug() << "[TAZER] GETLOCK ERROR!!! " << entry << " " << __LINE__ << " type: "<<lock.l_type<<" ("<<F_UNLCK<<","<<F_RDLCK<<","<<F_WRLCK<<") " << strerror(errno) << std::endl;
+            }
+            lock.l_type = F_WRLCK;
+            std::this_thread::sleep_for(std::chrono::microseconds(1));
+            _fdMutex->writerLock();
+            _shmLock->writerLock();
+            ret = fcntl(_fd, F_GETLK, &lock);
+            _shmLock->writerUnlock();
+        }
         if (lock.l_type == F_UNLCK) {
+            lock.l_type = F_WRLCK;
+            lock.l_whence = SEEK_SET;
+            lock.l_start = entry * _entrySize;
+            lock.l_len = _entrySize;
+            lock.l_pid = 0;
+            _shmLock->writerLock();
+            ret = fcntl(_fd, F_GETLK, &lock);
+            _shmLock->writerUnlock();
+            int cnt = 0;
+            while (ret == -1) {
+                _fdMutex->writerUnlock();
+                cnt++;
+                if (cnt == 1000000) {
+                    cnt = 0;
+                    Loggable::debug() << "[TAZER] GETLOCK ERROR!!! " << entry << " " << __LINE__ << " type: "<<lock.l_type<<" ("<<F_UNLCK<<","<<F_RDLCK<<","<<F_WRLCK<<") " << strerror(errno) << std::endl;
+                }
+                lock.l_type = F_WRLCK;
+                std::this_thread::sleep_for(std::chrono::microseconds(1));
+                _fdMutex->writerLock();
+                _shmLock->writerLock();
+                ret = fcntl(_fd, F_GETLK, &lock);
+                _shmLock->writerUnlock();
+            }
+            if (lock.l_type == F_UNLCK) {
+                ret = 1;
+            }
+        }
+    }
+    _fdMutex->writerUnlock();
+    if (debug){
+        Loggable::debug()<<"["<<Timer::getCurrentTime()<<"] "<<_id<<" avail: "<< ret<<" "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
+    return ret;
+}
+
+
+FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, uint32_t numEntries, std::string lockPath, std::string id) : _entrySize(entrySize),
+                                                                                                                            _numEntries(numEntries),
+                                                                                                                            _lockPath(lockPath),
+                                                                                                                            _id(id) {
+
+    
+
+    size_t shmLen= sizeof(uint32_t) + sizeof(ReaderWriterLock) + 2 * sizeof(std::atomic<uint16_t>) * _numEntries;// + sizeof(std::atomic<uint8_t>) * _numEntries;
+    _shmLock = new ReaderWriterLock();
+    // _readers = new std::atomic<uint16_t>[_numEntries];
+    // memset(_readers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    // init_atomic_array(_readers,_numEntries,(uint16_t)0);
+    // _writers = new std::atomic<uint16_t>[_numEntries];
+    // memset(_writers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+    // init_atomic_array(_writers,_numEntries,(uint16_t)0);
+    // _readerMutex = new std::atomic<uint8_t>[_numEntries];
+    // init_atomic_array(_readerMutex,_numEntries,(uint8_t)0);
+    _fdMutex = new ReaderWriterLock();
+    _fd = (*(unixopen_t)dlsym(RTLD_NEXT, "open"))(_lockPath.c_str(), O_RDWR);
+    if (Config::enableSharedMem){
+        std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck."+_id);
+        Loggable::debug()<<shmPath<<std::endl;
+        int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+        if (shmFd == -1) {
+            shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
+            if (shmFd != -1) {
+                Loggable::debug() << "resusing fcntl shm lock" << std::endl;
+                ftruncate(shmFd, shmLen);
+                void *ptr = mmap(NULL, shmLen, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
+                uint32_t *init = (uint32_t *)ptr;
+                while (!*init) {
+                    sched_yield();
+                }
+                _shmLock = (ReaderWriterLock *)((uint8_t *)init + sizeof(uint32_t));
+                _readers  = (std::atomic<uint16_t>*)(uint8_t*)_shmLock + sizeof(ReaderWriterLock);
+                _writers  = (std::atomic<uint16_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
+                // _readerMutex = (std::atomic<uint8_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
+            }
+            else {
+                std::cerr << "[TAZER]"
+                        << "Error opening shared memory " << strerror(errno) << std::endl;
+            }
+        }
+        else {
+            Loggable::debug() << "creating fcntl shm lock" << std::endl;
+            ftruncate(shmFd, shmLen);
+            void *ptr = mmap(NULL, shmLen, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
+
+            uint32_t *init = (uint32_t *)ptr;
+            _shmLock = new ((uint8_t *)init + sizeof(uint32_t)) ReaderWriterLock();
+            _readers  = (std::atomic<uint16_t>*)(uint8_t*)_shmLock + sizeof(ReaderWriterLock);
+            _writers  = (std::atomic<uint16_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
+            // _readerMutex = (std::atomic<uint8_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
+            init_atomic_array(_readers,_numEntries,(uint16_t)0);
+            init_atomic_array(_writers,_numEntries,(uint16_t)0);
+            // init_atomic_array(_readerMutex,_numEntries,(uint8_t)0);
+            *init = 1;
+        }
+    }
+    else{
+        _shmLock = new ReaderWriterLock();
+        _readers = new std::atomic<uint16_t>[_numEntries];
+        // memset(_readers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+        init_atomic_array(_readers,_numEntries,(uint16_t)0);
+        _writers = new std::atomic<uint16_t>[_numEntries];
+        // memset(_writers, 0, _numEntries * sizeof(std::atomic<uint16_t>));
+        init_atomic_array(_writers,_numEntries,(uint16_t)0);
+        _readerMutex = new std::atomic<uint8_t>[_numEntries];
+        init_atomic_array(_readerMutex,_numEntries,(uint8_t)0);
+    }
+}
+
+//todo better delete aka make sure all readers/writers are done...
+FcntlBoundedReaderWriterLock::~FcntlBoundedReaderWriterLock() {
+    
+    if (Config::enableSharedMem){
+        // std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
+        // shm_unlink(shmPath.c_str());
+        (*(unixclose_t)dlsym(RTLD_NEXT, "close"))(_fd);
+    }
+    else{
+        delete _shmLock;
+        delete[] _readers;
+        delete[] _writers;
+        // delete[] _readerMutex;
+    }
+
+    // delete[] _readers;
+    // delete[] _writers;
+    // delete[] _readerMutex;
+
+    delete _fdMutex;
+    
+}
+
+int FcntlBoundedReaderWriterLock::lockOp(uint64_t entry, int lock_type, int op_type){
+    struct flock lock = {};
+    lock.l_type = lock_type;
+    lock.l_whence = SEEK_SET;
+    lock.l_start = entry * _entrySize;
+    lock.l_len = _entrySize;
+    int ret = fcntl(_fd, op_type, &lock);
+    return ret;
+}
+
+void FcntlBoundedReaderWriterLock::readerLock(uint64_t entry, Request* req, bool debug) {
+    req->trace(debug)<<_id<<" trying to rlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    _shmLock->writerLock();
+    while (_writers[entry].load()) {
+        _shmLock->writerUnlock();
+        std::this_thread::yield();
+        _shmLock->writerLock();
+    }
+    int cnt = 0;
+    while( _readers[entry].load() == 0 && lockOp(entry, F_RDLCK, F_SETLK) == -1){
+        int sleepTime = rand()%500;
+        _shmLock->writerUnlock();
+        cnt++;
+        if (cnt == 1000000 || (errno != EACCES && errno != EAGAIN)){
+            cnt = 0;
+            Loggable::log() << "[TAZER] R LOCK ERROR!!! "<<_id<<" " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(sleepTime));
+        _shmLock->writerLock();
+    }
+    _readers[entry].fetch_add(1);
+    _shmLock->writerUnlock();
+    req->trace(debug)<<_id<<" leaving rlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+}
+
+void FcntlBoundedReaderWriterLock::readerUnlock(uint64_t entry, Request* req,bool debug) {
+    req->trace(debug)<<_id<<" trying to runlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    _shmLock->writerLock();
+    int cnt = 0;
+    _readers[entry].fetch_sub(1);
+    while (_readers[entry].load() == 0 && lockOp(entry, F_UNLCK, F_SETLK) == -1){
+        int sleepTime = rand()%500;
+        _shmLock->writerUnlock();
+        cnt++;
+        if (cnt == 1000000 || (errno != EACCES && errno != EAGAIN)){
+            cnt = 0;
+            Loggable::debug() << "[TAZER] R UNLOCK ERROR!!! "<<_id<<" " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(sleepTime));
+        _shmLock->writerLock();
+    }
+    _shmLock->writerUnlock();  
+    req->trace(debug)<<_id<<" leaving runlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;    
+}
+
+void FcntlBoundedReaderWriterLock::writerLock(uint64_t entry,Request* req, bool debug) {
+    req->trace(debug)<<_id<<" trying to wlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    _shmLock->writerLock();
+    uint16_t check = 1;
+    while (_writers[entry].exchange(check) == 1) { //get the writer lock
+        _shmLock->writerUnlock();
+        std::this_thread::yield();
+        _shmLock->writerLock();
+    }
+    while (_readers[entry].load()) { //wait for readers to finish
+        _shmLock->writerUnlock();
+        std::this_thread::yield();
+        _shmLock->writerLock();
+    }
+    int cnt=0;
+
+    while (lockOp(entry, F_WRLCK, F_SETLK) == -1){
+        int sleepTime = rand()%500;
+        _shmLock->writerUnlock();
+        cnt++;
+        if (cnt == 1000000 || (errno != EACCES && errno != EAGAIN)){
+            cnt = 0;
+            Loggable::debug() << "[TAZER] W LOCK ERROR!!! "<<_id<<" " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(sleepTime));
+        _shmLock->writerLock();
+        
+    }
+    _shmLock->writerUnlock();
+    req->trace(debug)<<_id<<" leaving wlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+}
+
+void FcntlBoundedReaderWriterLock::writerUnlock(uint64_t entry, Request* req, bool debug) {
+    req->trace(debug)<<_id<<" trying to wunlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    _shmLock->writerLock();
+    int cnt =0;
+    while (lockOp(entry, F_UNLCK, F_SETLK) == -1){
+        int sleepTime = rand()%500;
+        _shmLock->writerUnlock();
+        cnt++;
+        if (cnt == 1000000 || (errno != EACCES && errno != EAGAIN)){
+            cnt = 0;
+            Loggable::debug() << "[TAZER] W UNLOCK ERROR!!! "<<_id<<" " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(sleepTime));
+        _shmLock->writerLock();
+    }
+    _writers[entry].store(0);
+    _shmLock->writerUnlock();
+
+    req->trace(debug)<<_id<<" leaving wunlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;    
+}
+
+int FcntlBoundedReaderWriterLock::lockAvail(uint64_t entry, Request* req, bool debug) {
+    req->trace(debug)<<_id<<" checking avail: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    _shmLock->writerLock();
+    int ret = -1;
+    struct flock lock = {};
+    lock.l_type = F_WRLCK;
+    lock.l_whence = SEEK_SET;
+    lock.l_start = entry * _entrySize;
+    lock.l_len = _entrySize;
+    lock.l_pid = 0;
+    if (_readers[entry].load() == 0 && _writers[entry].load() == 0) {
+        ret = fcntl(_fd, F_GETLK, &lock);
+        int cnt = 0;
+        while (ret == -1 && (_readers[entry].load() == 0 && _writers[entry].load() == 0)) {
+            int sleepTime = rand()%500;
+            _shmLock->writerUnlock();
+            cnt++;
+            if (cnt == 1000000 || (errno != EACCES && errno != EAGAIN)){
+                cnt = 0;
+                Loggable::debug() << "[TAZER] W UNLOCK ERROR!!! "<<_id<<" " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
+            }
+            lock.l_type = F_WRLCK;
+            lock.l_whence = SEEK_SET;
+            lock.l_start = entry * _entrySize;
+            lock.l_len = _entrySize;
+            lock.l_pid = 0;
+            std::this_thread::sleep_for(std::chrono::microseconds(sleepTime));
+            _shmLock->writerLock();
+            ret = fcntl(_fd, F_GETLK, &lock);
+        }
+        if (lock.l_type == F_UNLCK  && (_readers[entry].load() == 0 && _writers[entry].load() == 0)) {
             ret = 1;
         }
     }
+    _shmLock->writerUnlock();
+    req->trace(debug)<<_id<<" avail: "<< ret<<" "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<" l: "<<lock.l_type<<std::endl;
     return ret;
 }

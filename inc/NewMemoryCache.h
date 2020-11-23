@@ -72,67 +72,44 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef FileCache_H
-#define FileCache_H
-#include "BoundedCache.h"
-#include <atomic>
-#include <future>
-#include <map>
-#include <unordered_map>
-#include <unordered_set>
+#ifndef NewMemoryCache_H
+#define NewMemoryCache_H
+#include "NewBoundedCache.h"
 
-#define FILECACHENAME "filecache"
+#define NEWMEMORYCACHENAME "privatememory"
 
-class FileCache : public BoundedCache<MultiReaderWriterLock> {
+class NewMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
   public:
-    FileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string filePath);
-    ~FileCache();
+    NewMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
+    ~NewMemoryCache();
 
-    static Cache *addNewFileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string filePath);
+    static Cache *addNewMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
 
   protected:
-    virtual uint8_t *getBlockData(unsigned int blockIndex);
-    virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size);
-    virtual void cleanUpBlockData(uint8_t *data);
-
-  private:
     struct MemBlockEntry : BlockEntry {
         std::atomic<uint32_t> activeCnt;
-        void init(BoundedCache* c){
-          BlockEntry::init(c);
+        void init(NewBoundedCache* c,uint32_t entryId){
+          BlockEntry::init(c,entryId);
           std::atomic_init(&activeCnt, (uint32_t)0);
         }
     };
-    void writeToFile(uint64_t size, uint8_t *buff);
-    void readFromFile(uint64_t size, uint8_t *buff);
-    void preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
-    void pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
-    
-    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch);
+
+    virtual void blockSet(BlockEntry* blk,  uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch, int activeUpdate,Request* req);
     virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
-    virtual void readBlockEntry(uint32_t blockIndex, BlockEntry *entry);
-    virtual void writeBlockEntry(uint32_t blockIndex, BlockEntry *entry);
-    virtual void readBin(uint32_t binIndex, BlockEntry *entries);
-    virtual std::vector<std::shared_ptr<BlockEntry>> readBin(uint32_t binIndex);
+   
+    virtual uint8_t *getBlockData(unsigned int blockIndex);
+    virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size);
+    virtual BlockEntry* getBlockEntry(uint32_t blockIndex,  Request* req);
+    virtual std::vector<BlockEntry*> readBin(uint32_t binIndex);
+    virtual std::string blockEntryStr(BlockEntry *entry);
 
-    virtual int incBlkCnt(uint32_t blk, Request* req);
-    virtual int decBlkCnt(uint32_t blk, Request* req);
-    virtual bool anyUsers(uint32_t blk, Request* req);
+    virtual int incBlkCnt(BlockEntry * entry, Request* req);
+    virtual int decBlkCnt(BlockEntry * entry, Request* req);
+    virtual bool anyUsers(BlockEntry * entry, Request* req);
 
+  private:
     MemBlockEntry *_blkIndex;
-
-    uint32_t _pid;
-    std::string _filePath;
-    std::atomic_uint *_fullFlag;
-    int _blocksfd;
-    int _blkIndexfd;
-
-    unixopen_t _open;
-    unixclose_t _close;
-    unixread_t _read;
-    unixwrite_t _write;
-    unixlseek_t _lseek;
-    unixfsync_t _fsync;
+    uint8_t *_blocks;
 };
 
-#endif /* BUSTBUFFERCACHE_H */
+#endif /* NewMemoryCache_H */

@@ -106,7 +106,7 @@ UrlCache::~UrlCache() {
 }
 
 void UrlCache::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
-    std::cout<<_name<<" adding file: "<<filename<<std::endl;
+    log(this)<<_name<<" adding file: "<<filename<<std::endl;
     _lock->writerLock();
     if(supportedUrlType(filename)){
         if(_fileMap.count(index) == 0) {

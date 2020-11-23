@@ -91,13 +91,14 @@ class BoundedFilelockCache : public BoundedCache<FcntlBoundedReaderWriterLock> {
 
   private:
     struct FileBlockEntry : BlockEntry {
+        uint16_t active;
         char fileName[BFL_FILENAME_LEN];
         FileBlockEntry(){
-          memset(fileName,0,BFL_FILENAME_LEN);
+          memset(fileName,0,sizeof(uint16_t) + BFL_FILENAME_LEN);
         }
         FileBlockEntry(BoundedCache* c){
           BlockEntry::init(c);
-          memset(fileName,0,BFL_FILENAME_LEN);
+          memset(fileName,0,sizeof(uint16_t) + BFL_FILENAME_LEN);
         }
         FileBlockEntry(FileBlockEntry* old){
           *(BlockEntry*)this = *(BlockEntry*)old;
@@ -124,14 +125,15 @@ class BoundedFilelockCache : public BoundedCache<FcntlBoundedReaderWriterLock> {
 
     void readFileBlockEntry(uint32_t blockIndex, FileBlockEntry *entry);
     void writeFileBlockEntry(uint32_t blockIndex, FileBlockEntry *entry);
+    virtual std::string blockEntryStr(uint32_t blockIndex);
     virtual void readBlockEntry(uint32_t blockIndex, BlockEntry *entry);
     virtual void writeBlockEntry(uint32_t blockIndex, BlockEntry *entry);
 
     void readBin(uint32_t binIndex, BlockEntry *entries);
     virtual std::vector<std::shared_ptr<BlockEntry>> readBin(uint32_t binIndex);
-    virtual int incBlkCnt(uint32_t blk);
-    virtual int decBlkCnt(uint32_t blk);
-    virtual bool anyUsers(uint32_t blk);
+    virtual int incBlkCnt(uint32_t blk, Request* req);
+    virtual int decBlkCnt(uint32_t blk, Request* req);
+    virtual bool anyUsers(uint32_t blk, Request* req);
 
     virtual void cleanUpBlockData(uint8_t *data);
 

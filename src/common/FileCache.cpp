@@ -398,13 +398,13 @@ std::vector<std::shared_ptr<BoundedCache<MultiReaderWriterLock>::BlockEntry>> Fi
     return entries;
 }
 
-int FileCache::incBlkCnt(uint32_t blk) {
+int FileCache::incBlkCnt(uint32_t blk, Request* req) {
     return _blkIndex[blk].activeCnt.fetch_add(1);
 }
-int FileCache::decBlkCnt(uint32_t blk) {
+int FileCache::decBlkCnt(uint32_t blk, Request* req) {
     return _blkIndex[blk].activeCnt.fetch_sub(1);
 }
 
-bool FileCache::anyUsers(uint32_t blk) {
+bool FileCache::anyUsers(uint32_t blk, Request* req) {
     return _blkIndex[blk].activeCnt;
 }

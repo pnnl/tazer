@@ -301,7 +301,6 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
 
     //Do the work
     auto retValue = innerWrapper(fileId, isTazerFile, tazerFun, posixFun, args...);
-
     if (ignore) {
         //Maintain the ignore_fd set
         addToSet(ignore_fd, retValue, posixFun);

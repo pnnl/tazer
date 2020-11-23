@@ -72,67 +72,37 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef FileCache_H
-#define FileCache_H
-#include "BoundedCache.h"
+#ifndef FILELINKREADERWRITERLOCK_H
+#define FILELINKREADERWRITERLOCK_H
+#include "ReaderWriterLock.h"
+#include "UnixIO.h"
+#include "Timer.h"
+#include "Request.h"
 #include <atomic>
-#include <future>
-#include <map>
-#include <unordered_map>
-#include <unordered_set>
+#include <limits.h>
+#include <thread>
+#include <vector>
 
-#define FILECACHENAME "filecache"
-
-class FileCache : public BoundedCache<MultiReaderWriterLock> {
+class FileLinkReaderWriterLock {
   public:
-    FileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string filePath);
-    ~FileCache();
+    void readerLock(uint64_t entry,Request* req,bool log=true);
+    void readerUnlock(uint64_t entry,Request* req,bool log=true);
 
-    static Cache *addNewFileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string filePath);
+    void writerLock(uint64_t entry,Request* req, bool log=true);
+    void writerUnlock(uint64_t entry,Request* req, bool log=true);
 
-  protected:
-    virtual uint8_t *getBlockData(unsigned int blockIndex);
-    virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size);
-    virtual void cleanUpBlockData(uint8_t *data);
+    FileLinkReaderWriterLock(uint32_t numEntries, std::string lockPath, std::string id);
+    ~FileLinkReaderWriterLock();
 
   private:
-    struct MemBlockEntry : BlockEntry {
-        std::atomic<uint32_t> activeCnt;
-        void init(BoundedCache* c){
-          BlockEntry::init(c);
-          std::atomic_init(&activeCnt, (uint32_t)0);
-        }
-    };
-    void writeToFile(uint64_t size, uint8_t *buff);
-    void readFromFile(uint64_t size, uint8_t *buff);
-    void preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
-    void pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
-    
-    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch);
-    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
-    virtual void readBlockEntry(uint32_t blockIndex, BlockEntry *entry);
-    virtual void writeBlockEntry(uint32_t blockIndex, BlockEntry *entry);
-    virtual void readBin(uint32_t binIndex, BlockEntry *entries);
-    virtual std::vector<std::shared_ptr<BlockEntry>> readBin(uint32_t binIndex);
-
-    virtual int incBlkCnt(uint32_t blk, Request* req);
-    virtual int decBlkCnt(uint32_t blk, Request* req);
-    virtual bool anyUsers(uint32_t blk, Request* req);
-
-    MemBlockEntry *_blkIndex;
-
-    uint32_t _pid;
-    std::string _filePath;
-    std::atomic_uint *_fullFlag;
-    int _blocksfd;
-    int _blkIndexfd;
-
-    unixopen_t _open;
-    unixclose_t _close;
-    unixread_t _read;
-    unixwrite_t _write;
-    unixlseek_t _lseek;
-    unixfsync_t _fsync;
+  int getLock(std::string entryPath, std::string linkPath,Request* req,bool log=true);
+  std::string createLinkPath(uint64_t entry);
+  int getRandTime();
+  uint32_t _numEntries;
+  std::string _lockPath;
+  std::string _id;
+  std::atomic<uint16_t> *_writers;
+  ReaderWriterLock _randLock;
 };
 
-#endif /* BUSTBUFFERCACHE_H */
+#endif /* FcntlREADERWRITERLOCK_H */

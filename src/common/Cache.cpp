@@ -189,6 +189,8 @@ Cache::~Cache() {
     while (_outstandingWrites.load()) {
         std::this_thread::yield();
     }
+    void* ptr = ((uint8_t*)_curIoTime) - sizeof(uint32_t);
+    free(ptr);
 
     _terminating = true;
 
@@ -215,9 +217,6 @@ Cache::~Cache() {
     shm_unlink(shmPath.c_str());
 }
 
-bool Cache::blockReserve(uint32_t index, uint32_t fileIndex, int &reservedIndex, bool prefetch) {
-    return false;
-}
 
 //Must lock first!
 void Cache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex) {
@@ -234,6 +233,7 @@ bool Cache::writeBlock(Request *req) {
 
 Request *Cache::requestBlock(uint32_t index, uint64_t &size, uint32_t fileIndex, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
     Request *req = new Request(index, fileIndex, size, this, NULL);
+    // std::cout<<"New Request!! "<<req->str()<<std::endl;
     Cache *tmp = this;
     while (tmp) {
         req->reservedMap[tmp] = 0;
