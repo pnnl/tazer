@@ -68,8 +68,8 @@ cd ${workspace}/test_${test_id}
     sed -i 's+'${SERVER_DATA_PATH}'/+data/+g' access_pattern.txt
     #Run workloadSim with tazer using the given cache sizes.
     
-    ref_time=`/people/frie869/Projects/SimplePTP/target/release/client`
-    echo "ref_time ${ref_time}"
+    ref_time=0 #debug -- calcuate a reference time (e.g. with SimplePTP if you want to use)
+    echo "ref_time ${ref_time}" 
     # time gdb --ex run --ex bt --args env  
     time TAZER_REF_TIME=${ref_time} TAZER_SHARED_MEM_CACHE=$((${CACHES[1]}))  TAZER_SHARED_MEM_CACHE_SIZE=$((${CACHE_SIZES[0]})) \
     TAZER_BB_CACHE=$((${CACHES[1]})) TAZER_BB_CACHE_SIZE=$((${CACHE_SIZES[1]})) \

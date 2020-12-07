@@ -13,7 +13,7 @@ if [ -z "$TAZER_BUILD_DIR" ];  then
     TAZER_BUILD_DIR=build
 fi
 
-$HOME/Projects/SimplePTP/target/release/SimplePTP &
+
 
 cd tests/integration_tests
 
@@ -54,6 +54,8 @@ cur_dir=`pwd`
 cd ${workspace}/tazer-bigflow-sim
 make -j
 cd $cur_dir
+
+
 
 
 

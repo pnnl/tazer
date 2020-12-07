@@ -57,7 +57,7 @@ cd ${workspace}/test_${test_id}
     echo "TAZER_SHARED_MEM_CACHE=${CACHES[0]} TAZER_SHARED_MEM_CACHE_SIZE=$((${CACHE_SIZES[0]})) \
     TAZER_BB_CACHE=${CACHES[1]} TAZER_BB_CACHE_SIZE=$((${CACHE_SIZES[1]})) \
     TAZER_BOUNDED_FILELOCK_CACHE=${CACHES[2]} TAZER_BOUNDED_FILELOCK_CACHE_SIZE=$((${CACHE_SIZES[2]}))"
-    ref_time=`/people/frie869/Projects/SimplePTP/target/release/client`
+    ref_time=0 #debug -- calcuate a reference time (e.g. with SimplePTP if you want to use)
     echo "ref_time ${ref_time}"
     # time gdb --ex run --ex bt --args env  
     time TAZER_REF_TIME=${ref_time} TAZER_SHARED_MEM_CACHE=$((${CACHES[0]})) TAZER_SHARED_MEM_CACHE_SIZE=$((${CACHE_SIZES[0]})) \
