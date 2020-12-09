@@ -1,4 +1,4 @@
-// -*-Mode: C++;-*-
+// -*-Mode: C++;-*- // technically C99
 
 //*BeginLicense**************************************************************
 //
@@ -72,99 +72,51 @@
 // 
 //*EndLicense****************************************************************
 
-#include "ErrorTester.h"
-#include "Message.h"
-#include <execinfo.h>
-#include <iostream>
-#include <map>
-#include <string>
+#ifndef ThreadPool_H
+#define ThreadPool_H
+#include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <functional>
+#include <mutex>
+#include <thread>
+#include <vector>
+#include <future>
 
-const unsigned int maxBackTrace = 50;
+template <class T>
+class ThreadPool {
+  public:
+    ThreadPool(unsigned int maxThreads);
+    ThreadPool(unsigned int maxThreads,std::string name);
+    ~ThreadPool();
 
-std::string errorList[] = {
-#if defined(MSG_ERROR) || defined(ALL_ERROR)
-    std::string("sendRequestBlkMsg"),
-    std::string("sendOpenFileMsg"),
-    std::string("sendRequestBlkMsg"),
-    std::string("sendCloseFileMsg"),
-    std::string("sendCloseConMsg"),
-    std::string("sendFileSizeMsg"),
-    std::string("recFileSizeMsg"),
-    std::string("sendSendBlkMsg"),
-    std::string("recSendBlkMsg"),
-    std::string("sendAckMsg"),
-    std::string("recAckMsg"),
-    std::string("sendRequestFileSizeMsg"),
-    std::string("sendCloseServerMsg"),
-#endif
-#if defined(POLL_ERROR) || defined(ALL_ERROR)
-    std::string("pollWrapper"),
-    std::string("pollRecWrapper"),
-#endif
-    std::string("last")};
+    unsigned int initiate();
+    bool terminate(bool force = false);
+    void wait();
 
-ErrorTester error;
+    unsigned int addThreads(unsigned int numThreads);
+    void addTask(T f);
+    bool addThreadWithTask(T f);
 
-ErrorTester::ErrorTester() : _seed(7) {
-    std::unique_lock<std::mutex> lock(_lock);
-    srand(_seed);
-    lock.unlock();
-}
+    unsigned int getMaxThreads();
+    int numTasks();
 
-ErrorTester::~ErrorTester() {
-}
+  private:
+    unsigned int _maxThreads;
+    unsigned int _users;
 
-bool ErrorTester::randomError() {
-    bool ret = false;
-    if (checkStack()) {
-        std::unique_lock<std::mutex> lock(_lock);
-        //        ret = (rand() % 2) == 1;
-        ret = true;
-        lock.unlock();
-    }
-    return ret;
-}
+    std::atomic_bool _alive;
+    std::atomic_uint _currentThreads;
 
-bool ErrorTester::checkError() {
-    return error.randomError();
-}
+    std::mutex _tMutex;
+    std::vector<std::thread> _threads;
 
-template <class RetType>
-bool ErrorTester::checkError(RetType pass, RetType fail) {
-    if (error.randomError())
-        return pass;
-    return fail;
-}
+    std::mutex _qMutex;
+    std::deque<T> _q;
+    std::condition_variable _cv;
 
-bool ErrorTester::checkStack() {
-    void *bt[maxBackTrace];
-    size_t size = backtrace(bt, maxBackTrace);
-    char **names = backtrace_symbols(bt, size);
-    size_t listSize = sizeof(errorList) / sizeof(std::string);
-    for (size_t j = 0; j < listSize - 1; j++) {
-        for (size_t i = 0; i < size; i++) {
-            char *name = names[i];
-            std::string temp(name);
-            if (temp.find(errorList[j]) < temp.length()) {
-                std::cout<<"[TAZER] " << "Error: " << errorList[j] << std::endl;
-                free(names);
-                return true;
-            }
-        }
-    }
-    free(names);
-    return false;
-}
+    void workLoop();
+    std::string _name;
+};
 
-void ErrorTester::printStack() {
-    PRINTF("HERE ............\n");
-    void *bt[maxBackTrace];
-    size_t size = backtrace(bt, maxBackTrace);
-    char **names = backtrace_symbols(bt, size);
-    for (size_t i = 0; i < size; i++) {
-        char *name = names[i];
-        std::cout<<"[TAZER] " << name << std::endl;
-        //            PRINTF("%s\n", name);
-    }
-    free(names);
-}
+#endif /* ThreadPool_H */

@@ -83,22 +83,24 @@
 #include <thread>
 #include <unistd.h>
 
-#include "BoundedFilelockCache.h"
+#include "caches/bounded/deprecated/BoundedFilelockCache.h"
+#include "caches/bounded/deprecated/MemoryCache.h"
+#include "caches/bounded/deprecated/SharedMemoryCache.h"
+#include "caches/unbounded/UrlCache.h"
+#include "caches/LocalFileCache.h"
+#include "caches/NetworkCache.h"
+#include "caches/UrlFileCache.h"
+#include "caches/UrlDownload.h"
+
 #include "Config.h"
 #include "FileCacheRegister.h"
-#include "LocalFileCache.h"
-#include "MemoryCache.h"
 #include "Message.h"
-#include "NetworkCache.h"
 #include "Request.h"
 #include "ServeFile.h"
-#include "SharedMemoryCache.h"
 #include "UnixIO.h"
 #include "lz4.h"
 #include "lz4hc.h"
-#include "UrlFileCache.h"
-#include "UrlCache.h"
-#include "UrlDownload.h"
+
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 //#define DPRINTF(...)
