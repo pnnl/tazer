@@ -192,6 +192,7 @@ void __attribute__((destructor)) tazerCleanup(void) {
     curlDestroy;
 
     if (Config::printStats) {
+        
         std::cout << "[TAZER] " << "Exiting Client" << std::endl;
         if (ConnectionPool::useCnt->size() > 0) {
             for (auto conUse : *ConnectionPool::useCnt) {
@@ -235,6 +236,7 @@ int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, cons
     if (file)
         TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
     // std::cout << "tazer open "<<metaName<<" "<<fd<<std::endl;
+
     return fd;
 }
 
@@ -479,7 +481,7 @@ int fseek(FILE *fp, long int off, int whence) {
 }
 
 int tazerFgetc(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
-    if (!file->eof()) {
+    if (!file->eof(pos)) {
         unsigned char buffer;
         read(fd, &buffer, 1);
         return (int)buffer;
@@ -493,7 +495,7 @@ int fgetc(FILE *fp) {
 
 char *tazerFgets(TazerFile *file, unsigned int pos, int fd, char *__restrict s, int n, FILE *__restrict fp) {
     char *ret = NULL;
-    if (!file->eof()) {
+    if (!file->eof(pos)) {
         int prior = file->filePos(pos);
         size_t res = read(fd, s, n - 1);
         if (res) {
@@ -551,7 +553,7 @@ int fputs(const char *__restrict s, FILE *__restrict fp) {
 }
 
 int tazerFeof(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
-    return file->eof();
+    return file->eof(pos);
 }
 
 int feof(FILE *fp) ADD_THROW {

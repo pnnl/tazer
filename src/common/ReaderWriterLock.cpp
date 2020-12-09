@@ -74,8 +74,12 @@
 
 #include "ReaderWriterLock.h"
 #include "AtomicHelper.h"
+#include "Request.h"
+#include "Loggable.h"
 #include <cstring>
 #include <iostream>
+#include <sys/types.h>
+       #include <unistd.h>
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 
@@ -216,7 +220,8 @@ MultiReaderWriterLock::~MultiReaderWriterLock() {
     }
 }
 
-void MultiReaderWriterLock::readerLock(uint64_t entry) {
+void MultiReaderWriterLock::readerLock(uint64_t entry, Request* req) {
+    if(req) { req->trace()<<"rlocking: "<<entry<<std::endl;}
     while (1) {
         while (_writers[entry].load()) {
             std::this_thread::yield();
@@ -227,13 +232,17 @@ void MultiReaderWriterLock::readerLock(uint64_t entry) {
         }
         _readers[entry].fetch_sub(1);
     }
+    if(req) { req->trace()<<"rlocked: "<<entry<<std::endl;}
 }
 
-void MultiReaderWriterLock::readerUnlock(uint64_t entry) {
+void MultiReaderWriterLock::readerUnlock(uint64_t entry, Request* req) {
+    if(req) { req->trace()<<"runlocking: "<<entry<<std::endl; }
     _readers[entry].fetch_sub(1);
+    if(req) { req->trace()<<"runlocked: "<<entry<<std::endl;}
 }
 
-void MultiReaderWriterLock::writerLock(uint64_t entry) {
+void MultiReaderWriterLock::writerLock(uint64_t entry, Request* req) {
+    if(req) { req->trace()<<"wlocking: "<<entry <<" "<<::getpid()<<std::endl; }
     unsigned int check = 1;
     while (_writers[entry].exchange(check) == 1) {
         std::this_thread::yield();
@@ -241,6 +250,7 @@ void MultiReaderWriterLock::writerLock(uint64_t entry) {
     while (_readers[entry].load()) {
         std::this_thread::yield();
     }
+    if(req) { req->trace()<<"wlocked: "<<entry <<" "<<::getpid()<<std::endl; }
 }
 
 void MultiReaderWriterLock::fairWriterLock(uint64_t entry) {
@@ -254,8 +264,11 @@ void MultiReaderWriterLock::fairWriterLock(uint64_t entry) {
     }
 }
 
-void MultiReaderWriterLock::writerUnlock(uint64_t entry) {
+void MultiReaderWriterLock::writerUnlock(uint64_t entry, Request* req) {
+    if(req) { req->trace()<<"wunlocking: "<<entry <<" "<<::getpid()<<std::endl; }
     _writers[entry].store(0);
+    if(req) { req->trace()<<"wunlocked: "<<entry <<" "<<::getpid()<<std::endl; }
+
 }
 
 void MultiReaderWriterLock::fairWriterUnlock(uint64_t entry) {

@@ -268,8 +268,8 @@ bool TazerFile::active() {
     return _active.load();
 }
 
-bool TazerFile::eof() {
-    return _eof;
+bool TazerFile::eof(uint32_t index) {
+    return _eof[index];
 }
 
 uint32_t TazerFile::newFilePosIndex() {
@@ -277,6 +277,7 @@ uint32_t TazerFile::newFilePosIndex() {
     std::unique_lock<std::mutex> lock(_fpMutex);
     ret = _filePos.size();
     _filePos.push_back(0);
+    _eof.push_back(false);
     lock.unlock();
     return ret;
 }

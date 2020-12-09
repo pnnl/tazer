@@ -85,7 +85,7 @@
 const unsigned int numThreads = 1;
 ThreadPool<std::function<void()>> pool(numThreads);
 
-size_t blockSize = 16 * 1024; //16777216;
+size_t blockSize = 1 * 1024*1024; //16777216;
 size_t numBlocks = 0;
 size_t fileSize = 0;
 
@@ -109,7 +109,7 @@ char *makeBuffer(unsigned int size) {
 
 size_t getFileSize(std::string fileName) {
     struct stat64 sb;
-    if (lstat64(fileName.c_str(), &sb) != -1) {
+    if (stat64(fileName.c_str(), &sb) != -1) { //stat instead of lstat so we get size of the file, not the link
         std::cout << "Size: " << sb.st_size << std::endl;
         return sb.st_size;
     }

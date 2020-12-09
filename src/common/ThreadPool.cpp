@@ -74,7 +74,7 @@
 
 #include "ThreadPool.h"
 #include "Timer.h"
-#include "Cache.h"
+#include "caches/Cache.h"
 #include <iostream>
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)

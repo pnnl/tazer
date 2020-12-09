@@ -73,25 +73,28 @@
 //*EndLicense****************************************************************
 
 #include "InputFile.h"
-#include "BlockSizeTranslationCache.h"
-#include "BoundedFilelockCache.h"
-#include "Cache.h"
+#include "caches/Cache.h"
+#include "caches/bounded/NewBoundedFilelockCache.h"
+#include "caches/bounded/NewSharedMemoryCache.h"
+#include "caches/bounded/NewMemoryCache.h"
+#include "caches/bounded/deprecated/BoundedFilelockCache.h"
+#include "caches/bounded/deprecated/SharedMemoryCache.h"
+#include "caches/bounded/deprecated/MemoryCache.h"
+#include "caches/bounded/deprecated/FileCache.h"
+#include "caches/unbounded/FilelockCache.h"
+#include "caches/unbounded/FcntlCache.h"
+#include "caches/LocalFileCache.h"
+#include "caches/NetworkCache.h"
+
 #include "Config.h"
 #include "Connection.h"
 #include "ConnectionPool.h"
 #include "DeltaPrefetcher.h"
-#include "FcntlCache.h"
-#include "FileCache.h"
 #include "FileCacheRegister.h"
-#include "FilelockCache.h"
-#include "LocalFileCache.h"
-#include "MemoryCache.h"
 #include "Message.h"
-#include "NetworkCache.h"
 #include "PerfectPrefetcher.h"
 #include "Prefetcher.h"
 #include "Request.h"
-#include "SharedMemoryCache.h"
 #include "Timer.h"
 #include "UnixIO.h"
 #include "lz4.h"
@@ -130,14 +133,14 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     Cache *c = NULL;
 
     if (Config::useMemoryCache) {
-        Cache *c = MemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
+        Cache *c = NewMemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
         std::cerr << "[TAZER] "
                   << "mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }
 
     if (Config::useSharedMemoryCache && Config::enableSharedMem) {
-        c = SharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
+        c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
         std::cerr << "[TAZER] "
                   << "shared mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
@@ -158,7 +161,7 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     }
 
     if (Config::useBoundedFilelockCache) {
-        c = BoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
+        c = NewBoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
         std::cerr << "[TAZER] "
                   << "bounded filelock cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
@@ -195,6 +198,8 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     //TODO: think about the right way to terminate these (do we even need to or just let the OS destroy when the application exits?)
     InputFile::_transferPool->initiate();
     InputFile::_decompressionPool->initiate();
+
+    std::cerr<< "[TAZER] TIME_REF: "<<Config::referenceTime<<std::endl;
 }
 
 InputFile::InputFile(std::string name, std::string metaName, int fd, bool openFile) : TazerFile(TazerFile::Type::Input, name, metaName, fd),
@@ -213,10 +218,11 @@ InputFile::InputFile(std::string name, std::string metaName, int fd, bool openFi
     if (Config::prefetcherType != PERFILE) {
         _prefetch = Config::prefetcherType;
     }
+    _prefetcher = NULL;
 
     switch (_prefetch) {
     case NONE:
-        //_prefetcher = NULL;
+        _prefetcher = NULL;
         log(this) << "[TAZER] "
                   << "No prefetcher" << std::endl;
         break;
@@ -285,7 +291,7 @@ void InputFile::open() {
             }
             else { //We failed to open the file
                 _active.store(false);
-                std::cout << "failed to open file" << _name << std::endl;
+                err() << "failed to open file" << _name << std::endl;
             }
         }
         lock.unlock();
@@ -365,7 +371,7 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
 
         if (_filePos[index] >= _fileSize) {
             log(this) << "[TAZER] " << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
-            _eof = true;
+            _eof[index] = true;
             _cache->stats.end(false, CacheStats::Metric::ovh);
             _cache->stats.end(false, CacheStats::Metric::hits);
             _cache->stats.end(false, CacheStats::Metric::read);
@@ -538,7 +544,7 @@ off_t InputFile::seek(off_t offset, int whence, uint32_t index) {
         break;
     }
 
-    _eof = false;
+    _eof[index] = false;
     return _filePos[index];
 }
 
