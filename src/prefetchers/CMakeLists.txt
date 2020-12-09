@@ -10,5 +10,5 @@ set(PREFETCH_FILES
     Prefetcher.cpp
 )
 
-add_library(prefetch SHARED ${PREFETCH_HEADERS} ${PREFETCH_FILES})
+add_library(prefetch OBJECT ${PREFETCH_HEADERS} ${PREFETCH_FILES})
 target_include_directories(prefetch PUBLIC ${TAZER_INC_DIR} ${TAZER_PREFETCH_INC_DIR})
