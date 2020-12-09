@@ -1,4 +1,5 @@
-add_library(testLib SHARED $<TARGET_OBJECTS:common>)
+include_directories(${TAZER_INC_DIR}  ${TAZER_CACHE_INC_DIR})
+add_library(testLib SHARED $<TARGET_OBJECTS:common> $<TARGET_OBJECTS:caches>)
 target_link_libraries(testLib ${RDMACM_LIB} ${RT_LIB} ${CURL_LIB} ${SSL_LIB} stdc++fs)
 
 add_executable(ServerTest ServerTest.cpp)
@@ -77,10 +78,10 @@ target_link_libraries(PriorityThreadPoolTest testLib)
 
 if(CURL_LIB)
     add_executable(SimpleUrlTest SimpleUrlTest.cpp)
-    target_link_libraries(SimpleUrlTest testLib)
+    target_link_libraries(SimpleUrlTest testLib )
 
     add_executable(CopyRangeTest CopyRangeTest.cpp)
-target_link_libraries(CopyRangeTest testLib)
+    target_link_libraries(CopyRangeTest testLib)
 endif()
 
 configure_file(FileStressTest.sh ${CMAKE_BINARY_DIR}/test/FileStressTest.sh @ONLY)
