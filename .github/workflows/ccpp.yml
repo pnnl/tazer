@@ -1,11 +1,13 @@
 name: C/C++ CI
 
-on: [push]
+on:
+  push:
+  workflow_dispatch:
 
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted]
     
     steps:
     - uses: actions/checkout@v1
@@ -17,4 +19,8 @@ jobs:
     - name: make
       working-directory: build
       run: make
+    - name: unit tests
+      run: tests/unit_test/RunLibCppUnitTest.sh
+    - name: integration tests
+      run: tests/integration_tests/RunIntegrationTests.sh
   

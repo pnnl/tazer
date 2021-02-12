@@ -73,25 +73,33 @@
 //*EndLicense****************************************************************
 
 #include "LocalFile.h"
-#include "BlockSizeTranslationCache.h"
-#include "BoundedFilelockCache.h"
-#include "Cache.h"
+#include "caches/Cache.h"
+#include "caches/bounded/NewBoundedFilelockCache.h"
+#include "caches/bounded/NewSharedMemoryCache.h"
+#include "caches/bounded/NewMemoryCache.h"
+#include "caches/bounded/deprecated/BoundedFilelockCache.h"
+#include "caches/bounded/deprecated/SharedMemoryCache.h"
+#include "caches/bounded/deprecated/MemoryCache.h"
+#include "caches/bounded/deprecated/FileCache.h"
+#include "caches/unbounded/FilelockCache.h"
+#include "caches/unbounded/FcntlCache.h"
+#include "caches/unbounded/UrlCache.h"
+#include "caches/LocalFileCache.h"
+#include "caches/NetworkCache.h"
+#include "caches/UrlDownload.h"
+#include "caches/UrlFileCache.h"
+
 #include "Config.h"
 #include "Connection.h"
 #include "ConnectionPool.h"
-#include "FcntlCache.h"
-#include "FileCache.h"
 #include "FileCacheRegister.h"
-#include "FilelockCache.h"
-#include "MemoryCache.h"
 #include "Message.h"
-#include "NetworkCache.h"
 #include "Request.h"
-#include "SharedMemoryCache.h"
 #include "Timer.h"
 #include "UnixIO.h"
 #include "lz4.h"
 #include "xxhash.h"
+
 #include <fcntl.h>
 #include <fstream>
 #include <iomanip>
@@ -108,50 +116,66 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-#define TIMEON(...) __VA_ARGS__
-//#define TIMEON(...)
+std::once_flag local_init_flag;
+Cache *LocalFile::_cache = NULL;
 
-#define RESERVESIZE ((_compress) ? LZ4_compressBound(_blkSize) + _blkSize : _blkSize)
-
-std::once_flag init_flag;
-
-Cache *LocalFile::_cache = NULL; //(BASECACHENAME);
-
-void /*__attribute__((constructor))*/ LocalFile::cache_init(void) {
+void LocalFile::cache_init() {
     int level = 0;
     Cache *c = NULL;
 
     if (Config::useMemoryCache) {
-        Cache *c = MemoryCache::addNewMemoryCache(MEMORYCACHENAME, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
-        std::cerr << "[TAZER] "
-                  << "mem cache: " << (void *)c << std::endl;
+        c = MemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
+        std::cerr << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
         LocalFile::_cache->addCacheLevel(c, ++level);
     }
 
     if (Config::useSharedMemoryCache) {
-        c = SharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
-        std::cerr << "[TAZER] "
-                  << "shared mem cache: " << (void *)c << std::endl;
+        c = SharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
+        std::cerr << "[TAZER] " << "shared mem cache: " << (void *)c << std::endl;
         LocalFile::_cache->addCacheLevel(c, ++level);
     }
 
-    if (Config::LocalFileCache) {
-        c = BoundedFilelockCache::addNewLocalFileCache(LOCALFILECACHENAME);
-        std::cerr << "[TAZER] "
-                  << "filelock cache: " << (void *)c << std::endl;
-        LocalFile::_cache->addCacheLevel(c, ++level);
-    }
-
+    #ifdef USE_CURL
+        if(Config::urlFileCacheOn) {
+            c = UrlFileCache::addNewUrlFileCache(URLFILECACHENAME, CacheType::local);
+            std::cerr << "[TAZER] " << "Url file cache: " << (void *)c << std::endl;
+            LocalFile::_cache->addCacheLevel(c, ++level);
+            return;
+        }
+        else {
+            c = UrlCache::addNewUrlCache(URLCACHENAME, CacheType::local, Config::sharedMemoryCacheBlocksize);
+            std::cerr << "[TAZER] " << "Url cache: " << (void *)c << std::endl;
+            LocalFile::_cache->addCacheLevel(c, ++level);
+        }
+    #endif
+    c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME, CacheType::local);
+    std::cerr << "[TAZER] " << "Local file cache: " << (void *)c << std::endl;
+    LocalFile::_cache->addCacheLevel(c, ++level);
 }
 
-LocalFile::LocalFile(std::string fileName, int fd, bool openFile) : TazerFile(TazerFile::Type::Local, fileName, fd),
-                                                                    _fileSize(0),
-                                                                    _numBlks(0),
-                                                                    _regFileIndex(id()) { //This is if there is no file cache...
-    std::call_once(init_flag, LocalFile::cache_init);
-    if (openFile) {
-        open();
+LocalFile::LocalFile(std::string name, std::string metaName, int fd, bool openFile) : TazerFile(TazerFile::Type::Local, name, metaName, fd),
+                                                                                      _fileSize(0),
+                                                                                      _numBlks(0),
+                                                                                      _regFileIndex(id()), 
+                                                                                      _url(supportedUrlType(name)) { //This is if there is no file cache...
+    std::call_once(local_init_flag, LocalFile::cache_init);
+    std::unique_lock<std::mutex> lock(_openCloseLock);
+    if(_url)
+        _fileSize = sizeUrlPath(name);
+    else {
+        struct stat sbuf;
+        if (stat(_name.c_str(), &sbuf) == 0)
+            _fileSize = sbuf.st_size;
     }
+
+    if(_fileSize == (uint64_t) -1)
+        std::cout << "Failed to open file " << _name << std::endl;
+    else if(openFile)
+        open();
+    else {
+        _active.store(false);
+    }
+    lock.unlock();
 }
 
 LocalFile::~LocalFile() {
@@ -160,52 +184,46 @@ LocalFile::~LocalFile() {
 }
 
 void LocalFile::open() {
-    //   std::cout << "[TAZER] "
-    //             << "LocalFile: " << _connections.size() << std::endl;
-    std::unique_lock<std::mutex> lock(_openCloseLock);
+    _blkSize = Config::memoryCacheBlocksize;
+
+    if (_fileSize < _blkSize)
+        _blkSize = _fileSize;
+
+    _numBlks = _fileSize / _blkSize;
+    if (_fileSize % _blkSize != 0)
+        _numBlks++;
+
     bool prev = false;
     if (_active.compare_exchange_strong(prev, true)) {
-        struct stat sbuf;
-        if (stat(_name.c_str(), &sbuf) == 0){
-            _fileSize = sbuf.st_size;
-            _blkSize = Config::memoryCacheBlocksize;
-            if (_fileSize < _blkSize){
-                _blkSize = _fileSize;
-            }
-
-            _numBlks = _fileSize / _blkSize;
-            if (_fileSize % _blkSize != 0){
-                _numBlks++;
-            }
-
-            FileCacheRegister *reg = FileCacheRegister::openFileCacheRegister();
-            if (reg) {
-                _regFileIndex = reg->registerFile(_name);
-                _cache->addFile(_regFileIndex, _name, _blkSize, _fileSize);                
-            }
-        }
-        else { //We failed to open the file
-            _active.store(false);
-            std::cout << "failed to open file" << _name << std::endl;
+        FileCacheRegister *reg = FileCacheRegister::openFileCacheRegister();
+        if (reg) {
+            _regFileIndex = reg->registerFile(_name);
+            _cache->addFile(_regFileIndex, _name, _blkSize, _fileSize);                
         }
     }
-    lock.unlock();
-    
-    // std::cout << "done open: " << _name << " " << servers_requested << " " << _transferPool.numTasks() << std::endl;
 }
 
-//Close doesn't really do much, we hedge our bet that we will likey reopen the file thus we keep our connections to the servers active...
 void LocalFile::close() {
     std::unique_lock<std::mutex> lock(_openCloseLock);
     bool prev = true;
     if (_active.compare_exchange_strong(prev, false)) {
         DPRINTF("CLOSE: _FC: %p _BC: %p\n", _fc, _bc);
-    }
-    if (Config::useLocalFileCache) {
-        ((LocalFileCache*)_cache->getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
+        #ifdef USE_CURL
+            if(Config::urlFileCacheOn)
+                ((UrlFileCache*)(_cache->getCacheByName(URLFILECACHENAME)))->removeFile(_regFileIndex);
+            else 
+            {
+                if(_url) {
+                    ((UrlCache*)(_cache->getCacheByName(URLCACHENAME)))->removeFile(_regFileIndex);
+                }
+                else
+                    ((LocalFileCache*)_cache->getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
+            }
+        #else
+            ((LocalFileCache*)_cache->getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
+        #endif 
     }
     lock.unlock();
-    // std::cout << "Closing file " << _name << std::endl;
 }
 
 uint64_t LocalFile::copyBlock(char *buf, char *blkBuf, uint32_t blk, uint32_t startBlock, uint32_t endBlock, uint32_t fpIndex, uint64_t count) {
@@ -234,94 +252,48 @@ uint64_t LocalFile::copyBlock(char *buf, char *blkBuf, uint32_t blk, uint32_t st
     return localSize;
 }
 
-bool LocalFile::trackRead(size_t count, uint32_t index, uint32_t startBlock, uint32_t endBlock) {
-    if (Config::TrackReads) {
-        unixopen_t unixopen = (unixopen_t)dlsym(RTLD_NEXT, "open");
-        unixclose_t unixclose = (unixclose_t)dlsym(RTLD_NEXT, "close");
-        unixwrite_t unixwrite = (unixwrite_t)dlsym(RTLD_NEXT, "write");
-
-        int fd = (*unixopen)("access_new.txt", O_WRONLY | O_APPEND | O_CREAT, 0660);
-        if (fd != -1) {
-            std::stringstream ss;
-            ss << _name << " " << _filePos[index] << " " << count << " " << startBlock << " " << endBlock << std::endl;
-            unixwrite(fd, ss.str().c_str(), ss.str().length());
-            unixclose(fd);
-            return true;
-        }
-    }
-    return false;
-}
-
 ssize_t LocalFile::read(void *buf, size_t count, uint32_t index) {
     if (_active.load() && _numBlks) {
-        uint64_t otime = Timer::getCurrentTime();
-        uint64_t rtime = otime;
         if (_filePos[index] >= _fileSize) {
-            std::cerr << "[TAZER]" << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
-            _eof = true;
+            // std::cerr << "[TAZER]" << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
+            _eof[index] = true;
             return 0;
         }
-
+        
         char *localPtr = (char *)buf;
-        if ((uint64_t)count > _fileSize - _filePos[index]) {
+        if ((uint64_t)count > _fileSize - _filePos[index])
             count = _fileSize - _filePos[index];
-        }
 
         uint32_t startBlock = _filePos[index] / _blkSize;
         uint32_t endBlock = ((_filePos[index] + count) / _blkSize);
 
-        if (((_filePos[index] + count) % _blkSize)) {
+        if (((_filePos[index] + count) % _blkSize))
             endBlock++;
-        }
-        if (endBlock > _numBlks) {
-            endBlock = _numBlks;
-        }
-        // std::cerr << "[TAZER] " << Timer::printTime() << _name << " " << _filePos[index] << " " << _fileSize << " " << count << " " << startBlock << " " << endBlock << std::endl;
 
-        trackRead(count, index, startBlock, endBlock);
-        bool error = false;
+        if (endBlock > _numBlks)
+            endBlock = _numBlks;
+
         std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> reads;
         uint64_t priority = 0;
         for (uint32_t blk = startBlock; blk < endBlock; blk++) {
-            _cache->updateReadCnt(1);
-            uint32_t dataSize = (blk + 1 == _numBlks) ? _fileSize - (blk * _blkSize) : _blkSize;
-            _cache->updateOvhTime(Timer::getCurrentTime() - otime);
-
             auto request = _cache->requestBlock(blk, _blkSize, _regFileIndex, reads, priority);
-            otime = Timer::getCurrentTime();
-            // std::cout << "request blk " << blk << " from: " << request->originating->name() << request->ready << std::endl;
-
-            if (request->ready) { //the block was in a client side cache!! --as this is local this should always happen...
-                // std::cout << "blk " << blk << " done from: " << request->originating->name() << std::endl;
-                // request->originating->getRequestTime();
-                uint64_t tmp = 0;
-                uint64_t dtime = Timer::getCurrentTime();
-                auto amt = copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
-                _cache->updateDataTime(Timer::getCurrentTime() - dtime);
-                request->originating->updateHitAmt(amt);
-                //c->updateReadTime(Timer::getCurrentTime() - start_t);
+            if (request->ready) {
+                copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
                 _cache->bufferWrite(request);
             }
-        }
-
-        // std::cout<<"[TAZER] " << "read size" << reads.size() << std::endl;
-
-        //If prefetching is enabled globally or for this specific file, apply specific prefetching policy
-        if (Config::prefetchGlobal || _prefetch) {
-            //Default: Prefetch next n (numPrefetchBlks) blocks
-            //Prefetch gap means that we skip a few blocks: e.g. if Gap=2 and N=5, we will prefetch blocks {3..5}
-            if (Config::prefetchNextBlks) {
-                _cache->prefetchBlocks(index, endBlock + Config::prefetchGap, endBlock + Config::numPrefetchBlks, _numBlks - Config::prefetchGap, _fileSize.load(), _blkSize, _regFileIndex);
-            }
-            else if (Config::prefetchAllBlks) {
-                _cache->prefetchBlocks(index, 0, _numBlks, _numBlks, _fileSize.load(), _blkSize, _regFileIndex);
+            else {
+                auto request = reads[blk].get().get();
+                if (request->ready) {
+                    copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
+                    _cache->bufferWrite(request);
+                }
+                else {
+                    std::cout << "Error reading local file: " << _name << " " << _fileSize << std::endl;
+                    return 0;
+                }
             }
         }
-        
         _filePos[index] += count;
-        _cache->updateReadTime(Timer::getCurrentTime() - rtime);
-        _cache->updateDataAmt(count);
-        _cache->updateOvhTime(Timer::getCurrentTime() - otime);
         return count;
     }
     return 0;
@@ -333,15 +305,11 @@ ssize_t LocalFile::write(const void *buf, size_t count, uint32_t index) {
     return 0;
 }
 
-
-
 uint64_t LocalFile::fileSize() {
         return _fileSize;
 }
 
-//TODO: handle for if there is the local file present...
 off_t LocalFile::seek(off_t offset, int whence, uint32_t index) {
-    // std::cout << "seek: " << _name << " " << offset << " " << whence << " " << index << std::endl;
     switch (whence) {
     case SEEK_SET:
         _filePos[index] = offset;
@@ -356,8 +324,7 @@ off_t LocalFile::seek(off_t offset, int whence, uint32_t index) {
         _filePos[index] = _fileSize + offset;
         break;
     }
-
-    _eof = false;
+    _eof[index] = false;
     return _filePos[index];
 }
 

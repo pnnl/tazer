@@ -89,6 +89,8 @@
 #include "InputFile.h"
 #include "TazerFile.h"
 #include "OutputFile.h"
+#include "LocalFile.h"
+#include "MetaFileParser.h"
 #include "Timer.h"
 #include "UnixIO.h"
 
@@ -117,27 +119,27 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
 TazerFile::~TazerFile() {
 }
 
-std::string TazerFile::findMetaParam(std::string param, std::string server, bool required){
-    size_t start = server.find(param);
-    if (start == std::string::npos){
-        if (required){
-            log(this) << "improperly formatted meta file, unable to find: "<< param << std::endl;
-            exit(0);
-        }
-        else{
-            return std::string("");
-        }
-    }
-    size_t end = server.find("\n",start);
-    start = start+param.size(); //only return the data part
-    size_t len = end;
-    if (end != std::string::npos){
-        len -= start;
-    }
-    std::string val = server.substr(start, len);
-    log(this) << param << val << std::endl;
-    return val;
-}
+// std::string TazerFile::findMetaParam(std::string param, std::string server, bool required){
+//     size_t start = server.find(param);
+//     if (start == std::string::npos){
+//         if (required){
+//             log(this) << "improperly formatted meta file, unable to find: "<< param << std::endl;
+//             exit(0);
+//         }
+//         else{
+//             return std::string("");
+//         }
+//     }
+//     size_t end = server.find("\n",start);
+//     start = start+param.size(); //only return the data part
+//     size_t len = end;
+//     if (end != std::string::npos){
+//         len -= start;
+//     }
+//     std::string val = server.substr(start, len);
+//     log(this) << param << val << std::endl;
+//     return val;
+// }
 
 
 
@@ -145,61 +147,25 @@ std::string TazerFile::findMetaParam(std::string param, std::string server, bool
 bool TazerFile::readMetaInfo() {
     TIMEON(uint64_t t1 = Timer::getCurrentTime());
     auto start = Timer::getCurrentTime();
-    unixread_t unixRead = (unixread_t)dlsym(RTLD_NEXT, "read");
-    unixlseek_t unixlseek = (unixlseek_t)dlsym(RTLD_NEXT, "lseek");
+
 
     if (_fd < 0) {
         log(this) << "ERROR: Failed to open local metafile " << _metaName.c_str() << " : " << strerror(errno) << std::endl;
         return 0;
     }
-
-    int64_t fileSize = (*unixlseek)(_fd, 0L, SEEK_END);
-    (*unixlseek)(_fd, 0L, SEEK_SET);
-    char *meta = new char[fileSize + 1];
-    int ret = (*unixRead)(_fd, (void *)meta, fileSize);
-    if (ret < 0) {
-        log(this) << "ERROR: Failed to read local metafile: " << strerror(errno) << std::endl;
-        raise(SIGSEGV);
-        return 0;
-    }
-    meta[fileSize] = '\0';
-    std::string metaStr(meta);
+    MetaFileParser parse(_fd);
+    
     uint32_t numServers = 0;
-    size_t server_start = metaStr.find("[server]");
-    while (server_start != std::string::npos) {
-        size_t server_end = metaStr.find("[server]",server_start+1);
-        size_t len = server_end;
-        if (server_end != std::string::npos){
-            len -= start;
-        }
-        std::string server = metaStr.substr(server_start, len);
-        
-        //required params----------------------------------------------------
-        std::string hostAddr = findMetaParam("host=",server,true);
-        int port = atoi(findMetaParam("port=",server,true).c_str());
-        _name = findMetaParam("file=",server,true);
+    Entry e;
+    while (parse.getNext(&e)){
+        _name = e.file;
+        _compress = e.compress;
+        _prefetch = e.prefetch;
+        _blkSize = e.blkSize;
         //-------------------------------------------------------------------
-
-        //optional params----------------------------------------------------
-        std::string compress = findMetaParam("compress=",server, false);
-        if (compress.size() > 0){
-            _compress = atoi(compress.c_str());
-        }
-        
-        std::string prefetch = findMetaParam("prefetch=",server, false); //maybe we specify prefetch mode here eventually....
-        if (prefetch.size() > 0){
-            _prefetch = atoi(prefetch.c_str());
-        }
-
-        std::string blkSize = findMetaParam("blocksize=",server, false); // I think this is currently overwritten based on the cache block size in config.h
-        if (prefetch.size() > 0){                                        // but we maybe able to explore per file block sizes (that are a multiple of the cache block size)
-            _blkSize = atoi(blkSize.c_str());
-        }
-        //-------------------------------------------------------------------
-
         if (_type != TazerFile::Local) {
-            Connection *connection = Connection::addNewClientConnection(hostAddr, port);
-            log(this) << hostAddr << " " << port << " " << connection << std::endl;
+            Connection *connection = Connection::addNewClientConnection(e.host, e.port);
+            // std::cout << hostAddr << " " << port << " " << connection << std::endl;
             if (connection) {
                 if (ConnectionPool::useCnt->count(connection->addrport()) == 0) {
                     ConnectionPool::useCnt->emplace(connection->addrport(), 0);
@@ -209,10 +175,7 @@ bool TazerFile::readMetaInfo() {
                 numServers++;
             }
         };
-        server_start = server_end;
     }
-
-    delete[] meta;
     TIMEON(fprintf(stderr, "Meta Time: %lu\n", Timer::getCurrentTime() - t1));
     _initMetaTime = Timer::getCurrentTime()-start;
     return (numServers > 0);
@@ -247,8 +210,8 @@ bool TazerFile::active() {
     return _active.load();
 }
 
-bool TazerFile::eof() {
-    return _eof;
+bool TazerFile::eof(uint32_t index) {
+    return _eof[index];
 }
 
 uint32_t TazerFile::newFilePosIndex() {
@@ -256,6 +219,7 @@ uint32_t TazerFile::newFilePosIndex() {
     std::unique_lock<std::mutex> lock(_fpMutex);
     ret = _filePos.size();
     _filePos.push_back(0);
+    _eof.push_back(false);
     lock.unlock();
     return ret;
 }
@@ -274,7 +238,8 @@ void TazerFile::setFilePos(uint32_t index, uint64_t pos) {
 TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName, std::string metaName, int fd, bool open) {
     if (type == TazerFile::Input) {
         return Trackable<std::string, TazerFile *>::AddTrackable(
-            fileName, [=]() -> TazerFile * {
+            metaName, [=]() -> TazerFile * {
+                // std::cout << "new input " <<fileName<<" "<<metaName<<" "<<std::endl;
                 TazerFile *temp = new InputFile(fileName, metaName, fd, open);
                 if (open && temp && temp->active() == 0) {
                     delete temp;
@@ -285,7 +250,8 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
     }
     else if (type == TazerFile::Output) {
         return Trackable<std::string, TazerFile *>::AddTrackable(
-            fileName, [=]() -> TazerFile * {
+            metaName, [=]() -> TazerFile * {
+                // std::cout << "new output " <<fileName<<" "<<metaName<<" "<<std::endl;
                 TazerFile *temp = new OutputFile(fileName, metaName, fd);
                 if (temp && temp->active() == 0) {
                     delete temp;
@@ -294,18 +260,17 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
                 return temp;
             });
     }
-    // TODO: reimplement local file with new cache structure
-    // else if (type == TazerFile::Local) {
-    //     return Trackable<std::string, TazerFile *>::AddTrackable(
-    //         fileName, [=]() -> TazerFile * {
-    //             TazerFile *temp = new LocalFile(fileName, fd, open);
-    //             if (open && temp && temp->active() == 0) {
-    //                 delete temp;
-    //                 return NULL;
-    //             }
-    //             return temp;
-    //         });
-    // }
+    else if (type == TazerFile::Local) {
+        return Trackable<std::string, TazerFile *>::AddTrackable(
+            fileName, [=]() -> TazerFile * {
+                TazerFile *temp = new LocalFile(fileName, metaName, fd, open);
+                if (open && temp && temp->active() == 0) {
+                    delete temp;
+                    return NULL;
+                }
+                return temp;
+            });
+    }
     return NULL;
 }
 
@@ -315,14 +280,17 @@ bool TazerFile::removeTazerFile(std::string fileName) {
         char temp[1000];
         strcpy(temp, fileName.c_str());
         removeStr(temp, ".tmp");
+        // std::cout<<" remove tazer 1: "<<fileName<<std::endl;
         return Trackable<std::string, TazerFile *>::RemoveTrackable(temp);
     }
     else {
+        // std::cout<<" remove tazer 2: "<<fileName<<std::endl;
         return Trackable<std::string, TazerFile *>::RemoveTrackable(fileName);
     }
 }
 
 bool TazerFile::removeTazerFile(TazerFile *file) {
+    // std::cout<<" remove: "<<file->_name<<" "<<file->_metaName<<std::endl;
     return removeTazerFile(file->_metaName);
 }
 

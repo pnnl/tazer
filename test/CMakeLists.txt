@@ -1,5 +1,6 @@
-add_library(testLib SHARED $<TARGET_OBJECTS:common>)
-target_link_libraries(testLib ${RDMACM_LIB} ${RT_LIB} stdc++fs)
+include_directories(${TAZER_INC_DIR}  ${TAZER_CACHE_INC_DIR})
+add_library(testLib SHARED $<TARGET_OBJECTS:common> $<TARGET_OBJECTS:caches>)
+target_link_libraries(testLib ${RDMACM_LIB} ${RT_LIB} ${CURL_LIB} ${SSL_LIB} stdc++fs)
 
 add_executable(ServerTest ServerTest.cpp)
 target_link_libraries(ServerTest testLib)
@@ -44,7 +45,7 @@ add_executable(MapTest2 MapTest2.cpp)
 target_link_libraries(MapTest2 testLib)
 
 add_executable(TazerCp TazerCp.cpp )
-target_link_libraries(TazerCp threadPool testLib)
+target_link_libraries(TazerCp threadPool)
 
 configure_file(runTest.pl ${CMAKE_BINARY_DIR}/test/runTest.pl @ONLY)
 
@@ -74,5 +75,13 @@ configure_file(ConvertToRecords.py ${CMAKE_BINARY_DIR}/test/ConverToRecords.py @
 
 add_executable(PriorityThreadPoolTest PriorityThreadPoolTest.cpp)
 target_link_libraries(PriorityThreadPoolTest testLib)
+
+if(CURL_LIB)
+    add_executable(SimpleUrlTest SimpleUrlTest.cpp)
+    target_link_libraries(SimpleUrlTest testLib )
+
+    add_executable(CopyRangeTest CopyRangeTest.cpp)
+    target_link_libraries(CopyRangeTest testLib)
+endif()
 
 configure_file(FileStressTest.sh ${CMAKE_BINARY_DIR}/test/FileStressTest.sh @ONLY)

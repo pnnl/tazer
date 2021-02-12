@@ -152,7 +152,7 @@ uint64_t Timer::getCurrentTime() {
     auto now_ms = std::chrono::time_point_cast<std::chrono::nanoseconds>(now);
     auto value = now_ms.time_since_epoch();
     uint64_t ret = value.count();
-    return ret;
+    return ret + Config::referenceTime;
 }
 
 char *Timer::printTime() {

@@ -73,14 +73,57 @@
 //*EndLicense****************************************************************
 
 #include <iostream>
+#include <fcntl.h>
+#include <iostream>
+#include <string>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "UrlDownload.h"
 
 int main(int argc, char *argv[]) {
     std::string inUrl(argv[1]);
-    int size = sizeUrlPath(inUrl);
-    std::cout << "Downloading size: " << size << std::endl;
-    std::string path = downloadUrlPath(inUrl);
-    std::cout << path << std::endl;
+    if(checkUrlPath(inUrl)) {
+        int size = sizeUrlPath(inUrl);
+        std::cout << "Downloading size: " << size << std::endl;
+        std::string path = downloadUrlPath(inUrl);
+        std::cout << path << std::endl;
+
+        if(size && argc == 3) {
+            char * data = (char*) malloc(sizeof(char) * size);
+            unsigned int blockSize = (unsigned int) std::stoi(argv[2]);
+            unsigned int bytesDownloaded = 0;
+            while(bytesDownloaded < size) {
+                unsigned int start = bytesDownloaded;
+                unsigned int end = start + blockSize;
+                if(end > size)
+                    end = size;
+                void * block = downloadUrlRange(inUrl, start, end);
+                if(!block) {
+                    std::cout << "Failed range: " << start << " - " << end << std::endl;
+                    break;
+                }
+                memcpy(&data[bytesDownloaded], block, end-start);
+                bytesDownloaded+=end-start;
+                free(block);
+            }
+
+            //Check data
+            int fd = open(path.c_str(), O_RDONLY);
+            char byte;
+            int current = 0;
+            while(current < size) {
+                int bytes = read(fd, &byte, 1);
+                if(bytes == 1) {
+                    if(data[current] != byte) {
+                        std::cout << "Data does not match on " << current << std::endl;
+                        break;
+                    }
+                    current++;
+                }
+            }
+            close(fd);
+            free(data);
+        }
+    }
     return 0;
 }
-

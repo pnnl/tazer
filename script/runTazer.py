@@ -2,6 +2,8 @@
 import sys
 import argparse
 import tazerUtil as tu
+import importlib
+importlib.reload(tu)
 
 # Check python version
 def checkPython():
@@ -16,8 +18,7 @@ def parseClientCommand(comList):
     res = []
     for one in comList:
         if ' ' in one:
-            one.split()
-            res + one
+            res.extend(one.split())
         else:
             res.append(one)
     return res
