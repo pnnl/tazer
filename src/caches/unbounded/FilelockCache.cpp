@@ -277,6 +277,7 @@ bool FilelockCache::blockSet(unsigned int index, unsigned int fileIndex, uint8_t
 }
 
 void FilelockCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<" delete data"<<std::endl;
     delete[] data;
 }
 

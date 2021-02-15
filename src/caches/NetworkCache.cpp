@@ -112,15 +112,23 @@ NetworkCache::~NetworkCache() {
     delete _lock;
     stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
-    std::cout << std::endl;
+    // std::cout << std::endl;
+}
+
+void NetworkCache::cleanUpBlockData(uint8_t *data){
+    // debug()<<_name<<" delete data"<<std::endl;
+    delete[] data;
 }
 
 bool NetworkCache::writeBlock(Request *req) {
     bool ret = true;
+    req->trace(_name)<<"WRITE BLOCK"<<std::endl;
+    // debug()
     // //log(this) /*std::cout*/<<"[TAZER] " << _name << " netcache writing: " << index << " " << (void *)originating << std::endl;
     // //log(this) /*std::cout*/<<"[TAZER] "<<_name<<" writeblock "<<std::hex<<(void*)buffer<<std::dec<<std::endl;
     if (req->originating == this) {
-        delete[] req->data;
+        // req->trace(_name)<<_type<<" deleting data "<<req->id<<std::endl;
+        req->printTrace=false; 
         delete req;
     }
     else if (_nextLevel) { // currentlty this should be the last level....but it could be possible to do something like a level for site level servers and then a level for remote site servers...
@@ -158,6 +166,7 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
     // bool success = false;
     server->lock();
     bool compress = _compressMap[fileIndex];
+    req->trace(_name)<<"requesting block from: "<<server->addrport()<<std::endl;
     //Currently we are only ever getting a single block at a time (blkStart == blkEnd)
     //That makes this reasonable... A better idea is to keep track of what block succeeded
     //And only re-request those that failed...
@@ -173,7 +182,7 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
     for (uint32_t j = 0; j < Config::socketRetry; j++) {
         if (sendRequestBlkMsg(server, name, blkStart, blkEnd)) {
             for (uint32_t i = blkStart; i <= blkEnd; i++) {
-                // log(this) << _name << " requesting block " << i << std::endl;
+                req->trace(_name) << " requesting block " << i <<" try: "<<j <<" of "<< Config::socketRetry<< std::endl;
                 uint64_t start = blkStart * _blkSize;
                 uint64_t end;
                 if (blkEnd * _blkSize > _fileSize) {
@@ -200,7 +209,7 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
                 }
                 if (!fileName.empty() && dataSize && blk == i) { //Got a block
                     // sizeSum += dataSize;
-                    // log(this) << _name<< "Received " << fileName << " " << blk << " " << dataSize << " allocSize " << size << std::endl;
+                    req->trace(_name) << "Received " << fileName << " " << blk << " " << dataSize << " allocSize " << size << std::endl;
                     if (compress) {
 
                         auto task = std::packaged_task<Request *()>([this, req, data, dataSize, size, blk, priority]() {
@@ -250,8 +259,11 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
     stats.start(); //hits
     // std::cout << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << std::endl;
     // req->trace+=_name+":";
+    req->printTrace=false;
+    req->globalTrigger=false;
     req->time = Timer::getCurrentTime();
     req->originating = this;
+    req->trace(_name)<<" READ BLOCK"<<std::endl;
     bool prefetch = priority != 0;
 
     auto task = std::packaged_task<std::shared_future<Request *>()>([this, req, priority, prefetch] { //packaged task allow the transfer to execute on an asynchronous tx thread.
@@ -267,7 +279,7 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
         bool success = false;
         auto fut = requestBlk(sev, req, priority, success);
         int retryCnt = 0;
-        while (!success && retryCnt < 10) {
+        while (!success && retryCnt < 100) {
 
             Connection *oldSev = sev;
             sev = NULL;
@@ -275,6 +287,7 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
                 sev = pool->popConnection();
             }
             err(this) << "retrying to request block old: " << oldSev->addrport() << " " << sev->addrport() << std::endl;
+            req->trace(_name)<< "retrying to request block old: " << oldSev->addrport() << " " << sev->addrport() << std::endl;
             pool->pushConnection(oldSev, true); //TODO: determine if oldSev is still a viable connection
             success = false;
             fut = requestBlk(sev, req, priority, success);

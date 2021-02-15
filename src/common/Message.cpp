@@ -521,10 +521,10 @@ std::string recSendBlkMsg(Connection *connection, char **data, unsigned int &blk
 
     if (retMsgSize == (int64_t)sizeof(sendBlkMsg) &&
         retFileNameSize == (int64_t)msg.header.fileNameSize &&
-        retDataSize == (int64_t)msg.dataSize) {
+        retDataSize == (int64_t)msg.dataSize) { //this is the path we want to take?
         dataSize = msg.dataSize;
         blk = msg.blk;
-        return fileName;
+        return fileName; 
     }
 
     if (created) { //No memory leak here!

@@ -242,6 +242,11 @@ void SharedMemoryCache::writeBlockEntry(uint32_t blockIndex, BlockEntry *entry) 
     *(BlockEntry *)&_blkIndex[blockIndex] = *entry;
 }
 
+
+void SharedMemoryCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<" (not)delete data"<<std::endl;
+}
+
 void SharedMemoryCache::readBin(uint32_t binIndex, BlockEntry *entries) {
     int startIndex = binIndex * _associativity;
     for (uint32_t i = 0; i < _associativity; i++) {

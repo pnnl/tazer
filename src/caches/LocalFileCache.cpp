@@ -120,12 +120,17 @@ uint8_t *LocalFileCache::getBlockData(std::ifstream *file, uint32_t blkIndex, ui
     return (uint8_t *)buff;
 }
 
+void LocalFileCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<" delete data"<<std::endl;
+    delete[] data;
+}
+
 bool LocalFileCache::writeBlock(Request *req) {
     bool ret = true;
     // //log(this) /*std::cout*/<<"[TAZER] " << _name << " netcache writing: " << index << " " << (void *)originating << std::endl;
     // //log(this) /*std::cout*/<<"[TAZER] "<<_name<<" writeblock "<<std::hex<<(void*)buffer<<std::dec<<std::endl;
     if (req->originating == this) {
-        delete[] req->data;
+        // debug()<<_type<<" deleting data "<<req->id<<std::endl;
         delete req;
     }
     else if (_nextLevel) {
@@ -199,7 +204,7 @@ Cache *LocalFileCache::addNewLocalFileCache(std::string cacheName, CacheType typ
 }
 
 void LocalFileCache::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
-    log(this)<<_name<<" adding file: "<<filename<<std::endl;
+    debug()<<_name<<" adding file: "<<filename<<std::endl;
     // //log(this) /*std::cout*/<<"[TAZER] " << "adding file: " << filename << " " << (void *)this << " " << (void *)_nextLevel << std::endl;
     // //log(this) /*std::cout*/ << "[TAZER] " << _name << " " << filename << " " << fileSize << " " << blockSize << std::endl;
     _lock->writerLock();
@@ -214,6 +219,7 @@ void LocalFileCache::addFile(uint32_t index, std::string filename, uint64_t bloc
         if (!file->is_open()) {
             log(this) << "WARNING: " << filename << " did not open" << std::endl;
             _fstreamMap.emplace(index, std::make_pair((std::ifstream *)NULL, (ReaderWriterLock *)NULL));
+            delete file;
         }
         else {
             _fstreamMap.emplace(index, std::make_pair(file, new ReaderWriterLock()));
@@ -229,11 +235,15 @@ void LocalFileCache::addFile(uint32_t index, std::string filename, uint64_t bloc
 
 void LocalFileCache::removeFile(uint32_t index){
     _lock->writerLock();
-    auto file = _fstreamMap[index];
-    _fstreamMap.erase(index);
-    _fileMap.erase(index);
-    file.first->close();
-    delete file.first;
-    delete file.second;
+    if (_fstreamMap.count(index) != 0) {
+        auto file = _fstreamMap[index];
+        if (file.first) {
+            _fstreamMap.erase(index);
+            _fileMap.erase(index);
+            file.first->close();
+            delete file.first;
+            delete file.second;
+        }
+    }
     _lock->writerUnlock();
 }

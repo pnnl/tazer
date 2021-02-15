@@ -256,7 +256,8 @@ void Cache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_fut
 }
 
 //TODO: merge/reimplement from old cache structure
-void Cache::cleanUpBlockData(uint8_t *data) {
+void Cache::cleanUpBlockData(uint8_t* data) {
+    // debug()<<_name<<" (not)delete data"<<std::endl;
 }
 
 uint32_t Cache::numBlocks() {
@@ -326,11 +327,11 @@ void Cache::setBase(Cache *base) {
 }
 
 //TODO: merge/reimplement from old cache structure
-void Cache::cleanReservation() {
-}
+// void Cache::cleanReservation() {
+// }
 
 bool Cache::bufferWrite(Request *req) {
-    //std::cout<<"[TAZER] " << "buffered write: " << (void *)originating << std::endl;
+    // debug() << "buffered write req id:" << req->id <<" ow: "<<_outstandingWrites.load()<< std::endl;
     if (Config::bufferFileCacheWrites) { // && !_terminating) {
         _outstandingWrites.fetch_add(1);
         _writePool->addTask([this, req] {
@@ -343,8 +344,10 @@ bool Cache::bufferWrite(Request *req) {
         return false;
     }
 
-    if (!req->data) //This will cause a seg fault instead of infinitely spinning
+    if (!req->data){ //This will cause a seg fault instead of infinitely spinning
+        debug()<<"EXITING!!!!"<<std::endl;
         raise(SIGSEGV);
+    }
 
     if (!writeBlock(req)) {
         DPRINTF("FAILED WRITE...\n");

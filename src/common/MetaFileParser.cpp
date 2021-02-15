@@ -93,6 +93,7 @@ MetaFileParser::MetaFileParser(int fd){
     int ret = (*unixRead)(fd, (void *)meta, fileSize);
     if (ret < 0) {
         log(this) << "ERROR: Failed to read local metafile: " << strerror(errno) << std::endl;
+        debug()<<"EXITING!!!!"<<std::endl;
         raise(SIGSEGV);
         exit(0);
     }

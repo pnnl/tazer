@@ -447,9 +447,9 @@ void NewBoundedLinkfileCache::writeFileBlockEntry(FileBlockEntry *entry) {
 }
 
 NewBoundedCache<FileLinkReaderWriterLock>::BlockEntry* NewBoundedLinkfileCache::getBlockEntry(uint32_t entryIndex, Request* req){
-    req->trace()<<"getting entry before"<<blockEntryStr(&_cacheEntries[entryIndex])<<std::endl;
+    req->trace(_name)<<"getting entry before"<<blockEntryStr(&_cacheEntries[entryIndex])<<std::endl;
     FileBlockEntry* entry = &_cacheEntries[entryIndex];
-    req->trace()<<"getting entry after"<<blockEntryStr(&_cacheEntries[entryIndex])<<std::endl;
+    req->trace(_name)<<"getting entry after"<<blockEntryStr(&_cacheEntries[entryIndex])<<std::endl;
     readFileBlockEntry(entry,req);
     return entry;
 }
@@ -547,24 +547,24 @@ bool NewBoundedLinkfileCache::sameBlk(BlockEntry *blk1, BlockEntry *blk2) {
 
 //this assumes the passed in entry is valid, which is should be if the ecompasssing bin is locked (which it should be)
 int NewBoundedLinkfileCache::incBlkCnt(BlockEntry * entry, Request* req) {
-    req->trace()<<"incrementing"<<std::endl;
-    req->trace()<<blockEntryStr(entry)<<std::endl;
+    req->trace(_name)<<"incrementing"<<std::endl;
+    req->trace(_name)<<blockEntryStr(entry)<<std::endl;
     int curCnt = ((FileBlockEntry*) entry)->activeCnt;
     ((FileBlockEntry*) entry)->activeCnt+=1;
     ((FileBlockEntry*) entry)->pid = _pid;
     writeFileBlockEntry(((FileBlockEntry*) entry));
-    req->trace()<<blockEntryStr(entry)<<std::endl;
+    req->trace(_name)<<blockEntryStr(entry)<<std::endl;
     return curCnt; //equivalent to what the memcaches do (fetch_add)
 }
 
 int NewBoundedLinkfileCache::decBlkCnt(BlockEntry * entry, Request* req) {
-    req->trace()<<"decrementing"<<std::endl;
-    req->trace()<<blockEntryStr(entry)<<std::endl;
+    req->trace(_name)<<"decrementing"<<std::endl;
+    req->trace(_name)<<blockEntryStr(entry)<<std::endl;
     int curCnt = ((FileBlockEntry*) entry)->activeCnt;
     ((FileBlockEntry*) entry)->activeCnt-=1;
     ((FileBlockEntry*) entry)->pid = _pid;
     writeFileBlockEntry(((FileBlockEntry*) entry));
-    req->trace()<<blockEntryStr(entry)<<std::endl;
+    req->trace(_name)<<blockEntryStr(entry)<<std::endl;
     return curCnt; //equivalent to what the memcaches do(fetch_sub)
 }
 
@@ -575,7 +575,7 @@ bool NewBoundedLinkfileCache::anyUsers(BlockEntry * entry, Request* req) {
 }
 
 void NewBoundedLinkfileCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate,Request* req) {
-    req->trace()<<"setting block: "<<blockEntryStr(blk)<<std::endl;
+    req->trace(_name)<<"setting block: "<<blockEntryStr(blk)<<std::endl;
     FileBlockEntry* entry = (FileBlockEntry*)blk;
     _localLock->readerLock();
     std::string name = _fileMap[fileIndex].name;
@@ -594,17 +594,17 @@ void NewBoundedLinkfileCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint
         entry->prefetched = prefetched;
     }
     if (activeUpdate >0){
-        req->trace()<<"incrementing"<<std::endl;
+        req->trace(_name)<<"incrementing"<<std::endl;
         entry->activeCnt+=1; // we do this explicity for files to avoid multiple writes...
     }
     else if (activeUpdate < 0){
-        req->trace()<<"decrementing"<<std::endl;
+        req->trace(_name)<<"decrementing"<<std::endl;
         entry->activeCnt-=1; // we do this explicity for files to avoid multiple writes...
     }
     entry->pid = _pid;
     // log(this) << "blkSet: " << entry.fileIndex << " " << entry.blockIndex << " " << entry.fileName << " " << entry.status << std::endl;
     writeFileBlockEntry(entry);
-    req->trace()<<"blockset: "<<blockEntryStr(entry)<<std::endl;
+    req->trace(_name)<<"blockset: "<<blockEntryStr(entry)<<std::endl;
 
     // FileBlockEntry tempentry;
     // tempentry.id = entry->id;
@@ -631,6 +631,7 @@ bool NewBoundedLinkfileCache::writeBlock(Request *req) {
 }
 
 void NewBoundedLinkfileCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<" delete data"<<std::endl;
     delete[] data;
 }
 

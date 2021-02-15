@@ -162,6 +162,11 @@ uint8_t *MemoryCache::getBlockData(unsigned int blockIndex) {
     return temp;
 }
 
+
+void MemoryCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<" (not)delete data"<<std::endl;
+}
+
 //Must lock first!
 //This uses the actual index (it does not do a search)
 void MemoryCache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched) {

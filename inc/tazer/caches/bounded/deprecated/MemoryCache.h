@@ -93,6 +93,7 @@ class MemoryCache : public BoundedCache<MultiReaderWriterLock> {
           std::atomic_init(&activeCnt, (uint32_t)0);
         }
     };
+    virtual void cleanUpBlockData(uint8_t *data);
     virtual uint8_t *getBlockData(unsigned int blockIndex);
     virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size);
     virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch);

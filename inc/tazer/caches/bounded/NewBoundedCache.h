@@ -148,7 +148,7 @@ class NewBoundedCache : public Cache {
         }
         std::string str(){
           std::stringstream ss;
-          ss<<"id: "<<id<<" fi: "<<fileIndex<<" bi: "<<blockIndex<<" status: "<<status<<" oc: "<<cacheTypeName(origCache);
+          ss<<"addr: "<< this <<" id: "<<id<<" fi: "<<fileIndex<<" bi: "<<blockIndex<<" status: "<<status<<" oc: "<<cacheTypeName(origCache);
           return ss.str();
         }
         // std::atomic<uint32_t> activeCnt;
@@ -167,6 +167,7 @@ class NewBoundedCache : public Cache {
     virtual void blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte,  CacheType type, int32_t prefetch, int32_t activeUpdate,Request* req) = 0;
     virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL) = 0;
 
+    virtual void cleanUpBlockData(uint8_t *data);
     // virtual char *blockMiss(uint32_t index, uint64_t &size, uint32_t fileIndex, std::unordered_map<uint64_t,std::future<std::future<Request*>>> &reads);
     virtual uint8_t *getBlockData(uint32_t blockIndex) = 0;
     virtual void setBlockData(uint8_t *data, uint32_t blockIndex, uint64_t size) = 0;

@@ -107,8 +107,10 @@ NewMemoryCache::NewMemoryCache(std::string cacheName, CacheType type, uint64_t c
     _blkIndex = new MemBlockEntry[_numBlocks];
     memset(_blocks, 0, _cacheSize);
     // memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
+    debug() <<"numBins :"<< _numBins <<" cacheSize: "<<_cacheSize<<" _numBlocks: "<<_numBlocks<<" "<<std::endl;
     for (uint32_t i=0;i<_numBlocks;i++){
         _blkIndex[i].init(this,i);
+        // debug()<<_blkIndex[i].str()<<std::endl;
     }
     // log(this) << (void *)_blkIndex << " " << (void *)((uint8_t *)_blkIndex + (_numBlocks * sizeof(BlockEntry))) << std::endl;
     _binLock->writerUnlock(0);
@@ -149,9 +151,13 @@ uint8_t *NewMemoryCache::getBlockData(unsigned int blockIndex) {
     return temp;
 }
 
+void NewMemoryCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<" (not)delete data"<<std::endl;
+}
+
 //Must lock first!
 //This uses the actual index (it does not do a search)
-void NewMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate,Request* req) {
+void NewMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate, Request* req) {
     blk->fileIndex = fileIndex;
     blk->blockIndex = blockIndex;
     blk->timeStamp = Timer::getCurrentTime();
@@ -160,7 +166,7 @@ void NewMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t bloc
     }
     blk->origCache.store(type);
     blk->status = status;
-    if (activeUpdate >0){
+    if (activeUpdate >0 ){
         incBlkCnt(blk,NULL);
     }
     else if (activeUpdate < 0){

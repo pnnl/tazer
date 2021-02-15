@@ -439,6 +439,7 @@ int64_t Connection::sendMsg(void *msg, int64_t msgSize) {
     }
     else {
         log(this) << "Send: Thread Local Socket Not Set!!!" << std::endl;
+        debug()<<"EXITING!!!!"<<std::endl;
         raise(SIGSEGV);
     }
     TIMEON(_tlSocketBytes += ((sentSize > 0) ? sentSize : 0));
@@ -475,6 +476,7 @@ int64_t Connection::recvMsg(char *buf, int64_t bufSize) {
                     break;
                 case EINVAL:
                     ss << "EINVAL " << _tlSocket << " " << bufSize << " " << recvSize << std::endl;
+                    debug()<<"EXITING!!!!"<<std::endl;
                     raise(SIGSEGV);
                     break;
                 case ENOMEM:
@@ -510,6 +512,7 @@ int64_t Connection::recvMsg(char *buf, int64_t bufSize) {
     }
     else {
         log(this) << "Recv: Thread Local Socket Not Set!!!" << std::endl;
+        debug()<<"EXITING!!!!"<<std::endl;
         raise(SIGSEGV);
     }
     TIMEON(_tlSocketBytes += ((recvSize > 0) ? recvSize : 0));
