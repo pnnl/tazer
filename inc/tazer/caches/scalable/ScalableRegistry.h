@@ -72,61 +72,39 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef InputFile_H_
-#define InputFile_H_
-#include "caches/Cache.h"
-#include "ConnectionPool.h"
-#include "FileCacheRegister.h"
-#include "TazerFile.h"
-#include "PriorityThreadPool.h"
-#include "ReaderWriterLock.h"
-#include "Prefetcher.h"
-#include <atomic>
-#include <mutex>
-#include <string>
-#include <unordered_set>
+#ifndef SCALABLE_REGISTRY_H
+#define SCALABLE_REGISTRY_H
 
-class ScalableRegistry;
+#include <vector>
+#include <unordered_map>
+#include "Cache.h"
 
-class InputFile : public TazerFile {
+//template <class Lock>
+class ScalableRegistry{
   public:
-    InputFile(std::string name, std::string metaName, int fd, bool openFile = true);
-    ~InputFile();
+    ScalableRegistry(uint64_t maxCacheSize, uint64_t blockSize);
+    uint32_t registerCache(Cache* cache);
+    uint8_t * allocateBlock(Cache* cache);
+    uint8_t * stealBlock(Cache* cache);
+    uint8_t * stealBlock(int n);
+    void fileClosed (Cache* cache);
+    void fileOpened (Cache* cache);
 
-    static void cache_init(void);
-
-    void open();
-    void close();
-    uint64_t fileSize();
-
-    ssize_t read(void *buf, size_t count, uint32_t index = 0);
-    ssize_t write(const void *buf, size_t count, uint32_t index = 0);
-    off_t seek(off_t offset, int whence, uint32_t index = 0);
-
-    static void printHits();
-    static PriorityThreadPool<std::packaged_task<std::shared_future<Request*>()>>* _transferPool;
-    static PriorityThreadPool<std::packaged_task<Request*()>>* _decompressionPool;
-
-    static Cache *_cache;
-    //bmutlu 
-    static ScalableRegistry* _scalableRegistry;
-    static std::chrono::time_point<std::chrono::high_resolution_clock>*  _time_of_last_read;
-
+    static ScalableRegistry *addNewScalableRegistry(uint64_t maxCacheSize, uint64_t blockSize);
+    
+    //closeFile() //fill this to close a file , remove from cachesinuse, remove from cachemap, add cachemap vector to availableblocks
+  protected:
+ 
   private:
-    uint64_t fileSizeFromServer();
-
-    bool trackRead(size_t count, uint32_t index, uint32_t startBlock, uint32_t endBlock);
-
-    uint64_t copyBlock(char *buf, char *blkBuf, uint32_t blk, uint32_t startBlock, uint32_t endBlock, uint32_t fpIndex, uint64_t count);
-
-    std::mutex _openCloseLock;
-    std::atomic<uint64_t> _fileSize;
-    uint32_t _numBlks;
-    uint32_t _regFileIndex;
-    Prefetcher *_prefetcher;
-
-
-
+    uint64_t _maxBlocks;
+    uint64_t _allocatedBlocks;
+    uint32_t _maxCacheSize;
+    uint32_t _blockSize;
+    uint32_t _fileBlockLimit;
+    std::unordered_map< Cache*, std::vector<uint8_t*> > _cacheMap; // map to keep trck of all the blocks allocated for each cache
+    std::vector<Cache*> _cachesInUse; //vector of all caches registered
+    std::vector<Cache*> _victims;
+    std::vector<uint8_t *> _availableBlocks; //closed file blocks will be returned to this list 
 };
 
-#endif /* InputFile_H_ */
+#endif /* SCALABLE_REGISTRY_H */

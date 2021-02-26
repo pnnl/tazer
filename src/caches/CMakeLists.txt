@@ -4,7 +4,7 @@
 
 set(BOUNDED_INC_DIR ${TAZER_CACHE_INC_DIR}/bounded)
 set(UNBOUNDED_INC_DIR ${TAZER_CACHE_INC_DIR}/unbounded)
-
+set(SCALABLE_INC_DIR ${TAZER_CACHE_INC_DIR}/scalable)
 
 set(CACHE_HEADERS
     ${TAZER_CACHE_INC_DIR}/Cache.h
@@ -29,6 +29,10 @@ set(CACHE_HEADERS
     ${UNBOUNDED_INC_DIR}/UnboundedCache.h
     ${UNBOUNDED_INC_DIR}/FilelockCache.h
     ${UNBOUNDED_INC_DIR}/FcntlCache.h
+
+    ${SCALABLE_INC_DIR}/ScalableMemoryCache.h
+    ${SCALABLE_INC_DIR}/ScalableCache.h
+    ${SCALABLE_INC_DIR}/ScalableRegistry.h
 )
 
 set(CACHE_FILES
@@ -53,6 +57,10 @@ set(CACHE_FILES
     unbounded/UnboundedCache.cpp
     unbounded/FilelockCache.cpp
     unbounded/FcntlCache.cpp
+
+    scalable/ScalableMemoryCache.cpp
+    scalable/ScalableCache.cpp
+    scalable/ScalableRegistry.cpp
 )
 
 if(CURL_LIB)
@@ -69,4 +77,4 @@ if(CURL_LIB)
 endif()
 
 add_library(caches OBJECT ${CACHE_HEADERS} ${CACHE_FILES})
-target_include_directories(caches PUBLIC ${TAZER_INC_DIR} ${TAZER_CACHE_INC_DIR} ${BOUNDED_INC_DIR} ${BOUNDED_INC_DIR}/deprecated ${UNBOUNDED_INC_DIR})
+target_include_directories(caches PUBLIC ${TAZER_INC_DIR} ${TAZER_CACHE_INC_DIR} ${BOUNDED_INC_DIR} ${BOUNDED_INC_DIR}/deprecated ${UNBOUNDED_INC_DIR} ${SCALABLE_INC_DIR})

@@ -105,6 +105,10 @@
 #include "Lib.h"
 #include "UrlDownload.h"
 
+// //burcu
+// #include "caches/scalable/ScalableRegistry.h"
+// //endburcu
+
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
