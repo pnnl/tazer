@@ -27,8 +27,8 @@ ScalableMemoryCache::ScalableMemoryCache(std::string cacheName, CacheType type, 
     std::cout << "[TAZER] "
               << "Constructing " << _name << " in scalable memory cache" << std::endl;
     stats.start();
-    //init lock(s) ??
-    
+    _blkMapLock =  new MultiReaderWriterLock(1);
+     
     stats.end(false, CacheStats::Metric::constructor);
 }
 

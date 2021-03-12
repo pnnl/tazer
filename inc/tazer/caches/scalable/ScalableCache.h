@@ -105,11 +105,11 @@ class ScalableCache : public Cache {
     // std::unordered_map<uint64_t, uint64_t> _blkMap;
 
     // T *_lock;
-    // Lock *_binLock;
+    Lock *_blkMapLock;
 
 
-    ScalableRegistry* _registry;
     uint64_t _blockSize;
+    ScalableRegistry* _registry;
     uint32_t _maxNumBlocks;
     uint32_t _curNumBlocks;
 

@@ -30,7 +30,6 @@ ScalableRegistry* ScalableRegistry::addNewScalableRegistry(uint64_t maxCacheSize
 // - cur block size
 // -list of blocks?
 uint32_t ScalableRegistry::registerCache(Cache* cache) {
-
     _cacheMap[cache] = {};
     _cachesInUse.push_back(cache);
     return _fileBlockLimit; // returns the max number of cache blocks for that cache ( this should be changeable per-cache (per-file) )
@@ -101,17 +100,36 @@ uint8_t * ScalableRegistry::stealBlock(int n=3) {
 }
 
 void ScalableRegistry::fileOpened (Cache* cache) {
+    std::cerr << "registry open" << std::endl;
     // change status of the file
     // add file to caches in use
     // remove it from victims list
-    _victims.erase(std::find(_victims.begin(), _victims.end(),cache));
+    auto position = std::find(_victims.begin(), _victims.end(),cache);
+    if (position != _victims.end()) {
+        _victims.erase(position);
+        std::cerr << "removed file from victims" << std::endl;
+    }
     _cachesInUse.push_back(cache);
+    std::cerr << "added file to actives" << std::endl;
+
+    std::cerr << "registry open --- exit" << std::endl;
 }
 
 void ScalableRegistry::fileClosed (Cache* cache) {
+    std::cerr << "registry close" << std::endl;
+    
     _victims.push_back(cache);
-    _cachesInUse.erase(std::find(_cachesInUse.begin(), _cachesInUse.end(), cache));
+    std::cerr << "added file to victims" << std::endl;
+    auto position = std::find(_cachesInUse.begin(), _cachesInUse.end(), cache);
+    if (position != _cachesInUse.end()) {
+        _cachesInUse.erase(position);
+        std::cerr << "removed file from active caches" << std::endl;
+    }
+    else{
+        std::cerr <<" [BURCU] why don't we have that cache in actives?" << std::endl;
+    }
     // change status of the file
     // remove from active list
     // add to victims list 
+    std::cerr << "registry close -- exit" << std::endl;
 }

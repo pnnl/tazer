@@ -47,7 +47,7 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
     if (req->reservedMap[this] > 0 || !_terminating) { //when terminating dont waste time trying to write orphan requests
         if (req->originating == this) {
             req->trace()<<"originating cache"<<std::endl;
-//            _binLock->writerLock(binIndex,req); //LOCK ME
+            blkMapLock->writerLock(0,req); //LOCK ME
             BlockEntry* entry = getBlock(req->blkIndex, req->fileIndex, req);
             if (entry) {
                 if (req->reservedMap[this] > 0) {
@@ -69,7 +69,7 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
                 debug()<<req->str()<<std::endl;
                 exit(0);
             }
-            //_binLock->writerUnlock(binIndex,req); //UNLOCK ME
+            blkMapLock->writerUnlock(0,req); //UNLOCK ME
             cleanUpBlockData(req->data);
             req->trace()<<"deleting req"<<std::endl;  
             req->printTrace=false;           
@@ -84,7 +84,7 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
             DPRINTF("beg wb blk: %u out: %u\n", index,0);
 
             if (req->size <= _blockSize) {
-        //        _binLock->writerLock(binIndex,req); //LOCK ME
+                blkMapLock->writerLock(0,req); //LOCK ME
                 BlockEntry* entry = oldestBlock(req->blkIndex, req->fileIndex, req);
 
                 trackBlock(_name, "[BLOCK_WRITE]", req->fileIndex, req->blkIndex, 0);
@@ -94,7 +94,7 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
                         if(entry->status == BLK_EVICT && req->reservedMap[this] ){
                             req->trace()<<"evicted "<<blockEntryStr(entry)<<std::endl;
                             req->trace()<<"is this the problem?  blockIndex: "<< entry->id<<std::endl;
-                            //BURCU WHAT IS THIS PART?
+                            //this part is for debugging ? 
                             // auto binBlocks = readBin(binIndex);
                             // for( auto blk : binBlocks){
                             //     req->trace()<<blockEntryStr(blk)<<std::endl;
@@ -123,7 +123,7 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
                     }
                     ret = true;
                 }
-//                _binLock->writerUnlock(binIndex,req); // UNLOCK ME
+                blkMapLock->writerUnlock(0,req); // UNLOCK ME
             }
 //            DPRINTF("end wb blk: %u out: %u\n", index, _outstanding.load());
             DPRINTF("end wb blk: %u out: %u\n", req->blkIndex, 0);
@@ -171,16 +171,6 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
     
     log(this) << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << " nl: " << _nextLevel->name() << std::endl;
     trackBlock(_name, (priority != 0 ? " [BLOCK_PREFETCH_REQUEST] " : " [BLOCK_REQUEST] "), req->fileIndex, req->blkIndex, priority);
-    // if ((_nextLevel->name() == NETWORKCACHENAME && getRequestTime() > _nextLevel->getRequestTime()) && Timer::getCurrentTime() % 1000 < 999) {
-    //     // if (getRequestTime() > _lastLevel->getRequestTime()) {
-    //     // log(this) << _name << "time: " << getRequestTime()  << " "  << _lastLevel->name() << " time: " << _lastLevel->getRequestTime() << std::endl;
-    //     // log(this) << " skipping: " << _name << std::endl;
-    //     req->trace+=" skipping->";
-    //     stats.end(prefetch, CacheStats::Metric::ovh);
-    //     _lastLevel->readBlock(req, reads, priority);
-    //     stats.end(prefetch, CacheStats::Metric::read);
-    //     return;
-    // }
 
     req->time = Timer::getCurrentTime();
 
@@ -190,18 +180,15 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
 
     // find if we have the block
 
-    //WE NEED LOCKS
-    //PREFETCH,RES, etc isn't handled right now
      _localLock->readerLock(); //local lock
     int tsize = _fileMap[fileIndex].blockSize;
     _localLock->readerUnlock();
     if (!req->size) {
         req->size = tsize;
     }
-
     if (req->size <= _blockSize) {
-        //_binLock->writerLock(binIndex,req); //LOCK ME
-        BlockEntry *entry = oldestBlock(index, fileIndex, req); //int  entry->id = get entry->id(index, fileIndex, &entry);
+        _blkMapLock->writerLock(0,req); //LOCK ME
+        BlockEntry *entry = oldestBlock(index, fileIndex, req); 
         if (entry) { // an entry is available for this block
             req->trace()<<"found entry: "<<blockEntryStr(entry)<<" "<<" "<<(void*)entry<<std::endl;
             req->reservedMap[this] = 1; // indicate we will need to do a decrement in write
@@ -221,6 +208,7 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
                 stats.end(prefetch, CacheStats::Metric::ovh);
                 stats.start(); // hits
                 buff = entry->blkAddr;
+                req->data = buff;
                 req->originating = this;
                 req->ready = true;
                 req->time = Timer::getCurrentTime() - req->time;
@@ -230,7 +218,7 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
                 req->statusMap[this]=entry->status;
                 updateRequestTime(req->time);
                 req->trace()<<"done in hit "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-               // _binLock->writerUnlock(binIndex,req); //UNLOCK ME
+                _blkMapLock->writerUnlock(0,req); //UNLOCK ME
             }
             else{ // we have an entry but the data isnt there, either wait for someone else or grab ourselves
                 req->trace()<<"miss "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
@@ -245,7 +233,7 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
                     else {
                         blockSet(entry, fileIndex, index, BLK_RES, _type, prefetch,1,req);//the increment happens here
                     }
-                    //_binLock->writerUnlock(binIndex,req);   //UNLOCK ME          
+                    _blkMapLock->writerUnlock(0,req);   //UNLOCK ME          
                     req->time = Timer::getCurrentTime() - req->time;
                     req->trace()<<"reserved go to next level "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
                     updateRequestTime(req->time);
@@ -259,7 +247,7 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
                     incBlkCnt(entry,req); // someone else has already reserved so lets incrememt
                     req->trace()<<"someone else reserved: "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
                     auto  blockId= entry->id;
-                    //_binLock->writerUnlock(binIndex,req); //UNLOCK ME  
+                    _blkMapLock->writerUnlock(0,req); //UNLOCK ME  
                     auto fut = std::async(std::launch::deferred, [this, req,  blockId, prefetch, entry] { 
                         uint64_t stime = Timer::getCurrentTime();
                         CacheType waitingCacheType = CacheType::empty;
@@ -317,7 +305,7 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
             } 
         }
         else{ // no space available
-           // _binLock->writerUnlock(binIndex,req); //UNLOCK ME
+            _blkMapLock->writerUnlock(0,req); //UNLOCK ME
         
             req->time = Timer::getCurrentTime() - req->time;
             req->trace()<<"no space got to next level ("<<req->blkIndex<<","<<req->fileIndex<<")"<<std::endl;
@@ -370,6 +358,8 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
 template <class Lock>
 void ScalableCache<Lock>::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize){
     //trackBlock(_name, "[ADD_FILE]", index, blockSize, fileSize);
+
+    std::cerr <<" [BURCU] scalablecache add file " << std::endl;
     _localLock->writerLock();
     if (_fileMap.count(index) == 0) {
         std::string hashstr(_name + filename); //should cause each level of the cache to have different indicies for a given file
@@ -379,6 +369,7 @@ void ScalableCache<Lock>::addFile(uint32_t index, std::string filename, uint64_t
 
         //uint64_t temp = _fileMap[index];
     }
+    sendOpenSignal(index);
     _localLock->writerUnlock();
     // if (_nextLevel && _nextLevel->name() != NETWORKCACHENAME) { //quick hack to allow tasks to simulate unqiue files...
     if (_nextLevel) {
@@ -413,15 +404,16 @@ typename ScalableCache<Lock>::BlockEntry* ScalableCache<Lock>::oldestBlock(uint3
     //check if block exists 
     std::string hashstr(std::to_string(fileIndex) + std::to_string(index)); 
     uint64_t key = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
-    if(_blkMap.count(key) > 0 ) {
+    if(_blkMap.count(key) > 0 ) { // look for actual entry
         req->trace()<<"found entry: "<<blockEntryStr(_blkMap[key])<<std::endl;
         return _blkMap[key];
     }
-    else{
-        if(_curNumBlocks < _maxNumBlocks){
-            uint8_t* addr = _registry->allocateBlock(this);//ask for a block from registry
-            if( addr == NULL){} //registry didn't send a block -- go to else (look for LRU)
-            else {
+    else{ 
+        bool LRUsearch = true;
+        if(_curNumBlocks < _maxNumBlocks){ //if we can have more blocks 
+            uint8_t* addr = _registry->allocateBlock(this);//ask for a block from registry //send hit/miss for pattern detection
+            if( addr != NULL){ //registry sent a block 
+                LRUsearch = false;
                 BlockEntry* newBlk = new BlockEntry();
                 newBlk->init(this, key);
                 newBlk->blkAddr = addr;
@@ -430,7 +422,7 @@ typename ScalableCache<Lock>::BlockEntry* ScalableCache<Lock>::oldestBlock(uint3
                 return newBlk;
             }
         }
-        else{ //max number of blocks is reached, try to use one of the blocks we have 
+        if (LRUsearch){ //max number of blocks is reached or registry sent NULL, try to use one of the blocks we have 
             BlockEntry* blk = NULL;
             uint32_t minTime = -1; //this is max uint32_t
             BlockEntry *minEntry = NULL;
@@ -438,15 +430,16 @@ typename ScalableCache<Lock>::BlockEntry* ScalableCache<Lock>::oldestBlock(uint3
             BlockEntry *minPrefetchEntry = NULL;
             
             for( auto entry : _blkMap) {
-                if(entry.second->status == BLK_AVAIL){
-                    if (!anyUsers(entry.second,req)) { 
-                        if (entry.second->timeStamp < minTime) {
-                            minTime = entry.second->timeStamp;
-                            minEntry = entry.second;
+                blk = entry.second;
+                if(blk->status == BLK_AVAIL){
+                    if (!anyUsers(blk,req)) { 
+                        if (blk->timeStamp < minTime) {
+                            minTime = blk->timeStamp;
+                            minEntry = blk;
                         }
-                        if (Config::prefetchEvict && entry.second->prefetched && entry.second->timeStamp < minPrefetchTime) {
-                            minPrefetchTime = entry.second->timeStamp;
-                            minPrefetchEntry = entry.second;
+                        if (Config::prefetchEvict && blk->prefetched && blk->timeStamp < minPrefetchTime) {
+                            minPrefetchTime = blk->timeStamp;
+                            minPrefetchEntry = blk;
                         }
                     }
                 }
@@ -471,6 +464,8 @@ typename ScalableCache<Lock>::BlockEntry* ScalableCache<Lock>::oldestBlock(uint3
             return NULL;
         }
     }
+    log(this)<<" [BMUTLU] ScalableCache.cpp 478 - why are we here " << std::endl;
+    return NULL;
 }
 
 template <class Lock>
@@ -519,7 +514,6 @@ void ScalableCache<Lock>::trackBlock(std::string cacheName, std::string action, 
     }
 }
 
-// template class NewBoundedCache<ReaderWriterLock>;
 template class ScalableCache<MultiReaderWriterLock>;
 //template class ScalableCache<FcntlBoundedReaderWriterLock>;
 //template class ScalableCache<FileLinkReaderWriterLock>;
