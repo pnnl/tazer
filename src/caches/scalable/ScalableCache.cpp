@@ -47,7 +47,7 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
     if (req->reservedMap[this] > 0 || !_terminating) { //when terminating dont waste time trying to write orphan requests
         if (req->originating == this) {
             req->trace()<<"originating cache"<<std::endl;
-            blkMapLock->writerLock(0,req); //LOCK ME
+            _blkMapLock->writerLock(0,req); //LOCK ME
             BlockEntry* entry = getBlock(req->blkIndex, req->fileIndex, req);
             if (entry) {
                 if (req->reservedMap[this] > 0) {
@@ -69,7 +69,7 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
                 debug()<<req->str()<<std::endl;
                 exit(0);
             }
-            blkMapLock->writerUnlock(0,req); //UNLOCK ME
+            _blkMapLock->writerUnlock(0,req); //UNLOCK ME
             cleanUpBlockData(req->data);
             req->trace()<<"deleting req"<<std::endl;  
             req->printTrace=false;           
@@ -84,7 +84,7 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
             DPRINTF("beg wb blk: %u out: %u\n", index,0);
 
             if (req->size <= _blockSize) {
-                blkMapLock->writerLock(0,req); //LOCK ME
+                _blkMapLock->writerLock(0,req); //LOCK ME
                 BlockEntry* entry = oldestBlock(req->blkIndex, req->fileIndex, req);
 
                 trackBlock(_name, "[BLOCK_WRITE]", req->fileIndex, req->blkIndex, 0);
@@ -123,7 +123,7 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
                     }
                     ret = true;
                 }
-                blkMapLock->writerUnlock(0,req); // UNLOCK ME
+                _blkMapLock->writerUnlock(0,req); // UNLOCK ME
             }
 //            DPRINTF("end wb blk: %u out: %u\n", index, _outstanding.load());
             DPRINTF("end wb blk: %u out: %u\n", req->blkIndex, 0);
