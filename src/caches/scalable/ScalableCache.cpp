@@ -373,6 +373,7 @@ void ScalableCache<Lock>::addFile(uint32_t index, std::string filename, uint64_t
         //uint64_t temp = _fileMap[index];
     }
     sendOpenSignal(index);
+    _pattern = RANDOM; //when a file first opened, assume random read pattern until we recognize another pattern
     _localLock->writerUnlock();
     // if (_nextLevel && _nextLevel->name() != NETWORKCACHENAME) { //quick hack to allow tasks to simulate unqiue files...
     if (_nextLevel) {
@@ -547,7 +548,7 @@ void ScalableCache<Lock>::checkPattern() {
                 }
             }
         }
-        else {
+        else { //if we already observed a linear pattern
             if( curHits != allHits ) {
                     _pattern = RANDOM;
                     _registry->updateCachePattern(this, _pattern); 

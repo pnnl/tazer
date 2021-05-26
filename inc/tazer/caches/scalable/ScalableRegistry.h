@@ -79,6 +79,8 @@
 #include <unordered_map>
 #include "Cache.h"
 
+#define RANDOM_BLOCK_LIMIT 10 //a temporary value to start each file with a max # of allowed blocks
+
 //template <class Lock>
 class ScalableRegistry{
   public:
@@ -101,7 +103,7 @@ class ScalableRegistry{
     uint64_t _allocatedBlocks;
     uint32_t _maxCacheSize;
     uint32_t _blockSize;
-    uint32_t _fileBlockLimit;
+    uint32_t _fileBlockLimit = RANDOM_BLOCK_LIMIT;
     std::unordered_map< Cache*, std::vector<uint8_t*> > _cacheMap; // map to keep trck of all the blocks allocated for each cache
     std::vector<Cache*> _cachesInUse; //vector of all active caches 
     std::vector<Cache*> _victims;

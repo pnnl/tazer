@@ -45,8 +45,6 @@ class ScalableCache : public Cache {
         std::atomic<CacheType> origCache; 
         uint8_t* blkAddr;
         std::atomic<uint32_t> currentHits;
-        std::atomic<uint32_t> prevHits;
-        std::atomic<uint32_t> currentMiss;
 
         void init(ScalableCache* c,uint32_t entryId){
           // memset(this,0,sizeof(BlockEntry));
@@ -60,8 +58,6 @@ class ScalableCache : public Cache {
           std::atomic_init(&origCache,CacheType::empty);
           std::atomic_init(&activeCnt, (uint32_t)0);
           std::atomic_init(&currentHits, (uint32_t)0);
-          std::atomic_init(&prevHits, (uint32_t)0);
-          std::atomic_init(&currentMiss, (uint32_t)0);
         }
         BlockEntry& operator= (const BlockEntry &entry){
           if (this == &entry){

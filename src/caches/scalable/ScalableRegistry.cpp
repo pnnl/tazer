@@ -6,15 +6,13 @@
 #include <string.h>
 #include "ScalableMemoryCache.h"
 
-uint32_t RandomMaxSize = 10; //a temporary value to start each file with a max # of allowed blocks
-
 ScalableRegistry::ScalableRegistry(uint64_t maxCacheSize, uint64_t blockSize) {
 
     _maxCacheSize = maxCacheSize;
     _blockSize = blockSize;
     _maxBlocks = _maxCacheSize/_blockSize;
     _allocatedBlocks = 0;
-    _fileBlockLimit = RandomMaxSize; //started 10 for random pattern, if linear pattern is observed we drop the limit to 1 
+      
 }
 
 ScalableRegistry* ScalableRegistry::addNewScalableRegistry(uint64_t maxCacheSize, uint64_t blockSize) {
@@ -33,7 +31,8 @@ ScalableRegistry* ScalableRegistry::addNewScalableRegistry(uint64_t maxCacheSize
 uint32_t ScalableRegistry::registerCache(Cache* cache) {
     _cacheMap[cache] = {};
     _cachesInUse.push_back(cache);
-    return _fileBlockLimit; // returns the max number of cache blocks for that cache ( this should be changeable per-cache (per-file) )
+    return _fileBlockLimit; //started 10 for random pattern, if linear pattern is observed we drop the limit to 1
+    // returns the max number of cache blocks for that cache ( this should be changeable per-cache (per-file) )
 }
 
 //availabe should be in lock
@@ -93,11 +92,11 @@ uint8_t * ScalableRegistry::stealBlock(int n=3) {
                 _victims.erase(std::find(_victims.begin(), _victims.end(), victimCache));
             }
             else {
-                // why would we remove this?? we should leave it active with an empty vector of blocks
+                // should we remove this?? we should leave it active with an empty vector of blocks
                 //_cachesInUse.erase(std::find(_cachesInUse.begin(), _cachesInUse.end(), victimCache));
             }
         }
-        else if(((ScalableMemoryCache*)victimCache)->getMaxBlocks() <= _cacheMap[victimCache].size()){
+        else if(((ScalableMemoryCache*)victimCache)->getMaxBlocks() >= _cacheMap[victimCache].size()){
             //we end up here if the cache had more blocks than it's limit, it is within limit now
             _victims.erase(std::find(_victims.begin(), _victims.end(), victimCache));
         }
@@ -118,7 +117,7 @@ void ScalableRegistry::fileOpened (Cache* cache) {
     _cachesInUse.push_back(cache);
 
     //update file's max num of blocks, it is 0 if it was closed before
-    ((ScalableMemoryCache*)cache)->updateMaxBlocks(RandomMaxSize);
+    ((ScalableMemoryCache*)cache)->updateMaxBlocks(RANDOM_BLOCK_LIMIT);
     std::cerr << "added file to actives" << std::endl;
 
     std::cerr << "registry open --- exit" << std::endl;
@@ -148,7 +147,7 @@ void ScalableRegistry::updateCachePattern(Cache* cache, uint32_t p){ //RANDOM = 
         ((ScalableMemoryCache*)cache)->updateMaxBlocks(1);
     }
     else {
-        ((ScalableMemoryCache*)cache)->updateMaxBlocks(RandomMaxSize);
+        ((ScalableMemoryCache*)cache)->updateMaxBlocks(RANDOM_BLOCK_LIMIT);
     }
 
     //check if the cache has more than allowed limit, if so add to the victims list - but it's still in the active cache list
