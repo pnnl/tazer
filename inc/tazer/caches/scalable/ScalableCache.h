@@ -31,7 +31,8 @@ class ScalableCache : public Cache {
     virtual void sendCloseSignal(uint32_t index);
     virtual void sendOpenSignal(uint32_t index);
     virtual uint8_t * sendBlock();
-
+    void updateMaxBlocks(uint32_t blockSize);
+    uint32_t getMaxBlocks();
   protected:
     struct BlockEntry {
         uint32_t id;
@@ -43,6 +44,10 @@ class ScalableCache : public Cache {
         std::atomic<uint32_t> activeCnt;
         std::atomic<CacheType> origCache; 
         uint8_t* blkAddr;
+        std::atomic<uint32_t> currentHits;
+        std::atomic<uint32_t> prevHits;
+        std::atomic<uint32_t> currentMiss;
+
         void init(ScalableCache* c,uint32_t entryId){
           // memset(this,0,sizeof(BlockEntry));
           id=entryId;
@@ -54,6 +59,9 @@ class ScalableCache : public Cache {
           blkAddr= NULL;
           std::atomic_init(&origCache,CacheType::empty);
           std::atomic_init(&activeCnt, (uint32_t)0);
+          std::atomic_init(&currentHits, (uint32_t)0);
+          std::atomic_init(&prevHits, (uint32_t)0);
+          std::atomic_init(&currentMiss, (uint32_t)0);
         }
         BlockEntry& operator= (const BlockEntry &entry){
           if (this == &entry){
@@ -117,13 +125,20 @@ class ScalableCache : public Cache {
     std::unordered_map<uint64_t, BlockEntry*> _blkMap;
 
     ReaderWriterLock *_localLock;
-    //sendvictimflag
-    //sendopenedflag
-    //
 
+    enum ReadPattern {
+      RANDOM = 0,
+      LINEAR
+    };
+
+    ReadPattern _pattern;
+    bool _onLinearTrack = false; 
+    std::atomic<uint32_t> _hitsSinceLastMiss;
+    BlockEntry* _lastAccessedBlock = NULL;
 
   private:
     void trackBlock(std::string cacheName, std::string action, uint32_t fileIndex, uint32_t blockIndex, uint64_t priority);
+    void checkPattern();
 };
 
 #endif /* ScalableCache_H */

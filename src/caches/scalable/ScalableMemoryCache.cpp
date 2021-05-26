@@ -124,6 +124,10 @@ void ScalableMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t
         _blkMap.erase(blk->id);
         blk->id = key;
         _blkMap.insert({key, blk});
+        //if we are overwriting a block, reset hit counters
+        blk->currentHits = 0;
+        blk->currentMiss = 0;
+        blk->prevHits = 0;
     }
 
     blk->fileIndex = fileIndex;

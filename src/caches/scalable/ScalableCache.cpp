@@ -14,7 +14,8 @@ ScalableCache<Lock>::ScalableCache(std::string cacheName, CacheType type, uint64
                                                                                                                     _registry(registry) {
     // required initializations
     stats.start();
-    _maxNumBlocks = _registry->registerCache(this);
+    _maxNumBlocks = _registry->registerCache(this); //we might add pattern here in the future, for when we know the pattern beforehand (from metadata? ) 
+    _pattern = RANDOM;
     log(this) << _name << " " << _blockSize << " " << _maxNumBlocks << std::endl;
     _localLock = new ReaderWriterLock();
     stats.end(false, CacheStats::Metric::constructor);
@@ -190,12 +191,14 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
         _blkMapLock->writerLock(0,req); //LOCK ME
         BlockEntry *entry = oldestBlock(index, fileIndex, req); 
         if (entry) { // an entry is available for this block
+            _lastAccessedBlock = entry;
             req->trace()<<"found entry: "<<blockEntryStr(entry)<<" "<<" "<<(void*)entry<<std::endl;
             req->reservedMap[this] = 1; // indicate we will need to do a decrement in write
             if (entry->status == BLK_AVAIL){ //its a hit!
                 trackBlock(_name, "[BLOCK_READ_HIT]", fileIndex, index, priority);
                 req->trace()<<"hit "<<blockEntryStr(entry)<<std::endl;
-                
+                entry->currentHits.fetch_add(1);
+                _hitsSinceLastMiss.fetch_add(1);
                 if (entry->prefetched > 0) {
                     stats.addAmt(prefetch, CacheStats::Metric::prefetches, 1);
                     entry->prefetched = prefetch;
@@ -409,6 +412,9 @@ typename ScalableCache<Lock>::BlockEntry* ScalableCache<Lock>::oldestBlock(uint3
         return _blkMap[key];
     }
     else{ 
+        //update pattern according to current hit/miss
+        checkPattern();
+
         bool LRUsearch = true;
         if(_curNumBlocks < _maxNumBlocks){ //if we can have more blocks 
             uint8_t* addr = _registry->allocateBlock(this);//ask for a block from registry //send hit/miss for pattern detection
@@ -488,6 +494,7 @@ uint8_t* ScalableCache<Lock>::sendBlock() {
             if((entry.second)->status == BLK_AVAIL && (entry.second)->activeCnt.load() == 0 ) {
                 BlockEntry* item = entry.second;
                 _blkMap.erase(entry.first);
+                _curNumBlocks--;
                 return item->blkAddr;
             }
         }
@@ -512,6 +519,57 @@ void ScalableCache<Lock>::trackBlock(std::string cacheName, std::string action, 
             }
         });
     }
+}
+
+template <class Lock> 
+void ScalableCache<Lock>::checkPattern() {
+    //LOCK ME 
+    if (_lastAccessedBlock){ //if last accessed block is NULL, this is the very first block allocation, so we skip this check
+        uint32_t curHits = _lastAccessedBlock->currentHits.load();
+        uint32_t allHits = _hitsSinceLastMiss.load();
+        if(_pattern == RANDOM){
+            if(_onLinearTrack){
+                //if all hits since last block request (miss) are to the same block, we detect a linear pattern
+                if( curHits == allHits ) {
+                    _pattern = LINEAR;
+                    _registry->updateCachePattern(this, _pattern); 
+                }
+                else {
+                    //we accessed multiple blocks since last block request, so not a linear access pattern
+                    _pattern = RANDOM; 
+                    _onLinearTrack = false;
+                }
+            }
+            else {
+                if( curHits == allHits ) {
+                    _onLinearTrack = true;
+                    //we wait for one more block access of similar properties to decide that it is a linear read pattern , so this is a mid-state
+                }
+            }
+        }
+        else {
+            if( curHits != allHits ) {
+                    _pattern = RANDOM;
+                    _registry->updateCachePattern(this, _pattern); 
+                    _onLinearTrack = false;
+            }
+        }
+
+        //reset counters for hits
+        _lastAccessedBlock->currentHits = 0;
+        _hitsSinceLastMiss = 0;
+    }
+    //UNLOCK ME
+}
+
+template <class Lock>
+void ScalableCache<Lock>::updateMaxBlocks(uint32_t blockSize){
+    _maxNumBlocks = blockSize;
+}
+
+template <class Lock>
+uint32_t ScalableCache<Lock>::getMaxBlocks(){
+    return _maxNumBlocks;
 }
 
 template class ScalableCache<MultiReaderWriterLock>;

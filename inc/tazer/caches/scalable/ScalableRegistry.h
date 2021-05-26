@@ -89,6 +89,7 @@ class ScalableRegistry{
     uint8_t * stealBlock(int n);
     void fileClosed (Cache* cache);
     void fileOpened (Cache* cache);
+    void updateCachePattern(Cache* cache, uint32_t p);
 
     static ScalableRegistry *addNewScalableRegistry(uint64_t maxCacheSize, uint64_t blockSize);
     
@@ -102,9 +103,9 @@ class ScalableRegistry{
     uint32_t _blockSize;
     uint32_t _fileBlockLimit;
     std::unordered_map< Cache*, std::vector<uint8_t*> > _cacheMap; // map to keep trck of all the blocks allocated for each cache
-    std::vector<Cache*> _cachesInUse; //vector of all caches registered
+    std::vector<Cache*> _cachesInUse; //vector of all active caches 
     std::vector<Cache*> _victims;
-    std::vector<uint8_t *> _availableBlocks; //closed file blocks will be returned to this list 
+    //std::vector<uint8_t *> _availableBlocks; //closed file blocks will be returned to this list 
 };
 
 #endif /* SCALABLE_REGISTRY_H */
