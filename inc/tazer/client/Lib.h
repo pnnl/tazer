@@ -77,6 +77,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <fcntl.h>
+#include <linux/limits.h>
 #include <mutex>
 #include <sstream>
 #include <stdarg.h>
@@ -155,35 +156,51 @@ int removeStr(char *s, const char *r);
 
 /*Templating*************************************************************************************************/
 
-inline bool splitter(std::string tok, std::string full, std::string &path, std::string &file) {
-    size_t pos = full.find(tok);
-    if (pos != std::string::npos) {
-        path = full.substr(0, pos + tok.length());
-        if (path.length() < full.length())
-            file = full.substr(path.length() + 1);
-        else
-            file = full;
-        return true;
-    }
-    path = full;
-    file = full;
-    return false;
-}
-
 inline bool checkMeta(const char *pathname, std::string &path, std::string &file, TazerFile::Type &type) {
-    if (strstr(pathname, ".meta.")) {
-        std::string full(pathname);
+    int fd = (*unixopen)(pathname, O_RDONLY);
+
+    if(fd >= 0)
+    {
+        const std::string tazerVersion("TAZER0.1");
+        std::string types[3] = {"input", "output", "local"};
         TazerFile::Type tokType[3] = {TazerFile::Input, TazerFile::Output, TazerFile::Local};
-        std::string tok[3] = {".meta.in", ".meta.out", ".meta.local"};
-        for (unsigned int i = 0; i < 3; i++) {
-            if (splitter(tok[i], full, path, file)) {
+        int bufferSize = (tazerVersion.length() + 13); //need space for tazerVersion + \n + type= + (the type) + \0
+        char *meta = new char[bufferSize];
+
+        int ret = (*unixread)(fd, (void *)meta, bufferSize);
+        (*unixclose)(fd);
+        if (ret <= 0) {
+            return false;
+        }
+        meta[bufferSize] = '\0';
+
+        std::stringstream ss(meta);
+        std::string curLine;
+
+        std::getline(ss, curLine);
+        if(curLine.compare(0, tazerVersion.length(), tazerVersion) != 0) {
+            delete[] meta;
+            return false;
+        }
+
+        std::getline(ss, curLine);
+        if(curLine.compare(0, 5, "type=") != 0) {
+            delete[] meta;
+            return false;
+        }
+
+        std::string typeStr = curLine.substr(5, curLine.length() - 5);
+        for(int i = 0; i < 3; i++) {
+            if(typeStr.compare(types[i]) == 0) {
+                path = pathname;
+                file = pathname;
                 type = tokType[i];
                 DPRINTF("Path: %s File: %s\n", path.c_str(), file.c_str());
+                delete[] meta;
                 return true;
             }
         }
     }
-    DPRINTF("~ %s Path: %s File: %s\n", pathname, path.c_str(), file.c_str());
     return false;
 }
 

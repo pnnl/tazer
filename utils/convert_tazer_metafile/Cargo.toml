@@ -1,0 +1,10 @@
+[package]
+name = "convert_tazer_metafile"
+version = "0.1.0"
+authors = ["powe445"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "~2.33"

@@ -89,6 +89,7 @@ $tazer_cp_write ${node_workspace} ${data_path} ${tazer_path} ${build_dir} ${serv
 test_pids+=("$!")
 test_id=$((test_id+NUM_NODES))
 $tazer_cp_read ${node_workspace} ${data_path} ${tazer_path} ${build_dir} ${server_addr} ${server_port} ${test_id} ${shmem} ${burstbuff} ${filelock} ${ref_time} &
+#$tazer_cp_read ${node_workspace} ${data_path} ${tazer_path} ${build_dir} ${server_addr} ${server_port} ${test_id} ${shmem} 0 ${filelock} ${ref_time} &
 test_pids+=("$!")
 test_id=$((test_id+NUM_NODES))
 

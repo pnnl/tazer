@@ -3,6 +3,7 @@
 #This file is called directly by the jenkins pipeline script. It starts a tazer server and starts the TazerCp tests
 #and the Workflow Simulation tests found in combined-testing.
 TAZER_WORKSPACE_ROOT=$GITHUB_WORKSPACE
+#TAZER_WORKSPACE_ROOT=/people/powe445/Projects/tazer_new_metafiles/tazer
 
 if [ -z "$TAZER_WORKSPACE_ROOT" ];  then
 TAZER_WORKSPACE_ROOT=`pwd` #assumes it was launched locally from tazer root
@@ -23,7 +24,7 @@ module load gcc/8.1.0 python/3.7.0
 #Each node will have a certain number of clients running tests on it. Half of a given nodes clients will run
 #workflow sim tests while the other half runs TazerCp tests.
 total_client_nodes=2
-total_clients_per=10
+total_clients_per=5
 
 
 workspace=$TAZER_WORKSPACE_ROOT/runner-test/integration
@@ -64,7 +65,7 @@ cd $cur_dir
 tazer_server_port=5001
 #Start the tazer server on a node and sleep for a while to be sure that the server has time to create its 1GB data file and 
 #start up before the clients start trying to use it.
-tazer_server_task_id=`sbatch --parsable --exclude=node04,node33,node23,node24,node43 -N1 start_tazer_server.sh $workspace $TAZER_WORKSPACE_ROOT $TAZER_BUILD_DIR $tazer_server_port`
+tazer_server_task_id=`sbatch -A ippd --parsable --exclude=node04,node33,node23,node24,node43 -N1 start_tazer_server.sh $workspace $TAZER_WORKSPACE_ROOT $TAZER_BUILD_DIR $tazer_server_port`
 tazer_server_nodes=`squeue -j ${tazer_server_task_id} -h -o "%N"`
 while [ -z "$tazer_server_nodes" ]; do
 tazer_server_nodes=`squeue -j ${tazer_server_task_id} -h -o "%N"`
@@ -74,7 +75,7 @@ $TAZER_WORKSPACE_ROOT/${TAZER_BUILD_DIR}/test/PingServer $tazer_server_nodes $ta
 
 wait #need to wait for the temp files to finish being created
 
-sbatch --wait --exclude=node04,node33,node23,node24,node43 -N ${total_client_nodes} launch_tazer_clients.sh ${workspace} ${data_path} ${TAZER_WORKSPACE_ROOT} ${TAZER_BUILD_DIR} ${tazer_server_nodes} ${tazer_server_port} ${total_clients_per} ${total_client_nodes} 
+sbatch -A ippd --wait --exclude=node04,node33,node23,node24,node43 -N ${total_client_nodes} launch_tazer_clients.sh ${workspace} ${data_path} ${TAZER_WORKSPACE_ROOT} ${TAZER_BUILD_DIR} ${tazer_server_nodes} ${tazer_server_port} ${total_clients_per} ${total_client_nodes} 
 
 echo "Closing server ..."
 
