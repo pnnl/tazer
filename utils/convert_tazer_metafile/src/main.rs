@@ -6,8 +6,10 @@ use std::io;
 use std::io::Read;
 use std::io::Write;
 use std::fs::read_dir;
+use std::fs::read_link;
 use std::fs::create_dir_all;
 use std::fs::metadata;
+use std::fs::symlink_metadata;
 
 struct MetaInfo {
     tazer_version: String,
@@ -90,7 +92,19 @@ fn read_meta_info(path: &Path) -> Option<MetaInfo> {
         block_size: "block_size=1\n".to_string(),
     };
 
-    let path_str = String::from(path.file_name().unwrap().to_str().unwrap());
+    let path_str;
+    let meta_data = match symlink_metadata(path) {
+        Ok(meta_data) => meta_data,
+        Err(_) => return None,
+    };
+    if meta_data.file_type().is_symlink() {
+        //if path is symlink, get the real path so we can check the .meta extension
+        let real_path  = read_link(path).unwrap();
+        path_str = String::from(real_path.file_name().unwrap().to_str().unwrap());
+    }
+    else {
+        path_str = String::from(path.file_name().unwrap().to_str().unwrap());
+    }
 
     if path_str.contains(".meta.in") {
         meta_info.file_type = "type=input\n".to_string();
@@ -195,16 +209,14 @@ fn recursive(input_path: &Path, output_path: &Path, extension: &String) -> Resul
             if meta_info.is_some() {
                 let mut new_file_name = String::from(path.file_name().unwrap().to_str().unwrap());
 
-                if !extension.is_empty() {
-                    if new_file_name.contains(".meta.in") {
-                        new_file_name = new_file_name.replace(".meta.in", extension.as_str());
-                    }
-                    else if new_file_name.contains(".meta.out") {
-                        new_file_name = new_file_name.replace(".meta.out", extension.as_str());
-                    }
-                    else if new_file_name.contains(".meta.local") {
-                        new_file_name = new_file_name.replace(".meta.local", extension.as_str());
-                    }
+                if new_file_name.contains(".meta.in") {
+                    new_file_name = new_file_name.replace(".meta.in", extension.as_str());
+                }
+                else if new_file_name.contains(".meta.out") {
+                    new_file_name = new_file_name.replace(".meta.out", extension.as_str());
+                }
+                else if new_file_name.contains(".meta.local") {
+                    new_file_name = new_file_name.replace(".meta.local", extension.as_str());
                 }
     
                 let new_file_path = output_path.join(new_file_name);
