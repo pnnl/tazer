@@ -169,6 +169,9 @@ fn create_tazer_file(input_file_path: &Path, new_file_path: &Path, meta_info: &M
     let mut file = fs::File::create(file_path_with_extension).expect("error creating new file");
 
     let mut file_on_server = String::from(meta_info.server_root.as_str());
+    if file_on_server.chars().last().unwrap() != '/' {
+        file_on_server.push('/');
+    }
     file_on_server.push_str(String::from(input_file_path.to_str().unwrap()).replace("./", "").as_str());
     file_on_server.push('\n');
 
