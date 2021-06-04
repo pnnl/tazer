@@ -87,7 +87,6 @@ fn main() {
     meta_info.file_type.push_str(args.value_of("type").unwrap());
     meta_info.file_type.push('\n');
     meta_info.server_root.push_str(args.value_of("serverroot").unwrap());
-    meta_info.server_root.push('\n');
     meta_info.compress.push_str(args.value_of("compression").unwrap());
     meta_info.compress.push('\n');
     meta_info.prefetch.push_str(args.value_of("prefetch").unwrap());
@@ -132,7 +131,7 @@ fn main() {
     else if md.is_file() {
         fs::create_dir_all(output_path).expect("could not create output path");
         let new_file_path = output_path.join(input_path.file_name().unwrap().to_str().unwrap());
-        create_tazer_file(&new_file_path, &meta_info).expect("create_tazer_file() failed in main()");
+        create_tazer_file(&input_path, &new_file_path, &meta_info).expect("create_tazer_file() failed in main()");
     }
 }
 
@@ -155,20 +154,23 @@ fn find_files(input_path: &Path, output_path: &Path, meta_info: &MetaInfo, flat:
         }
         else if md.is_file() {
             let new_file_path = output_path.join(path.file_name().unwrap().to_str().unwrap());
-            let _ = create_tazer_file(&new_file_path, &meta_info)?;
+            let _ = create_tazer_file(&path, &new_file_path, &meta_info)?;
         }
     }
 
     Ok(())
 }
 
-fn create_tazer_file(new_file_path: &Path, meta_info: &MetaInfo) -> Result<(), io::Error>{
-
+fn create_tazer_file(input_file_path: &Path, new_file_path: &Path, meta_info: &MetaInfo) -> Result<(), io::Error>{
     let mut temp = String::from(new_file_path.to_str().unwrap());
     temp.push_str(meta_info.extension.as_str());
     let file_path_with_extension = Path::new(temp.as_str());
     println!("creating tazer file: {}", file_path_with_extension.to_str().unwrap());
     let mut file = fs::File::create(file_path_with_extension).expect("error creating new file");
+
+    let mut file_on_server = String::from(meta_info.server_root.as_str());
+    file_on_server.push_str(String::from(input_file_path.to_str().unwrap()).replace("./", "").as_str());
+    file_on_server.push('\n');
 
     file.write_all(meta_info.tazer_version.as_bytes())?;
     file.write_all(meta_info.file_type.as_bytes())?;
@@ -177,7 +179,7 @@ fn create_tazer_file(new_file_path: &Path, meta_info: &MetaInfo) -> Result<(), i
         file.write_all("[server]\n".as_bytes())?;
         file.write_all(meta_info.hosts[i].as_bytes())?;
         file.write_all(meta_info.ports[i].as_bytes())?;
-        file.write_all(meta_info.server_root.as_bytes())?;
+        file.write_all(file_on_server.as_bytes())?;
         file.write_all(meta_info.block_size.as_bytes())?;
         file.write_all(meta_info.compress.as_bytes())?;
         file.write_all(meta_info.prefetch.as_bytes())?;
