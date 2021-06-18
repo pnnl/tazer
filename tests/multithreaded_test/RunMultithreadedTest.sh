@@ -20,7 +20,7 @@ cd tests/multithreaded_test
 module load gcc/8.1.0 python/3.7.0
 
 
-total_client_nodes=1
+total_client_nodes=2
 total_clients_per=5
 
 

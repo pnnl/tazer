@@ -308,15 +308,16 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
 
     std::thread::id thread_id = std::this_thread::get_id();
     statsLock.readerLock();
-    if (timer->checkThread(thread_id) == false) {
-        statsLock.readerUnlock();
+    bool threadFound = timer->checkThread(thread_id);
+    statsLock.readerUnlock();
+
+    if(threadFound == false) {
         statsLock.writerLock();
         timer->addThread(thread_id);
         statsLock.writerUnlock();
-        statsLock.readerLock();
     }
+
     timer->threadStart(thread_id);
-    statsLock.readerUnlock();
     timer->start();
 
     //Check if this is a special file to track (from environment variable)
@@ -335,9 +336,7 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
         addToSet(ignore_fd, retValue, posixFun);
         removeFromSet(ignore_fd, retValue, posixFun);
         timer->end(Timer::MetricType::local, Timer::Metric::dummy); //to offset the call to start()
-        statsLock.readerLock();
         timer->threadEnd(thread_id, Timer::MetricType::local, Timer::Metric::dummy);
-        statsLock.readerUnlock();
     }
     else { //End Timers!
         if (track) {
@@ -349,21 +348,15 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
                 ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
                 if (ret != -1) {
                     timer->addAmt(Timer::MetricType::local, metric, ret);
-                    statsLock.readerLock();
                     timer->threadAddAmt(thread_id, Timer::MetricType::local, metric, ret);
-                    statsLock.readerUnlock();
                 }
             }
             timer->end(Timer::MetricType::local, metric);
-            statsLock.readerLock();
             timer->threadEnd(thread_id, Timer::MetricType::local, metric);
-            statsLock.readerUnlock();
         }
         else if (isTazerFile){
             timer->end(Timer::MetricType::tazer, metric);
-            statsLock.readerLock();
             timer->threadEnd(thread_id, Timer::MetricType::tazer, metric);
-            statsLock.readerUnlock();
         }
         else{
             if (std::string("read").compare(std::string(name)) == 0 ||
@@ -371,15 +364,11 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
                 ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
                 if (ret != -1) {
                     timer->addAmt(Timer::MetricType::system, metric, ret);
-                    statsLock.readerLock();
                     timer->threadAddAmt(thread_id, Timer::MetricType::system, metric, ret);
-                    statsLock.readerUnlock();
                 }
             }
             timer->end(Timer::MetricType::system, metric);
-            statsLock.readerLock();
             timer->threadEnd(thread_id, Timer::MetricType::system, metric);
-            statsLock.readerUnlock();
         }
     }
 
