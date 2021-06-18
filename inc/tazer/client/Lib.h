@@ -108,11 +108,12 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-static Timer timer;
+static Timer* timer;
 
 std::once_flag log_flag;
 bool init = false;
 ReaderWriterLock vLock;
+ReaderWriterLock statsLock;
 
 std::unordered_set<std::string>* track_files = NULL; //this is a pointer cause we access in ((attribute)) constructor and initialization isnt guaranteed
 static std::unordered_set<int> track_fd;
@@ -305,7 +306,18 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
         return posixFun(args...);
     }
 
-    timer.start();
+    std::thread::id thread_id = std::this_thread::get_id();
+    statsLock.readerLock();
+    if (timer->checkThread(thread_id) == false) {
+        statsLock.readerUnlock();
+        statsLock.writerLock();
+        timer->addThread(thread_id);
+        statsLock.writerUnlock();
+        statsLock.readerLock();
+    }
+    timer->threadStart(thread_id);
+    statsLock.readerUnlock();
+    timer->start();
 
     //Check if this is a special file to track (from environment variable)
     bool track = trackFile(fileId);
@@ -322,7 +334,10 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
         //Maintain the ignore_fd set
         addToSet(ignore_fd, retValue, posixFun);
         removeFromSet(ignore_fd, retValue, posixFun);
-        timer.end(Timer::MetricType::local, Timer::Metric::dummy); //to offset the call to start()
+        timer->end(Timer::MetricType::local, Timer::Metric::dummy); //to offset the call to start()
+        statsLock.readerLock();
+        timer->threadEnd(thread_id, Timer::MetricType::local, Timer::Metric::dummy);
+        statsLock.readerUnlock();
     }
     else { //End Timers!
         if (track) {
@@ -333,25 +348,41 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
             std::string("write").compare(std::string(name)) == 0){
                 ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
                 if (ret != -1) {
-                    timer.addAmt(Timer::MetricType::local, metric,ret);
+                    timer->addAmt(Timer::MetricType::local, metric, ret);
+                    statsLock.readerLock();
+                    timer->threadAddAmt(thread_id, Timer::MetricType::local, metric, ret);
+                    statsLock.readerUnlock();
                 }
             }
-            timer.end(Timer::MetricType::local, metric);
+            timer->end(Timer::MetricType::local, metric);
+            statsLock.readerLock();
+            timer->threadEnd(thread_id, Timer::MetricType::local, metric);
+            statsLock.readerUnlock();
         }
         else if (isTazerFile){
-            timer.end(Timer::MetricType::tazer, metric);
+            timer->end(Timer::MetricType::tazer, metric);
+            statsLock.readerLock();
+            timer->threadEnd(thread_id, Timer::MetricType::tazer, metric);
+            statsLock.readerUnlock();
         }
         else{
             if (std::string("read").compare(std::string(name)) == 0 ||
             std::string("write").compare(std::string(name)) == 0){
                 ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
                 if (ret != -1) {
-                    timer.addAmt(Timer::MetricType::system, metric,ret);
+                    timer->addAmt(Timer::MetricType::system, metric, ret);
+                    statsLock.readerLock();
+                    timer->threadAddAmt(thread_id, Timer::MetricType::system, metric, ret);
+                    statsLock.readerUnlock();
                 }
             }
-            timer.end(Timer::MetricType::system, metric);
+            timer->end(Timer::MetricType::system, metric);
+            statsLock.readerLock();
+            timer->threadEnd(thread_id, Timer::MetricType::system, metric);
+            statsLock.readerUnlock();
         }
     }
+
     return retValue;
 }
 
