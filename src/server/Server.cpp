@@ -292,7 +292,7 @@ int main(int argc, char *argv[]) {
     if (argc == 3)
         addr += argv[2];
 
-    if (argc == 2){
+    if (argc < 3){ 
         if (getInSocket(portno, sockfd) < 0) {
             perror("ERROR on binding");
             exit(1);
@@ -310,7 +310,10 @@ int main(int argc, char *argv[]) {
     std::cerr << "[TAZER] "
               << "Starting server on port " << portno << " socket " << sockfd << std::endl;
     //    signal(SIGCHLD, SIG_IGN); //hack for now, possibly implement a child handler?
-    rlisten(sockfd, 128);
+    if(rlisten(sockfd, 128) == -1) {
+        perror("Error trying to listen");
+        exit(1);
+    }
     struct sockaddr_in cli_addr;
     while (alive.load()) {
         socklen_t clilen = sizeof(cli_addr);

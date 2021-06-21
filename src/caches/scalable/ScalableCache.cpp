@@ -6,6 +6,7 @@
 #include <future>
 
 #define DPRINTF(...)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 
 
 template <class Lock>
@@ -550,9 +551,9 @@ void ScalableCache<Lock>::checkPattern() {
         }
         else { //if we already observed a linear pattern
             if( curHits != allHits ) {
-                    _pattern = RANDOM;
-                    _registry->updateCachePattern(this, _pattern); 
-                    _onLinearTrack = false;
+                _pattern = RANDOM;
+                _registry->updateCachePattern(this, _pattern); 
+                _onLinearTrack = false;
             }
         }
 

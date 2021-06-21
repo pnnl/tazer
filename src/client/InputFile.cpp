@@ -146,9 +146,8 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     if (Config::useMemoryCache) {
         InputFile::_scalableRegistry = ScalableRegistry::addNewScalableRegistry(20*Config::memoryCacheBlocksize, Config::memoryCacheBlocksize);
         //Cache *c = NewMemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
-        Cache *c = ScalableMemoryCache::addScalableMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheBlocksize, _scalableRegistry);
-        std::cerr << "[TAZER] "
-                  << "mem cache: " << (void *)c << std::endl;
+        Cache *c = ScalableMemoryCache::addScalableMemoryCache(SCALABLEMEMORYCACHENAME, CacheType::scalable, Config::memoryCacheBlocksize, _scalableRegistry);
+        std::cerr << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }
 
@@ -266,8 +265,7 @@ InputFile::~InputFile() {
 }
 
 void InputFile::open() {
-    //   std::cout << "[TAZER] "
-    //             << "InputFile: " << _name<<" eof "<<_eof << std::endl;
+    // std::cout << "[TAZER] " << "InputFile: " << _name << std::endl;
     if (_connections.size()) {
         std::unique_lock<std::mutex> lock(_openCloseLock);
         bool prev = false;

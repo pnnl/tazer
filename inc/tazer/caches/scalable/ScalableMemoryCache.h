@@ -2,7 +2,7 @@
 #define ScalableMemoryCache_H
 #include "ScalableCache.h"
 
-#define SCALABLEMEMORYCACHENAME "privatememory"
+#define SCALABLEMEMORYCACHENAME "scalable"
 
 class ScalableMemoryCache : public ScalableCache<MultiReaderWriterLock> {
   public:
