@@ -166,7 +166,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         std::string types[3] = {"input", "output", "local"};
         TazerFile::Type tokType[3] = {TazerFile::Input, TazerFile::Output, TazerFile::Local};
         int bufferSize = (tazerVersion.length() + 13); //need space for tazerVersion + \n + type= + (the type) + \0
-        char *meta = new char[bufferSize];
+        char *meta = new char[bufferSize+1];
 
         int ret = (*unixread)(fd, (void *)meta, bufferSize);
         (*unixclose)(fd);
