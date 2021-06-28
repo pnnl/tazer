@@ -171,6 +171,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         int ret = (*unixread)(fd, (void *)meta, bufferSize);
         (*unixclose)(fd);
         if (ret <= 0) {
+            delete[] meta;
             return false;
         }
         meta[bufferSize] = '\0';
@@ -201,6 +202,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
                 return true;
             }
         }
+        delete[] meta;
     }
     return false;
 }

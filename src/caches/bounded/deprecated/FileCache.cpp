@@ -239,6 +239,8 @@ FileCache::~FileCache() {
     stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
     std::cout << std::endl;
+
+    delete _binLock;
 }
 
 

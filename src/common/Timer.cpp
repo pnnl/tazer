@@ -136,6 +136,7 @@ Timer::Timer() {
 }
 
 Timer::~Timer() {
+    std::unordered_map<std::thread::id, Timer::ThreadMetric*>::iterator itor;
     if (Config::printStats) {
         std::stringstream ss;
         ss << std::fixed;
@@ -144,19 +145,22 @@ Timer::~Timer() {
                 ss << "[TAZER] " << metricTypeName[i] << " " << metricName[j] << " " << _time[i][j] / billion << " " << _cnt[i][j] << " " << _amt[i][j] << std::endl;
             }
         }
-        std::unordered_map<std::thread::id, Timer::ThreadMetric>::iterator itor;
         uint64_t thread_count = 0;
         for(itor = _thread_timers.begin(); itor != _thread_timers.end(); itor++) {
             thread_count++;
             ss << std::endl << "[TAZER] " << myprogname << " thread " << thread_count << std::endl;
             for (int i = 0; i < lastMetric; i++) {
                 for (int j = 0; j < last; j++) {
-                    ss << "[TAZER] " << metricTypeName[i] << " " << metricName[j] << " " << itor->second.time[i][j]->load(std::memory_order_relaxed) / billion << " "
-                     << itor->second.cnt[i][j]->load(std::memory_order_relaxed) << " " << itor->second.amt[i][j]->load(std::memory_order_relaxed) << std::endl;
+                    ss << "[TAZER] " << metricTypeName[i] << " " << metricName[j] << " " << itor->second->time[i][j]->load(std::memory_order_relaxed) / billion << " "
+                     << itor->second->cnt[i][j]->load(std::memory_order_relaxed) << " " << itor->second->amt[i][j]->load(std::memory_order_relaxed) << std::endl;
                 }
             }
         }
         dprintf(stdoutcp, "[TAZER] %s\n%s\n", myprogname.c_str(), ss.str().c_str());
+    }
+    
+    for(itor = _thread_timers.begin(); itor != _thread_timers.end(); itor++) {
+        delete itor->second;
     }
 }
 
@@ -198,25 +202,26 @@ void Timer::addAmt(MetricType type, Metric metric, uint64_t amt) {
 }
 
 void Timer::threadStart(std::thread::id id) {
-    if (!_thread_timers[id].depth->load(std::memory_order_relaxed))
-        _thread_timers[id].current->store(getCurrentTime(), std::memory_order_relaxed);
-    _thread_timers[id].depth->fetch_add(1, std::memory_order_relaxed);
+    if (!_thread_timers[id]->depth->load(std::memory_order_relaxed))
+        _thread_timers[id]->current->store(getCurrentTime(), std::memory_order_relaxed);
+    _thread_timers[id]->depth->fetch_add(1, std::memory_order_relaxed);
 }
 
 void Timer::threadEnd(std::thread::id id, MetricType type, Metric metric) {
-    if (_thread_timers[id].depth->load(std::memory_order_relaxed) == 1) {
-        _thread_timers[id].time[type][metric]->fetch_add((getCurrentTime() - _thread_timers[id].current->load(std::memory_order_relaxed)), std::memory_order_relaxed);
-        _thread_timers[id].cnt[type][metric]->fetch_add(1, std::memory_order_relaxed);
+    if (_thread_timers[id]->depth->load(std::memory_order_relaxed) == 1) {
+        _thread_timers[id]->time[type][metric]->fetch_add((getCurrentTime() - _thread_timers[id]->current->load(std::memory_order_relaxed)), std::memory_order_relaxed);
+        _thread_timers[id]->cnt[type][metric]->fetch_add(1, std::memory_order_relaxed);
     }
-    _thread_timers[id].depth->fetch_sub(1, std::memory_order_relaxed);
+    _thread_timers[id]->depth->fetch_sub(1, std::memory_order_relaxed);
 }
 
 void Timer::threadAddAmt(std::thread::id id, MetricType type, Metric metric, uint64_t amt) {
-    _thread_timers[id].amt[type][metric]->fetch_add(amt, std::memory_order_relaxed);
+    _thread_timers[id]->amt[type][metric]->fetch_add(amt, std::memory_order_relaxed);
 }
 
 void Timer::addThread(std::thread::id id) {
-    _thread_timers[id] = *(new Timer::ThreadMetric());
+    //_thread_timers[id] = *(new Timer::ThreadMetric());
+    _thread_timers[id] = new Timer::ThreadMetric();
 }
 
 bool Timer::checkThread(std::thread::id id) {
@@ -235,5 +240,17 @@ Timer::ThreadMetric::ThreadMetric() {
             cnt[i][j] = new std::atomic<uint64_t>(std::uint64_t(0));
             amt[i][j] = new std::atomic<uint64_t>(std::uint64_t(0));
         }
+    }
+}
+
+Timer::ThreadMetric::~ThreadMetric() {
+    delete current;
+    delete depth;
+        for (int i = 0; i < lastMetric; i++) {
+            for (int j = 0; j < last; j++) {
+                delete time[i][j];
+                delete cnt[i][j];
+                delete amt[i][j];
+            }
     }
 }

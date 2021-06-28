@@ -306,15 +306,6 @@ int close(int fd) {
 
 ssize_t tazerRead(TazerFile *file, unsigned int fp, int fd, void *buf, size_t count) {
     ssize_t ret = file->read(buf, count, fp);
-    std::thread::id thread_id = std::this_thread::get_id();
-    statsLock.readerLock();
-    bool threadFound = timer->checkThread(thread_id);
-    statsLock.readerUnlock();
-    if(threadFound == false) {
-        statsLock.writerLock();
-        timer->addThread(thread_id);
-        statsLock.writerUnlock();
-    }
     timer->addAmt(Timer::MetricType::tazer, Timer::Metric::read, ret);
     timer->threadAddAmt(std::this_thread::get_id(), Timer::MetricType::tazer, Timer::Metric::read, ret);
     return ret;
@@ -329,15 +320,6 @@ ssize_t read(int fd, void *buf, size_t count) {
 
 ssize_t tazerWrite(TazerFile *file, unsigned int fp, int fd, const void *buf, size_t count) {
     auto ret = file->write(buf, count, fp);
-    std::thread::id thread_id = std::this_thread::get_id();
-    statsLock.readerLock();
-    bool threadFound = timer->checkThread(thread_id);
-    statsLock.readerUnlock();
-    if(threadFound == false) {
-        statsLock.writerLock();
-        timer->addThread(thread_id);
-        statsLock.writerUnlock();
-    }
     timer->addAmt(Timer::MetricType::tazer, Timer::Metric::write, ret);
     timer->threadAddAmt(std::this_thread::get_id(), Timer::MetricType::tazer, Timer::Metric::write, ret);
     return ret;

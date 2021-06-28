@@ -176,6 +176,8 @@ NewSharedMemoryCache::~NewSharedMemoryCache() {
     stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
     std::cout << std::endl;
+
+    delete _binLock;
 }
 
 void NewSharedMemoryCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size) {

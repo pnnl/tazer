@@ -769,6 +769,7 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
                 while (!*init) {
                     sched_yield();
                 }
+                delete _shmLock;
                 _shmLock = (ReaderWriterLock *)((uint8_t *)init + sizeof(uint32_t));
                 _readers  = (std::atomic<uint16_t>*)(uint8_t*)_shmLock + sizeof(ReaderWriterLock);
                 _writers  = (std::atomic<uint16_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
@@ -785,6 +786,7 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
             void *ptr = mmap(NULL, shmLen, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
 
             uint32_t *init = (uint32_t *)ptr;
+            delete _shmLock;
             _shmLock = new ((uint8_t *)init + sizeof(uint32_t)) ReaderWriterLock();
             _readers  = (std::atomic<uint16_t>*)(uint8_t*)_shmLock + sizeof(ReaderWriterLock);
             _writers  = (std::atomic<uint16_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
@@ -796,6 +798,7 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
         }
     }
     else{
+        delete _shmLock;
         _shmLock = new ReaderWriterLock();
         _readers = new std::atomic<uint16_t>[_numEntries];
         // memset(_readers, 0, _numEntries * sizeof(std::atomic<uint16_t>));

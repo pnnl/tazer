@@ -10,6 +10,7 @@
 void task(int thread_num, char *in_metafile_path, char *out_metafile_path, char *test_directory_path) {
     //read a buffer of random data
     int rand_buf_size = 1048576;
+    //int rand_buf_size = 1024;
     char rand_buf[rand_buf_size];
     int fd_random = open("/dev/random", O_RDONLY);
     read(fd_random, rand_buf, rand_buf_size);
@@ -45,7 +46,8 @@ void task(int thread_num, char *in_metafile_path, char *out_metafile_path, char 
 
     char* read_buf2 = new char[file_size];
     assert(read(fd2, read_buf2, file_size) == file_size);
-    std::cout << "read " << file_size << " bytes" << std::endl;
+    //std::cout << "read " << file_size << " bytes" << std::endl;
+    delete[] read_buf2;
 
     close(fd2);
 
