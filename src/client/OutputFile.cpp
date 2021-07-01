@@ -72,333 +72,115 @@
 // 
 //*EndLicense****************************************************************
 
-#include <chrono>
-#include <deque>
-#include <fcntl.h>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <string.h>
-#include <string>
-#include <sys/stat.h>
-#include <unistd.h>
-
 #include "OutputFile.h"
 
-#include "Config.h"
-#include "Message.h"
-#include "lz4.h"
-#include "lz4hc.h"
-
+//PriorityThreadPool<std::function<void()>>* OutputFileInner::_transferPool;
+//ThreadPool<std::function<void()>>* OutputFileInner::_decompressionPool;
 PriorityThreadPool<std::function<void()>>* OutputFile::_transferPool;
 ThreadPool<std::function<void()>>* OutputFile::_decompressionPool;
 
-OutputFile::OutputFile(std::string fileName, std::string metaName, int fd) : TazerFile(TazerFile::Type::Output, fileName, metaName, fd),
-                                                       _compLevel(0),
-                                                       _fileSize(0),
-                                                       _messageOffset(sizeof(writeMsg) + _name.size() + 1),
-                                                       _seqNum(0),
-                                                       _sendNum(0) {
-    std::unique_lock<std::mutex> lock(_bufferLock);
-    _buffer = new char[Config::outputFileBufferSize];
-    _bufferIndex = _messageOffset;
-    _bufferFp = 0;
-    _bufferCnt = 0;
-    _totalCnt = 0;
-    lock.unlock();
-    open();
+OutputFile::OutputFile(std::string fileName, std::string metaName, int fd) : TazerFile(TazerFile::Type::Output, fileName, metaName, fd) {
+    //std::cout << "entered OutputFile constructor" << std::endl;
+    _outputFiles = new std::unordered_map<int, TazerFile*>;
+    _threadFileDescriptors = new std::unordered_map<std::thread::id, int>;
+
+    addFileDescriptor(fd);
 }
 
 OutputFile::~OutputFile() {
-    *this << "Destorying file" << _metaName << std::endl;
-    close();
+    //std::cout << "entered OutputFile destructor" << std::endl;
+    std::unordered_map<int, TazerFile*>::iterator itor;
+    for(itor = _outputFiles->begin(); itor != _outputFiles->end(); itor++)
+        delete itor->second;
+    delete _outputFiles;
+
+    delete _threadFileDescriptors;
 }
 
 void OutputFile::open() {
-    if (_connections.size()) {
-        std::unique_lock<std::mutex> lock(_openCloseLock);
-        bool prev = false;
-        if (_active.compare_exchange_strong(prev, true)) {
-            //Open file on all possible servers.  Connections should already exist!
-            if (openFileOnServer()) {
-                _transferPool->initiate();
-                _decompressionPool->initiate();
-                // std::cerr << "[TAZER] "
-                //           << "output: " << _name << " opened" << std::endl;
-            }
-            else { //We failed to open the file kill the threads we started...
-                _active.store(false);
-            }
-        }
-        lock.unlock();
-    }
-    else {
-        std::cerr << "[TAZER] "
-                  << "ERROR: " << _name << " has no connections!" << std::endl;
-    }
+    (*_outputFiles)[getThreadFileDescriptor()]->open();
 }
 
 void OutputFile::close() {
-    *this << "Closing file " << _name << std::endl;
-    //std::cout<<"[TAZER] " << "closing bi: " << _bufferIndex << " bc: " << _bufferCnt << " bfp: " << _bufferFp << " " << _totalCnt << std::endl;
-    if (_bufferCnt > 0) {
-        std::unique_lock<std::mutex> bufLock(_bufferLock);
-        uint32_t seqNum = _seqNum.fetch_add(1);
-        // std::cout<<"close: seq num"<<seqNum<<std::endl;
-        char * buffer = new char[Config::outputFileBufferSize];
-        if (_compress)
-            addCompressTask(_buffer, _bufferCnt, _bufferFp, seqNum);
-        else
-            addTransferTask(_buffer, _bufferCnt, _bufferCnt, _bufferFp, seqNum);
-        _buffer = buffer;
-        bufLock.unlock();
-        //std::cout<<"[TAZER] " << "final add tx task" << std::endl;
-    }
-    std::unique_lock<std::mutex> lock(_openCloseLock);
-    bool prev = true;
-    if (_active.compare_exchange_strong(prev, false)) {
-
-        while (_seqNum.load() != _sendNum.load()) {
-            std::this_thread::yield();
-        }
-        //std::cout<<"[TAZER] " << "closing bi: " << _bufferIndex << " bc: " << _bufferCnt << " bfp: " << _bufferFp << " " << _totalCnt << std::endl;
-
-        //Kill threads
-        _transferPool->terminate();
-        _decompressionPool->terminate();
-
-        //Close file
-        closeFileOnServer();
-
-        delete[] _buffer;
-        //Reset values
-        _seqNum.store(0);
-        _sendNum.store(0);
-    }
-    lock.unlock();
-}
-
-bool OutputFile::openFileOnServer() {
-    _connections[0]->lock();
-    for (uint32_t i = 0; i < Config::socketRetry; i++) {
-        if (sendOpenFileMsg(_connections[0], _name, 0, _compress, true)) {
-            if (recFileSizeMsg(_connections[0], _fileSize))
-                break;
-        }
-    }
-    _connections[0]->unlock();
-    return true;
-}
-
-bool OutputFile::closeFileOnServer() {
-    _connections[0]->lock();
-    bool ret = sendCloseFileMsg(_connections[0], _name);
-    recAckMsg(_connections[0], CLOSE_FILE_MSG);
-    _connections[0]->unlock();
-    return ret;
+    (*_outputFiles)[getThreadFileDescriptor()]->close();
 }
 
 ssize_t OutputFile::read(void *buf, size_t count, uint32_t index) {
-    *this << "in outputfile read.... need to implement... exiting" << std::endl;
-    exit(-1);
-    return 0;
+    return (*_outputFiles)[getThreadFileDescriptor()]->read(buf, count, index);
 }
 
-// void OutputFile::addCompressTask(char *buf, uint32_t size, uint64_t fp, uint32_t seqNum) {
-//void OutputFile::addTransferTask(char *buf, uint32_t size, uint32_t compSize, uint64_t fp, uint32_t seqNum) {
 ssize_t OutputFile::write(const void *buf, size_t count, uint32_t index) {
-    if (_active.load()) {
-         std::unique_lock<std::mutex> bufLock(_bufferLock);
-        trackWrites(count, index, 0, 0);
-
-        uint64_t fp = _filePos[index];
-        // std::cout << "[TAZER] "
-        //           << "write: i: " << fp << " cnt: " << count << " num tasks: " << _transferPool->numTasks() << " index: " << index << std::endl;
-        _filePos[index] += count;
-        if (_filePos[index] > _fileSize)
-            _fileSize = _filePos[index] + 1;
-
-        uint64_t bytesToSend = count;
-        uint64_t bytesSent = 0;
-        uint64_t spaceAvail = Config::outputFileBufferSize - _bufferIndex;
-        while (bytesToSend > spaceAvail || _bufferCnt + _bufferFp != fp + bytesSent) {
-            // std::cout << "[TAZER] " << (bytesToSend > spaceAvail) << " " << (_bufferCnt + _bufferFp != fp + bytesSent) << std::endl;
-            // std::cout << "[TAZER] " << _bufferIndex << " " << bytesSent << " " << spaceAvail << " " << bytesToSend << " " << _bufferCnt << " " << _bufferFp << " " << _bufferCnt + _bufferFp << " " << fp + bytesSent << std::endl;
-            if (bytesToSend < spaceAvail) {
-                spaceAvail = bytesToSend;
-            }
-            memcpy(_buffer + _bufferIndex, (char*)buf + bytesSent, spaceAvail);
-            //_totalCnt += spaceAvail;
-            bytesSent += spaceAvail;
-            bytesToSend -= spaceAvail;
-            _bufferCnt += spaceAvail;
-            //if (_bufferCnt > 0) {
-            uint32_t seqNum = _seqNum.fetch_add(1);
-            // std::cout<<"write: seq num"<<seqNum<<std::endl;
-            char *buffer = new char[Config::outputFileBufferSize];
-            if (_compress)
-                addCompressTask(_buffer, _bufferCnt, _bufferFp, seqNum);
-            else
-                addTransferTask(_buffer, _bufferCnt, _bufferCnt, _bufferFp, seqNum);
-            _buffer = buffer;
-            //}
-            //std::cout<<"[TAZER] " << "add tx task" << std::endl;
-            _bufferIndex = _messageOffset;
-            //_bufferFp = fp;
-            _bufferFp += _bufferCnt;
-            _bufferCnt = 0;
-            spaceAvail = Config::outputFileBufferSize - _bufferIndex;
-        }
-
-        memcpy(_buffer + _bufferIndex, (char*)buf + bytesSent, bytesToSend);
-        //_totalCnt += bytesToSend;
-        //memcpy(_buffer + _bufferIndex, buf, count);
-        _bufferIndex += bytesToSend;
-        _bufferCnt += bytesToSend;
-        if (_transferPool->numTasks() == 0) {
-            uint32_t seqNum = _seqNum.fetch_add(1);
-            // std::cout<<"write: seq num"<<seqNum<<std::endl;
-            char *buffer = new char[Config::outputFileBufferSize];
-            if (_compress)
-                addCompressTask(_buffer, _bufferCnt, _bufferFp, seqNum);
-            else
-                addTransferTask(_buffer, _bufferCnt, _bufferCnt, _bufferFp, seqNum);
-            //std::cout<<"[TAZER] " << "add tx task" << std::endl;
-            _buffer = buffer;
-            _bufferIndex = _messageOffset;
-            _bufferCnt = 0;
-            _bufferFp = fp + count;
-        }
-        bufLock.unlock();
-        // std::cout << "[TAZER] "
-        //           << "bi: " << _bufferIndex << " bc: " << _bufferCnt << " bfp: " << _bufferFp << " " << _totalCnt << std::endl;
-
-        return count;
-    }
-    return 0;
-}
-
-bool OutputFile::trackWrites(size_t count, uint32_t index, uint32_t startBlock, uint32_t endBlock) {
-    if (Config::TrackReads) {
-        unixopen_t unixopen = (unixopen_t)dlsym(RTLD_NEXT, "open");
-        unixclose_t unixclose = (unixclose_t)dlsym(RTLD_NEXT, "close");
-        unixwrite_t unixwrite = (unixwrite_t)dlsym(RTLD_NEXT, "write");
-
-        int fd = (*unixopen)("access_new.txt", O_WRONLY | O_APPEND | O_CREAT, 0666);
-        if (fd != -1) {
-            std::stringstream ss;
-            ss << _name << " " << _filePos[index] << " " << count << " " << startBlock << " " << endBlock << std::endl;
-            unixwrite(fd, ss.str().c_str(), ss.str().length());
-            unixclose(fd);
-            return true;
-        }
-    }
-    return false;
-}
-
-uint64_t OutputFile::compress(char **buffer, uint64_t offset, uint64_t size) {
-    uint64_t compSize = 0;
-    uint64_t maxCompSize = LZ4_compressBound(size);
-    char *compBuf = new char[maxCompSize + _messageOffset];
-    if (_compLevel < 0) {
-        compSize = LZ4_compress_fast((*buffer) + _messageOffset, compBuf + _messageOffset, size, maxCompSize, -_compLevel);
-    }
-    else if (_compLevel == 0) {
-        compSize = LZ4_compress_default((*buffer) + _messageOffset, compBuf + _messageOffset, size, maxCompSize);
-    }
-    else {
-        compSize = LZ4_compress_HC((*buffer) + _messageOffset, compBuf + _messageOffset, size, maxCompSize, _compLevel);
-    }
-
-    delete[] * buffer;
-    *buffer = compBuf;
-    return compSize;
-}
-
-void OutputFile::addTransferTask(char *buf, uint64_t size, uint64_t compSize, uint64_t fp, uint32_t seqNum) {
-    _transferPool->addTask(seqNum, [this, buf, size, compSize, fp, seqNum] {
-        if (seqNum == _sendNum.load()) {
-            //Send the message
-            _connections[0]->lock();
-            if (sendWriteMsg(_connections[0], _name, buf, size, compSize, fp, seqNum)) {
-                if (recAckMsg(_connections[0], WRITE_MSG)) {
-
-                    _totalCnt += (size - _messageOffset);
-                    *this << "Successful write " << _totalCnt << " " << seqNum << std::endl;
-                }
-            }
-            else{
-                *this << "Failed send" << std::endl;
-            }
-            _connections[0]->unlock();
-            _sendNum.fetch_add(1);
-        }
-        else
-            addTransferTask(buf, size, compSize, fp, seqNum);
-    });
-}
-
-void OutputFile::addCompressTask(char *buf, uint64_t size, uint64_t fp, uint32_t seqNum) {
-    _decompressionPool->addTask([this, buf, size, fp, seqNum] {
-        char *temp = buf;
-        uint32_t newSize = compress(&temp, fp, size);
-        addTransferTask(temp, size, newSize, fp, seqNum);
-    });
+    return (*_outputFiles)[getThreadFileDescriptor()]->write(buf, count, index);
 }
 
 off_t OutputFile::seek(off_t offset, int whence, uint32_t index) {
-    // std::cout << _name << " seek " << offset << " " << whence << " " << index << std::endl;
-    std::unique_lock<std::mutex> bufLock(_bufferLock);
-    /// flush buffer because we are not sending consecutive data
-    uint32_t seqNum = _seqNum.fetch_add(1);
-    char *buffer = new char[Config::outputFileBufferSize];
-    if (_compress) {
-        addCompressTask(_buffer, _bufferCnt, _bufferFp, seqNum);
-    }
-    else {
-        addTransferTask(_buffer, _bufferCnt, _bufferCnt, _bufferFp, seqNum);
-    }
-    _buffer = buffer;
-    _bufferIndex = _messageOffset;
-    _bufferCnt = 0;
-
-    switch (whence) {
-    case SEEK_SET:
-        _filePos[index] = offset;
-        _bufferFp = _filePos[index];
-        break;
-    case SEEK_CUR:
-        _filePos[index] += offset;
-        _bufferFp = _filePos[index];
-        break;
-    case SEEK_END:
-        _filePos[index] = _fileSize + offset;
-        _bufferFp = _filePos[index];
-        break;
-    }
-    bufLock.unlock();
-    return _filePos[index];
+    return (*_outputFiles)[getThreadFileDescriptor()]->seek(offset, whence, index);
 }
 
 uint64_t OutputFile::fileSize() {
-    if (_active.load())
-        return _fileSize;
+    return (*_outputFiles)[getThreadFileDescriptor()]->fileSize();
+}
 
-    uint64_t fileSize = 0;
-    if (_connections.size()) {
-        _connections[0]->lock();
-        for (uint32_t i = 0; i < Config::socketRetry; i++) {
-            *this << "Requesting file size on " << _connections[0] << " for " << _name << std::endl;
-            if (sendRequestFileSizeMsg(_connections[0], _name)) {
-                if (recFileSizeMsg(_connections[0], fileSize)) {
-                    break;
-                }
-            }
-            else
-                std::cout << "[TAZER] "
-                          << "ERROR: Failed to send size request" << std::endl;
-        }
-        _connections[0]->unlock();
+bool OutputFile::active() {
+    int fd = getThreadFileDescriptor();
+    if (fd != -1)
+        return (*_outputFiles)[getThreadFileDescriptor()]->active();
+    else
+        return false;
+}
+
+uint32_t OutputFile::newFilePosIndex() {
+    return (*_outputFiles)[getThreadFileDescriptor()]->newFilePosIndex();
+}
+
+uint64_t OutputFile::filePos(uint32_t index) {
+    return (*_outputFiles)[getThreadFileDescriptor()]->filePos(index);
+}
+
+void OutputFile::setFilePos(uint32_t index, uint64_t pos) {
+    return (*_outputFiles)[getThreadFileDescriptor()]->setFilePos(index, pos);
+}
+
+void OutputFile::setThreadFileDescriptor(int fd) {
+    std::thread::id threadId = std::this_thread::get_id();
+
+    //std::cout << "Set fd=" << fd << " for thread" << std::endl; 
+    _threadFdLock.writerLock();
+    (*_threadFileDescriptors)[threadId] = fd;
+    _threadFdLock.writerUnlock();
+}
+
+int OutputFile::getThreadFileDescriptor() {
+    std::thread::id threadId = std::this_thread::get_id();
+    _threadFdLock.readerLock();
+    bool threadNotFound = (_threadFileDescriptors->find(threadId) == _threadFileDescriptors->end());
+    _threadFdLock.readerUnlock();
+
+    if (threadNotFound) {
+        //std::cout << "thread not found?" << std::endl; 
+        return -1;
     }
-    return fileSize;
+    else {
+        return (*_threadFileDescriptors)[threadId];
+    }
+}
+
+void OutputFile::addFileDescriptor(int fd) {
+    _outputFileLock.readerLock();
+    bool fdExists = (_outputFiles->find(fd) != _outputFiles->end());
+    _outputFileLock.readerUnlock();
+
+    if (fdExists)
+        removeFileDescriptor(fd);
+    //std::cout << "ADDING fd=" << fd << std::endl; 
+    _outputFileLock.writerLock();
+    (*_outputFiles)[fd] = new OutputFileInner(name(), metaName(), fd);
+    _outputFileLock.writerUnlock();
+}
+
+void OutputFile::removeFileDescriptor(int fd) {
+    //std::cout << "REMOVING fd=" << fd << std::endl; 
+    _outputFileLock.writerLock();
+    _outputFiles->erase(fd);
+    _outputFileLock.writerUnlock();
 }

@@ -142,7 +142,7 @@ bool TazerFile::readMetaInfo() {
     char *meta = new char[fileSize + 1];
     int ret = (*unixRead)(_fd, (void *)meta, fileSize);
     if (ret < 0) {
-        log(this) << "ERROR: Failed to read local metafile: " << strerror(errno) << std::endl;
+        std::cout << "ERROR: Failed to read local metafile: " << strerror(errno) << std::endl;
         raise(SIGSEGV);
         return 0;
     }
@@ -323,16 +323,28 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
             });
     }
     else if (type == TazerFile::Output) {
+        bool dontcare;
         return Trackable<std::string, TazerFile *>::AddTrackable(
             metaName, [=]() -> TazerFile * {
                 // std::cout << "new output " <<fileName<<" "<<metaName<<" "<<std::endl;
+                //std::cout << "Create new" << std::endl;
                 TazerFile *temp = new OutputFile(fileName, metaName, fd);
-                if (temp && temp->active() == 0) {
+                if (temp) {
+                    OutputFile* out = dynamic_cast<OutputFile*>(temp);
+                    out->setThreadFileDescriptor(fd);
+                    if (temp->active() == 0) {
                     delete temp;
                     return NULL;
+                    }
                 }
                 return temp;
-            });
+            },
+            [=](TazerFile* tazerFile) -> void {
+                OutputFile* out = dynamic_cast<OutputFile*>(tazerFile);
+                out->setThreadFileDescriptor(fd);
+                //std::cout << "Reuse old" << std::endl;
+                out->addFileDescriptor(fd);
+            }, dontcare);
     }
     else if (type == TazerFile::Local) {
         return Trackable<std::string, TazerFile *>::AddTrackable(

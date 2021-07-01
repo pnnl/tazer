@@ -72,85 +72,62 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef TazerFile_H_
-#define TazerFile_H_
-
+#ifndef OutputFileInner_H_
+#define OutputFileInner_H_
 #include <atomic>
-#include <condition_variable>
-#include <fstream>
-#include <list>
-#include <math.h>
 #include <mutex>
-#include <queue>
-#include <sstream>
 #include <string>
-#include <thread>
-#include <unordered_map>
-#include <vector>
 
-#include "Connection.h"
-#include "Loggable.h"
-#include "Trackable.h"
+#include "TazerFile.h"
+#include "PriorityThreadPool.h"
+#include "ThreadPool.h"
+#include "OutputFile.h"
 
-class TazerFile : public Loggable, public Trackable<std::string, TazerFile *> {
+class OutputFileInner : public TazerFile {
   public:
-    enum Type { Input = 0,
-                Output = 1,
-                Local = 2 };
+    OutputFileInner(std::string fileName, std::string metaName, int fd);
+    ~OutputFileInner();
 
-    TazerFile(TazerFile::Type type, std::string name, std::string metaName, int fd);
-    virtual ~TazerFile();
+    void open();
+    void close();
 
-    virtual void open() = 0;
-    virtual void close() = 0;
-    virtual uint64_t fileSize() = 0;
+    ssize_t read(void *buf, size_t count, uint32_t index);
+    ssize_t write(const void *buf, size_t count, uint32_t index);
 
-    virtual ssize_t read(void *buf, size_t count, uint32_t filePosIndex = 0) = 0;
-    virtual ssize_t write(const void *buf, size_t count, uint32_t filePosIndex = 0) = 0;
+    off_t seek(off_t offset, int whence, uint32_t index);
+    uint64_t fileSize();
 
-    virtual uint32_t newFilePosIndex();
-    virtual uint64_t filePos(uint32_t index);
-    virtual void setFilePos(uint32_t index, uint64_t pos);
-    virtual off_t seek(off_t offset, int whence, uint32_t index = 0) = 0;
-
-    static TazerFile *addNewTazerFile(TazerFile::Type type, std::string fileName, std::string metaName, int fd, bool open = true);
-    static bool removeTazerFile(std::string fileName);
-    static bool removeTazerFile(TazerFile *file);
-    static TazerFile *lookUpTazerFile(std::string fileName);
-
-    TazerFile::Type type();
-    std::string name();
-    std::string metaName();
-    uint64_t blkSize();
-    bool compress();
-    bool prefetch();
-    virtual bool active();
-    bool eof(uint32_t index);
-
-  protected:
-    bool readMetaInfo();
-
-    TazerFile::Type _type;
-    std::string _name;
-    std::string _metaName;
-
-    std::mutex _fpMutex;
-    std::vector<uint64_t> _filePos;
-    std::vector<bool> _eof;
-
-    //Properties from meta data file
-    bool _compress;
-    uint32_t _prefetch; //Adding the option to prefetch or not a particular file
-    bool _save_local; //Not used yet
-    uint64_t _blkSize;
-
-    uint64_t _initMetaTime;
-
-    std::atomic_bool _active; //if the connections are up
-    std::vector<Connection *> _connections;
+    //static PriorityThreadPool<std::function<void()>>* _transferPool;
+    //static ThreadPool<std::function<void()>>* _decompressionPool;
 
   private:
-    int _fd;
+    bool openFileOnServer();
+    bool closeFileOnServer();
+    uint64_t fileSizeFromServer();
+
+    uint64_t compress(char **buffer, uint64_t offset, uint64_t size);
+    void addTransferTask(char *buf, uint64_t size, uint64_t compSize, uint64_t fp, uint32_t seqNum);
+    void addCompressTask(char *buf, uint64_t size, uint64_t fp, uint32_t seqNum);
+
+    bool trackWrites(size_t count, uint32_t index, uint32_t startBlock, uint32_t endBlock);
+    //    void compress(CompressionWorkArgs task);
+
+    int _compLevel;
+    uint64_t _fileSize;
+    uint32_t _messageOffset; //size of header -- depends on the file name
+    std::atomic_uint _seqNum;
+    std::atomic_uint _sendNum;
+    std::mutex _openCloseLock;
+
+    char *_buffer;
+    uint64_t _bufferIndex;
+    uint64_t _bufferFp;
+    uint64_t _bufferCnt;
+
+    uint64_t _totalCnt;
+    std::mutex _bufferLock;
+
+    
 };
 
-#endif /* TazerFile_H_ */
+#endif /* OutputFileInner_H_ */

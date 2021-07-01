@@ -133,6 +133,7 @@ Timer::Timer() {
 
     stdoutcp = dup(1);
     myprogname = __progname;
+    _thread_timers = new std::unordered_map<std::thread::id, Timer::ThreadMetric*>;
 }
 
 Timer::~Timer() {
@@ -146,7 +147,7 @@ Timer::~Timer() {
             }
         }
         uint64_t thread_count = 0;
-        for(itor = _thread_timers.begin(); itor != _thread_timers.end(); itor++) {
+        for(itor = _thread_timers->begin(); itor != _thread_timers->end(); itor++) {
             thread_count++;
             ss << std::endl << "[TAZER] " << myprogname << " thread " << thread_count << std::endl;
             for (int i = 0; i < lastMetric; i++) {
@@ -159,9 +160,10 @@ Timer::~Timer() {
         dprintf(stdoutcp, "[TAZER] %s\n%s\n", myprogname.c_str(), ss.str().c_str());
     }
     
-    for(itor = _thread_timers.begin(); itor != _thread_timers.end(); itor++) {
+    for(itor = _thread_timers->begin(); itor != _thread_timers->end(); itor++) {
         delete itor->second;
     }
+    delete _thread_timers;
 }
 
 uint64_t Timer::getCurrentTime() {
@@ -202,30 +204,31 @@ void Timer::addAmt(MetricType type, Metric metric, uint64_t amt) {
 }
 
 void Timer::threadStart(std::thread::id id) {
-    if (!_thread_timers[id]->depth->load(std::memory_order_relaxed))
-        _thread_timers[id]->current->store(getCurrentTime(), std::memory_order_relaxed);
-    _thread_timers[id]->depth->fetch_add(1, std::memory_order_relaxed);
+    if (!(*_thread_timers)[id]->depth->load(std::memory_order_relaxed))
+        (*_thread_timers)[id]->current->store(getCurrentTime(), std::memory_order_relaxed);
+    (*_thread_timers)[id]->depth->fetch_add(1, std::memory_order_relaxed);
 }
 
 void Timer::threadEnd(std::thread::id id, MetricType type, Metric metric) {
-    if (_thread_timers[id]->depth->load(std::memory_order_relaxed) == 1) {
-        _thread_timers[id]->time[type][metric]->fetch_add((getCurrentTime() - _thread_timers[id]->current->load(std::memory_order_relaxed)), std::memory_order_relaxed);
-        _thread_timers[id]->cnt[type][metric]->fetch_add(1, std::memory_order_relaxed);
+    if ((*_thread_timers)[id]->depth->load(std::memory_order_relaxed) == 1) {
+        uint64_t x = getCurrentTime() - (*_thread_timers)[id]->current->load(std::memory_order_relaxed);
+        (*_thread_timers)[id]->time[type][metric]->fetch_add(x, std::memory_order_relaxed);
+        (*_thread_timers)[id]->cnt[type][metric]->fetch_add(1, std::memory_order_relaxed);
     }
-    _thread_timers[id]->depth->fetch_sub(1, std::memory_order_relaxed);
+    (*_thread_timers)[id]->depth->fetch_sub(1, std::memory_order_relaxed);
 }
 
 void Timer::threadAddAmt(std::thread::id id, MetricType type, Metric metric, uint64_t amt) {
-    _thread_timers[id]->amt[type][metric]->fetch_add(amt, std::memory_order_relaxed);
+    (*_thread_timers)[id]->amt[type][metric]->fetch_add(amt, std::memory_order_relaxed);
 }
 
 void Timer::addThread(std::thread::id id) {
-    //_thread_timers[id] = *(new Timer::ThreadMetric());
-    _thread_timers[id] = new Timer::ThreadMetric();
+    //(*_thread_timers)[id] = *(new Timer::ThreadMetric());
+    (*_thread_timers)[id] = new Timer::ThreadMetric();
 }
 
 bool Timer::checkThread(std::thread::id id) {
-    if(_thread_timers.find(id) == _thread_timers.end())
+    if(_thread_timers->find(id) == _thread_timers->end())
         return false;
     else
         return true;

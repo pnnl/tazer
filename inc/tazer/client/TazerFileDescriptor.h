@@ -77,6 +77,7 @@
 
 #include "TazerFile.h"
 #include "Trackable.h"
+#include "OutputFile.h"
 
 class TazerFileDescriptor : public Trackable<int, TazerFileDescriptor *> {
   public:
