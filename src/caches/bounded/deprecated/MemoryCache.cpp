@@ -100,6 +100,9 @@
 MemoryCache::MemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : BoundedCache(cacheName, type, cacheSize, blockSize, associativity) {
     std::cout << "[TAZER] "
               << "Constructing " << _name << " in memory cache" << std::endl;
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
+    stats.threadStart(thread_id);
     stats.start();
     _binLock = new MultiReaderWriterLock(_numBins);
     _binLock->writerLock(0);
@@ -113,9 +116,13 @@ MemoryCache::MemoryCache(std::string cacheName, CacheType type, uint64_t cacheSi
     // log(this) << (void *)_blkIndex << " " << (void *)((uint8_t *)_blkIndex + (_numBlocks * sizeof(BlockEntry))) << std::endl;
     _binLock->writerUnlock(0);
     stats.end(false, CacheStats::Metric::constructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::constructor);
 }
 
 MemoryCache::~MemoryCache() {
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
+    stats.threadStart(thread_id);
     stats.start();
     // log(this) << "deleting " << _name << " in memory cache, collisions: " << _collisions << std::endl;
     // std::cout<<"[TAZER] " << "numBlks: " << _numBlocks << " numBins: " << _numBins << " cacheSize: " << _cacheSize << std::endl;
@@ -136,6 +143,7 @@ MemoryCache::~MemoryCache() {
     delete[] _blkIndex;
     delete _binLock;
     stats.end(false, CacheStats::Metric::destructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::destructor);
     stats.print(_name);
     std::cout << std::endl;
 }

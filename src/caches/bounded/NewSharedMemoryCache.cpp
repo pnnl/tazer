@@ -97,7 +97,10 @@
 
 NewSharedMemoryCache::NewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : NewBoundedCache(cacheName, type, cacheSize, blockSize, associativity) {
     // std::cout<<"[TAZER] " << "Constructing " << _name << " in shared memory cache" << std::endl;
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
     stats.start();
+    stats.threadStart(thread_id);
     std::string filePath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
 
     int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
@@ -153,12 +156,16 @@ NewSharedMemoryCache::NewSharedMemoryCache(std::string cacheName, CacheType type
 
     _shared = true;
     stats.end(false, CacheStats::Metric::constructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::constructor);
 }
 
 NewSharedMemoryCache::~NewSharedMemoryCache() {
     //std::cout<<"[TAZER] " << "deleting " << _name << " in shared memory cache, collisions: " << _collisions << std::endl;
     //std::cout<<"[TAZER] " << "numBlks: " << _numBlocks << " numBins: " << _numBins << " cacheSize: " << _cacheSize << std::endl;
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
     stats.start();
+    stats.threadStart(thread_id);
     if (false) {
         //code from FileCacheRegister...
     }
@@ -174,6 +181,7 @@ NewSharedMemoryCache::~NewSharedMemoryCache() {
     }
     std::cout<<_name<<" number of empty blocks: "<<numEmpty<<std::endl;
     stats.end(false, CacheStats::Metric::destructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::destructor);
     stats.print(_name);
     std::cout << std::endl;
 

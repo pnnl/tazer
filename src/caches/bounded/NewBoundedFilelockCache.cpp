@@ -107,7 +107,10 @@ NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheTyp
                                                                                                                                                            _stat((unixxstat_t)dlsym(RTLD_NEXT, "stat")),
                                                                                                                                                            _cachePath(cachePath),
                                                                                                                                                            _myOutstandingWrites(0) {
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
     stats.start();
+    stats.threadStart(thread_id);
     std::error_code err;
     std::string shmPath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
     // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
@@ -301,11 +304,15 @@ NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheTyp
     //     *init = 1;
     // }
     stats.end(false, CacheStats::Metric::constructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::constructor);
 }
 
 NewBoundedFilelockCache::~NewBoundedFilelockCache() {
     _terminating = true;
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
     stats.start();
+    stats.threadStart(thread_id);
     while (_outstandingWrites.load()) {
         std::this_thread::yield();
     }
@@ -322,6 +329,7 @@ NewBoundedFilelockCache::~NewBoundedFilelockCache() {
     // std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
     // shm_unlink(shmPath.c_str());
     stats.end(false, CacheStats::Metric::destructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::destructor);
     stats.print(_name);
     debug() << std::endl;
 }

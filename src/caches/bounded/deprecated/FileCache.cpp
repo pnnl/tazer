@@ -100,6 +100,9 @@ FileCache::FileCache(std::string cacheName, CacheType type, uint64_t cacheSize, 
                                                                                                                                     _lseek((unixlseek_t)dlsym(RTLD_NEXT, "lseek")),
                                                                                                                                     _fsync((unixfdatasync_t)dlsym(RTLD_NEXT, "fsync")) {
     //_pid = (unsigned int)getpid();
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
+    stats.threadStart(thread_id);
     stats.start();
     _blocksfd = -1;
     _blkIndexfd = -1;
@@ -211,9 +214,13 @@ FileCache::FileCache(std::string cacheName, CacheType type, uint64_t cacheSize, 
     // }
     _binLock->writerUnlock(0);
     stats.end(false, CacheStats::Metric::constructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::constructor);
 }
 
 FileCache::~FileCache() {
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
+    stats.threadStart(thread_id);
     stats.start();
     std::cout
         << "[TAZER] " << _name << " deleting" << std::endl;
@@ -237,6 +244,7 @@ FileCache::~FileCache() {
     (*_close)(_blocksfd);
     _blocksfd = -1;
     stats.end(false, CacheStats::Metric::destructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::destructor);
     stats.print(_name);
     std::cout << std::endl;
 

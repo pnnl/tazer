@@ -97,9 +97,13 @@
 #define DPRINTF(...)
 
 LocalFileCache::LocalFileCache(std::string cacheName, CacheType type) : Cache(cacheName,type) {
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
+    stats.threadStart(thread_id);
     stats.start();
     _lock = new ReaderWriterLock();
     stats.end(false,CacheStats::Metric::constructor);
+    stats.threadEnd(thread_id, false,CacheStats::Metric::constructor);
     // //log(this) /*std::cout*/<<"[TAZER] " << "Constructing " << _name << " in network cache" << std::endl;
 }
 
@@ -135,8 +139,13 @@ bool LocalFileCache::writeBlock(Request *req) {
 }
 
 void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
     stats.start(); //read
     stats.start(); //ovh
+    stats.threadStart(thread_id);
+    stats.threadStart(thread_id);
+    
     log(this) << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << std::endl;
     req->time = Timer::getCurrentTime();
     req->originating = this;
@@ -156,18 +165,24 @@ void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::s
     if (file.first) { //we have an open file stream! (represents a hit)
         if (!prefetch) {
             stats.addAmt(prefetch, CacheStats::Metric::hits, req->size);
+            stats.threadAddAmt(thread_id, prefetch, CacheStats::Metric::hits, req->size);
         }
         else {
             stats.addAmt(prefetch, CacheStats::Metric::prefetches, 1);
+            stats.threadAddAmt(thread_id, prefetch, CacheStats::Metric::prefetches, 1);
         }
         // uint64_t htime = Timer::getCurrentTime();
         stats.end(prefetch, CacheStats::Metric::ovh);
+        stats.threadEnd(thread_id, prefetch, CacheStats::Metric::ovh);
         stats.start(); //hits
+        stats.threadStart(thread_id);
         file.second->writerLock();
         uint8_t *buff = getBlockData(file.first, blkIndex, memblkSize,fileSize);
         file.second->writerUnlock();
         stats.end(prefetch, CacheStats::Metric::hits);
+        stats.threadEnd(thread_id, prefetch, CacheStats::Metric::hits);
         stats.start(); //ovh
+        stats.threadStart(thread_id);
         req->data = buff;
         req->originating = this;
         req->reservedMap[this] = 1;
@@ -177,17 +192,24 @@ void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::s
     }
     else {
         stats.addAmt(prefetch, CacheStats::Metric::misses, 1);
+        stats.threadAddAmt(thread_id, prefetch, CacheStats::Metric::misses, 1);
         
         req->time = Timer::getCurrentTime() - req->time;
         updateRequestTime(req->time);
         stats.end(prefetch, CacheStats::Metric::ovh);
+        stats.threadEnd(thread_id, prefetch, CacheStats::Metric::ovh);
         stats.start(); //misses
+        stats.threadStart(thread_id);
         _nextLevel->readBlock(req, reads, priority);
         stats.end(prefetch, CacheStats::Metric::misses);
+        stats.threadEnd(thread_id, prefetch, CacheStats::Metric::misses);
         stats.start(); //ovh
+        stats.threadStart(thread_id);
     }
     stats.end(prefetch, CacheStats::Metric::ovh);
     stats.end(prefetch, CacheStats::Metric::read);
+    stats.threadEnd(thread_id, prefetch, CacheStats::Metric::ovh);
+    stats.threadEnd(thread_id, prefetch, CacheStats::Metric::read);
 }
 
 Cache *LocalFileCache::addNewLocalFileCache(std::string cacheName, CacheType type) {

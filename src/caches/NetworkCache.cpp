@@ -100,17 +100,25 @@
 NetworkCache::NetworkCache(std::string cacheName, CacheType type, PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> &txPool, PriorityThreadPool<std::packaged_task<Request *()>> &decompPool) : Cache(cacheName,type),
                                                                                                                                                                                                       _transferPool(txPool),
                                                                                                                                                                                                       _decompPool(decompPool) {
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
     stats.start();
+    stats.threadStart(thread_id);
     _lock = new ReaderWriterLock();
     stats.end(false, CacheStats::Metric::constructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::constructor);
     // //log(this) /*std::cout*/<<"[TAZER] " << "Constructing " << _name << " in network cache" << std::endl;
 }
 
 NetworkCache::~NetworkCache() {
     ////log(this) /*std::cout*/<<"[TAZER] " << "deleting " << _name << " in network cache" << std::endl;
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
     stats.start();
+    stats.threadStart(thread_id);
     delete _lock;
     stats.end(false, CacheStats::Metric::destructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::destructor);
     stats.print(_name);
     std::cout << std::endl;
 }
@@ -204,9 +212,13 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
                     if (compress) {
 
                         auto task = std::packaged_task<Request *()>([this, req, data, dataSize, size, blk, priority]() {
+                            std::thread::id thread_id = std::this_thread::get_id();
+                            stats.checkThread(thread_id, true);
                             stats.start();
+                            stats.threadStart(thread_id);
                             return decompress(req, data, dataSize, size, blk);
                             stats.end(priority != 0, CacheStats::Metric::hits);
+                            stats.threadEnd(thread_id, priority != 0, CacheStats::Metric::hits);
                         });
                         fut = task.get_future();
                         _decompPool.addTask(priority, std::move(task));
@@ -245,9 +257,14 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
 }
 
 void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
     stats.start(); //read
     stats.start(); //ovh
     stats.start(); //hits
+    stats.threadStart(thread_id);
+    stats.threadStart(thread_id);
+    stats.threadStart(thread_id);
     // std::cout << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << std::endl;
     // req->trace+=_name+":";
     req->time = Timer::getCurrentTime();
@@ -255,6 +272,8 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
     bool prefetch = priority != 0;
 
     auto task = std::packaged_task<std::shared_future<Request *>()>([this, req, priority, prefetch] { //packaged task allow the transfer to execute on an asynchronous tx thread.
+        std::thread::id thread_id = std::this_thread::get_id();
+        stats.checkThread(thread_id, true);
         Connection *sev = NULL;
         _lock->readerLock();
         ConnectionPool* pool = _conPoolMap[req->fileIndex];
@@ -282,6 +301,7 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
         }
         pool->pushConnection(sev, true);
         stats.addAmt(prefetch, CacheStats::Metric::hits, req->size);
+        stats.threadAddAmt(thread_id, prefetch, CacheStats::Metric::hits, req->size);
         // req->trace+=", received->";
         return fut.share();
     });
@@ -292,6 +312,9 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
     stats.end(prefetch, CacheStats::Metric::hits);
     stats.end(prefetch, CacheStats::Metric::ovh);
     stats.end(prefetch, CacheStats::Metric::read);
+    stats.threadEnd(thread_id, prefetch, CacheStats::Metric::hits);
+    stats.threadEnd(thread_id, prefetch, CacheStats::Metric::ovh);
+    stats.threadEnd(thread_id, prefetch, CacheStats::Metric::read);
 }
 
 void NetworkCache::setFileCompress(uint32_t index, bool compress) {

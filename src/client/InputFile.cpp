@@ -262,11 +262,16 @@ void InputFile::open() {
             bool created;
             NetworkCache *nc = (NetworkCache *)_cache->getCacheByName(NETWORKCACHENAME);
             // std::cout << "[TAZER] init meta time: " << _initMetaTime << std::endl;
+            std::thread::id thread_id = std::this_thread::get_id();
+            nc->stats.checkThread(thread_id, true);
             nc->stats.addTime(false, CacheStats::Metric::ovh, _initMetaTime);
+            nc->stats.threadAddTime(thread_id, false, CacheStats::Metric::ovh, _initMetaTime);
             nc->stats.start();
+            nc->stats.threadStart(thread_id);
             ConnectionPool *pool = ConnectionPool::addNewConnectionPool(_name, _compress, _connections, created);
             _fileSize = pool->openFileOnAllServers();
             nc->stats.end(false, CacheStats::Metric::ovh);
+            nc->stats.threadEnd(thread_id, false, CacheStats::Metric::ovh);
             if (_fileSize) {
                 _blkSize = Config::memoryCacheBlocksize;
                 if (_fileSize < _blkSize)
@@ -365,9 +370,14 @@ bool InputFile::trackRead(size_t count, uint32_t index, uint32_t startBlock, uin
 
 ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
     if (_active.load() && _numBlks) {
+        std::thread::id thread_id = std::this_thread::get_id();
+        _cache->stats.checkThread(thread_id, true);
         _cache->stats.start(); // "read" timer
         _cache->stats.start(); // "hit"  timer
         _cache->stats.start(); // "ovh" timer
+        _cache->stats.threadStart(thread_id);
+        _cache->stats.threadStart(thread_id);
+        _cache->stats.threadStart(thread_id);
 
         if (_filePos[index] >= _fileSize) {
             log(this) << "[TAZER] " << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
@@ -375,6 +385,9 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
             _cache->stats.end(false, CacheStats::Metric::ovh);
             _cache->stats.end(false, CacheStats::Metric::hits);
             _cache->stats.end(false, CacheStats::Metric::read);
+            _cache->stats.threadEnd(thread_id, false, CacheStats::Metric::ovh);
+            _cache->stats.threadEnd(thread_id, false, CacheStats::Metric::hits);
+            _cache->stats.threadEnd(thread_id, false, CacheStats::Metric::read);
             return 0;
         }
 
@@ -402,12 +415,16 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
         uint64_t priority = 0;
         for (uint32_t blk = startBlock; blk < endBlock; blk++) {
             _cache->stats.end(false, CacheStats::Metric::ovh);
+            _cache->stats.threadEnd(thread_id, false, CacheStats::Metric::ovh);
             auto request = _cache->requestBlock(blk, _blkSize, _regFileIndex, reads, priority);
             _cache->stats.start(); //ovh
+            _cache->stats.threadStart(thread_id);
             if (request->ready) {  //the block was in a client side cache!!
                 // err(this) << "reading block "<<blk<<" from: "<<request->originating->name()<<std::endl;
                 auto amt = copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
+                request->originating->stats.checkThread(thread_id, true);
                 request->originating->stats.addAmt(false, CacheStats::Metric::read, amt);
+                request->originating->stats.threadAddAmt(thread_id, false, CacheStats::Metric::read, amt);
                 _cache->bufferWrite(request);
             }
             else {
@@ -434,6 +451,7 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
             uint32_t blk = (*it).first;
 
             _cache->stats.end(false, CacheStats::Metric::ovh);
+            _cache->stats.threadEnd(thread_id, false, CacheStats::Metric::ovh);
             auto stallTime = Timer::getCurrentTime();
 
             auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
@@ -442,29 +460,39 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
                 err(this) <<"(net) something missing!!!!!!!! r: "<<(void*)request<<" wc: "<<request->waitingCache<<" oc: "<<(void*)request->originating<<std::endl;
             }
             if(request->waitingCache != CacheType::empty ){
+                _cache->getCacheByType(request->waitingCache)->stats.checkThread(thread_id, true);
                 _cache->getCacheByType(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls,  (Timer::getCurrentTime() - stallTime) - request->retryTime, 1);
+                _cache->getCacheByType(request->waitingCache)->stats.threadAddTime(thread_id, 0, CacheStats::Metric::stalls,  (Timer::getCurrentTime() - stallTime) - request->retryTime, 1);
             }
             else {
                 err(this) << "(net) waiting cache was empty" <<std::endl;
             }
+            request->originating->stats.checkThread(thread_id, true);
             request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
+            request->originating->stats.threadAddTime(thread_id, 0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
             _cache->stats.start(); //ovh
+            _cache->stats.threadStart(thread_id);
             if (request->ready) {  // hmm what does it mean if this is NULL? do we need to catch and report this?
                 // err(this) << "reading block "<<blk<<" from: "<<request->originating->name()<<std::endl;
                 auto amt = copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
                 if(request->waitingCache != CacheType::empty ){
+                    _cache->getCacheByType(request->waitingCache)->stats.checkThread(thread_id, true);
                     _cache->getCacheByType(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, amt);
+                    _cache->getCacheByType(request->waitingCache)->stats.threadAddAmt(thread_id, 0, CacheStats::Metric::stalls, amt);
                 }
                 else {
                     err(this) << "(net) waiting cache was empty" <<std::endl;
                 }
+                request->originating->stats.checkThread(thread_id, true);
                 request->originating->stats.addAmt(false, CacheStats::Metric::stalled, amt);
+                request->originating->stats.threadAddAmt(thread_id, false, CacheStats::Metric::stalled, amt);
                 _cache->bufferWrite(request);
             }
         }
         for (auto it = local_reads.begin(); it != local_reads.end(); ++it) {
             uint32_t blk = (*it).first;
             _cache->stats.end(false, CacheStats::Metric::ovh);
+            _cache->stats.threadEnd(thread_id, false, CacheStats::Metric::ovh);
             auto stallTime = Timer::getCurrentTime();
 
             auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
@@ -473,23 +501,32 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
                 err(this) <<"(local) something missing!!!!!!!! r: "<<(void*)request<<" wc: "<<request->waitingCache<<" oc: "<<(void*)request->originating<<std::endl;
             }
             if(request->waitingCache != CacheType::empty ){
+                _cache->getCacheByType(request->waitingCache)->stats.checkThread(thread_id, true);
                 _cache->getCacheByType(request->waitingCache)->stats.addTime(false, CacheStats::Metric::stalls, (Timer::getCurrentTime() - stallTime) - request->retryTime, 1);
+                _cache->getCacheByType(request->waitingCache)->stats.threadAddTime(thread_id, false, CacheStats::Metric::stalls, (Timer::getCurrentTime() - stallTime) - request->retryTime, 1);
             }
             else{
                 err(this) << "(local) waiting cache was empty" <<std::endl;
             }
             request->originating->stats.addTime(false, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
+            request->originating->stats.checkThread(thread_id, true);
+            request->originating->stats.threadAddTime(thread_id, false, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
             _cache->stats.start(); //ovh
+            _cache->stats.threadStart(thread_id);
             if (request->ready) {  // hmm what does it mean if this is NULL? do we need to catch and report this?
                 // err(this) << "reading block "<<blk<<" from: "<<request->originating->name()<<std::endl;
                 auto amt = copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
                 if(request->waitingCache != CacheType::empty ){
+                    _cache->getCacheByType(request->waitingCache)->stats.checkThread(thread_id, true);
                     _cache->getCacheByType(request->waitingCache)->stats.addAmt(false, CacheStats::Metric::stalls, amt);
+                    _cache->getCacheByType(request->waitingCache)->stats.threadAddAmt(thread_id, false, CacheStats::Metric::stalls, amt);
                 }
                 else{
                     err(this) << "(local) waiting cache was empty" <<std::endl;
                 }
+                request->originating->stats.checkThread(thread_id, true);
                 request->originating->stats.addAmt(false, CacheStats::Metric::stalled, amt);
+                request->originating->stats.threadAddAmt(thread_id, false, CacheStats::Metric::stalled, amt);
                 _cache->bufferWrite(request);
             }
         }
@@ -501,6 +538,11 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
         _cache->stats.end(false, CacheStats::Metric::ovh);
         _cache->stats.end(false, CacheStats::Metric::hits);
         _cache->stats.end(false, CacheStats::Metric::read);
+        _cache->stats.threadAddAmt(thread_id, false, CacheStats::Metric::hits, _blkSize);
+        _cache->stats.threadAddAmt(thread_id, false, CacheStats::Metric::read, count);
+        _cache->stats.threadEnd(thread_id, false, CacheStats::Metric::ovh);
+        _cache->stats.threadEnd(thread_id, false, CacheStats::Metric::hits);
+        _cache->stats.threadEnd(thread_id, false, CacheStats::Metric::read);
         return count;
     }
     return 0;

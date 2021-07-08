@@ -146,10 +146,10 @@ Timer::~Timer() {
                 ss << "[TAZER] " << metricTypeName[i] << " " << metricName[j] << " " << _time[i][j] / billion << " " << _cnt[i][j] << " " << _amt[i][j] << std::endl;
             }
         }
-        uint64_t thread_count = 0;
+        //uint64_t thread_count = 0;
         for(itor = _thread_timers->begin(); itor != _thread_timers->end(); itor++) {
-            thread_count++;
-            ss << std::endl << "[TAZER] " << myprogname << " thread " << thread_count << std::endl;
+            //thread_count++;
+            ss << std::endl << "[TAZER] " << myprogname << " thread " << (*itor).first << std::endl;
             for (int i = 0; i < lastMetric; i++) {
                 for (int j = 0; j < last; j++) {
                     ss << "[TAZER] " << metricTypeName[i] << " " << metricName[j] << " " << itor->second->time[i][j]->load(std::memory_order_relaxed) / billion << " "

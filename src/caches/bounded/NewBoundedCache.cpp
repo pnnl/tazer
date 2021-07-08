@@ -103,7 +103,10 @@ NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, ui
                                                                                                                           _outstanding(0) {
 
     // log(this) /*debug()*/<< "Constructing " << _name << " in NewBoundedCache" << std::endl;
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
     stats.start();
+    stats.threadStart(thread_id);
     log(this) << _name << " " << _cacheSize << " " << _blockSize << " " << _numBlocks << std::endl;
     if (_associativity == 0 || _associativity > _numBlocks) { //make fully associative
         _associativity = _numBlocks;
@@ -116,6 +119,7 @@ NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, ui
     log(this) << _name << " " << _cacheSize << " " << _blockSize << " " << _numBlocks << " " << _associativity << " " << _numBins << std::endl;
     _localLock = new ReaderWriterLock();
     stats.end(false, CacheStats::Metric::constructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::constructor);
 }
 
 template <class Lock>
@@ -388,8 +392,12 @@ bool NewBoundedCache<Lock>::writeBlock(Request *req) {
 
 template <class Lock>
 void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
     stats.start(); //read
     stats.start(); //ovh
+    stats.threadStart(thread_id);
+    stats.threadStart(thread_id);
     bool prefetch = priority != 0;
     if (_type == CacheType::boundedGlobalFile){
         req->printTrace=true;
@@ -443,18 +451,24 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
                 
                 if (entry->prefetched > 0) {
                     stats.addAmt(prefetch, CacheStats::Metric::prefetches, 1);
+                    stats.threadAddAmt(thread_id, prefetch, CacheStats::Metric::prefetches, 1);
                     entry->prefetched = prefetch;
                 }
                 else {
                     stats.addAmt(prefetch, CacheStats::Metric::hits, req->size);
+                    stats.threadAddAmt(thread_id, prefetch, CacheStats::Metric::hits, req->size);
                 }
                 req->trace()<<"update access time"<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
                 blockSet(entry, fileIndex, index, BLK_AVAIL, _type, entry->prefetched, 1, req); //increment is handled here
                 stats.end(prefetch, CacheStats::Metric::ovh);
+                stats.threadEnd(thread_id, prefetch, CacheStats::Metric::ovh);
                 stats.start(); // hits
+                stats.threadStart(thread_id);
                 buff = getBlockData(entry->id);
                 stats.end(prefetch, CacheStats::Metric::hits);
+                stats.threadEnd(thread_id, prefetch, CacheStats::Metric::hits);
                 stats.start(); // ovh
+                stats.threadStart(thread_id);
                 req->data = buff;
                 req->originating = this;
                 req->ready = true;
@@ -471,6 +485,7 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
                 req->trace()<<"miss "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
                 trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
                 stats.addAmt(prefetch, CacheStats::Metric::misses, 1);
+                stats.threadAddAmt(thread_id, prefetch, CacheStats::Metric::misses, 1);
                 
                 if (entry->status == BLK_EMPTY || entry->status == BLK_EVICT){ // we need to get the data!
                     req->trace()<<"we reserve: "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
@@ -485,10 +500,14 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
                     req->trace()<<"reserved go to next level "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
                     updateRequestTime(req->time);
                     stats.end(prefetch, CacheStats::Metric::ovh);
+                    stats.threadEnd(thread_id, prefetch, CacheStats::Metric::ovh);
                     stats.start(); //miss
+                    stats.threadStart(thread_id);
                     _nextLevel->readBlock(req, reads, priority);
                     stats.end(prefetch, CacheStats::Metric::misses);
+                    stats.threadEnd(thread_id, prefetch, CacheStats::Metric::misses);
                     stats.start(); //ovh
+                    stats.threadStart(thread_id);
                 }
                 else { //BLK_WR || BLK_RES || BLK_PRE
                     
@@ -559,10 +578,14 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
             req->trace()<<"no space got to next level ("<<req->blkIndex<<","<<req->fileIndex<<")"<<std::endl;
             updateRequestTime(req->time);
             stats.end(prefetch, CacheStats::Metric::ovh);
+            stats.threadEnd(thread_id, prefetch, CacheStats::Metric::ovh);
             stats.start(); //miss
+            stats.threadStart(thread_id);
             _nextLevel->readBlock(req, reads, priority);
             stats.end(prefetch, CacheStats::Metric::misses);
+            stats.threadEnd(thread_id, prefetch, CacheStats::Metric::misses);
             stats.start(); //ovh
+            stats.threadStart(thread_id);
         }
     }
     else {
@@ -572,6 +595,8 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
     }
     stats.end(prefetch, CacheStats::Metric::ovh);
     stats.end(prefetch, CacheStats::Metric::read);
+    stats.threadEnd(thread_id, prefetch, CacheStats::Metric::ovh);
+    stats.threadEnd(thread_id, prefetch, CacheStats::Metric::read);
 }
 
 //TODO: merge/reimplement from old cache structure...

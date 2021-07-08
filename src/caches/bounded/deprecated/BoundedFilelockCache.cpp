@@ -107,7 +107,10 @@ BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, CacheType type
                                                                                                                                                            _stat((unixxstat_t)dlsym(RTLD_NEXT, "stat")),
                                                                                                                                                            _cachePath(cachePath),
                                                                                                                                                            _myOutstandingWrites(0) {
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
     stats.start();
+    stats.threadStart(thread_id);
     std::error_code err;
     std::experimental::filesystem::create_directories(_cachePath, err);
     int ret = mkdir((_cachePath + "/init_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + "/").c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH); //if -1 means another process has already reserved
@@ -254,11 +257,15 @@ BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, CacheType type
     //     *init = 1;
     // }
     stats.end(false, CacheStats::Metric::constructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::constructor);
 }
 
 BoundedFilelockCache::~BoundedFilelockCache() {
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
     _terminating = true;
     stats.start();
+    stats.threadStart(thread_id);
     while (_outstandingWrites.load()) {
         std::this_thread::yield();
     }
@@ -274,6 +281,7 @@ BoundedFilelockCache::~BoundedFilelockCache() {
     // std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
     // shm_unlink(shmPath.c_str());
     stats.end(false, CacheStats::Metric::destructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::destructor);
     stats.print(_name);
     debug() << std::endl;
 }

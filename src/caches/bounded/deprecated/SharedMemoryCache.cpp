@@ -97,6 +97,9 @@
 
 SharedMemoryCache::SharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : BoundedCache(cacheName, type, cacheSize, blockSize, associativity) {
     // std::cout<<"[TAZER] " << "Constructing " << _name << " in shared memory cache" << std::endl;
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
+    stats.threadStart(thread_id);
     stats.start();
     std::string filePath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
 
@@ -152,11 +155,15 @@ SharedMemoryCache::SharedMemoryCache(std::string cacheName, CacheType type, uint
 
     _shared = true;
     stats.end(false, CacheStats::Metric::constructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::constructor);
 }
 
 SharedMemoryCache::~SharedMemoryCache() {
     //std::cout<<"[TAZER] " << "deleting " << _name << " in shared memory cache, collisions: " << _collisions << std::endl;
     //std::cout<<"[TAZER] " << "numBlks: " << _numBlocks << " numBins: " << _numBins << " cacheSize: " << _cacheSize << std::endl;
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
+    stats.threadStart(thread_id);
     stats.start();
     if (false) {
         //code from FileCacheRegister...
@@ -173,6 +180,7 @@ SharedMemoryCache::~SharedMemoryCache() {
     }
     std::cout<<_name<<" number of empty blocks: "<<numEmpty<<std::endl;
     stats.end(false, CacheStats::Metric::destructor);
+    stats.threadEnd(thread_id, false, CacheStats::Metric::destructor);
     stats.print(_name);
     std::cout << std::endl;
 }

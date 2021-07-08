@@ -413,6 +413,7 @@ bool ServeFile::sendData(Connection *connection, uint64_t blk, Request *request)
 
 bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
     if (!_output && blk < _numBlks) {
+        std::thread::id thread_id = std::this_thread::get_id();
         log(this) << "Transfer blk " << blk << " of " << _numBlks << std::endl;
         while (1) {
             //See if it is in the cache or someone is in the process of loading it
@@ -421,7 +422,9 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
 
             auto request = _cache.requestBlock(blk, _blkSize, _regFileIndex, reads, 0);
             if (request->ready) {
+                request->originating->stats.checkThread(thread_id, true);
                 request->originating->stats.addAmt(false, CacheStats::Metric::read, _blkSize);
+                request->originating->stats.threadAddAmt(thread_id, false, CacheStats::Metric::read, _blkSize);
                 // std::cout << "cache: " << _name << " " << blk << std::endl;
                 return sendData(connection, blk, request);
             }
@@ -430,22 +433,29 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
                 auto stallTime = Timer::getCurrentTime();
                 auto request = pending.get().get();
                 if (request->waitingCache != CacheType::empty){
+                    _cache.getCacheByType(request->waitingCache)->stats.checkThread(thread_id, true);
                     _cache.getCacheByType(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls, Timer::getCurrentTime() - stallTime, 1);
+                    _cache.getCacheByType(request->waitingCache)->stats.threadAddTime(thread_id, 0, CacheStats::Metric::stalls, Timer::getCurrentTime() - stallTime, 1);
                 }
                 else{
                     err(this) << "waiting cache is empty"<<std::endl;
                 }
+                request->originating->stats.checkThread(thread_id, true);
                 request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
+                request->originating->stats.threadAddTime(thread_id, 0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
                 if (request->ready) {
                     // std::cout << "net: " << _name << " " << blk << std::endl;
                     if (request->waitingCache != CacheType::empty){
+                        _cache.getCacheByType(request->waitingCache)->stats.checkThread(thread_id, true);
                         _cache.getCacheByType(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, _blkSize);
+                        _cache.getCacheByType(request->waitingCache)->stats.threadAddAmt(thread_id, 0, CacheStats::Metric::stalls, _blkSize);
                     }
                     else{
                         err(this) << "waiting cache is empty"<<std::endl;
                     }
 
                     request->originating->stats.addAmt(false, CacheStats::Metric::stalled, _blkSize);
+                    request->originating->stats.threadAddAmt(thread_id, false, CacheStats::Metric::stalled, _blkSize);
                     return sendData(connection, blk, request);
                 }
                 else {

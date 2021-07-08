@@ -108,6 +108,10 @@ Cache::Cache(std::string name,  CacheType type) : Loggable(Config::CacheLog, nam
                                  _shared(false),
                                  _outstandingWrites(0),
                                  _terminating(false) {
+
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
+    stats.threadStart(thread_id);
     stats.start();
 
     // std::cout << "[TAZER] "
@@ -180,11 +184,15 @@ Cache::Cache(std::string name,  CacheType type) : Loggable(Config::CacheLog, nam
 
     memset(_ioTimes, 0, _ioWinSize * sizeof(uint64_t));
     memset(_ioAmts, 0, _ioWinSize * sizeof(uint64_t));
+    stats.threadEnd(thread_id, false, CacheStats::Metric::constructor);
     stats.end(false, CacheStats::Metric::constructor);
 }
 
 Cache::~Cache() {
     log(this) << "deleting " << _name << " in cache" << std::endl;
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
+    stats.threadStart(thread_id);
     stats.start();
     while (_outstandingWrites.load()) {
         std::this_thread::yield();
@@ -205,6 +213,7 @@ Cache::~Cache() {
         delete _prefetchPool;
         delete _writePool;
         // delete _fm_lock;
+        stats.threadEnd(thread_id, false, CacheStats::Metric::destructor);
         stats.end(false, CacheStats::Metric::destructor);
         stats.print(_name);
     }
@@ -394,6 +403,9 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
     std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> net_reads;
     std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> local_reads;
 
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
+
     // int numBlks = blocks.size();
     uint64_t startBlk = blocks[0];
 
@@ -402,7 +414,10 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         auto request = requestBlock(blk, blkSize, regFileIndex, reads, priority);
         if (request->ready) { //the block was in a client side cache!!
             //std::cout << "********************Data was on client side!!!" <<std::endl;
+            request->originating->stats.checkThread(thread_id, true);
             request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
+            request->originating->stats.threadAddAmt(thread_id, true, CacheStats::Metric::read, blkSize);
+
             bufferWrite(request);
            
         }
@@ -423,8 +438,11 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
 
         if (request->data) { // hmm what does it mean if this is NULL? do we need to catch and report this?
+            request->originating->stats.checkThread(thread_id, true);
             request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
             stats.addAmt(true, CacheStats::Metric::read, blkSize);
+            request->originating->stats.threadAddAmt(thread_id, true, CacheStats::Metric::read, blkSize);
+            stats.threadAddAmt(thread_id, true, CacheStats::Metric::read, blkSize);
             bufferWrite(request);
             
         }
@@ -433,8 +451,11 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         // uint32_t blk = (*it).first;
         auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
         if (request->data) {                     // hmm what does it mean if this is NULL? do we need to catch and report this?
+            request->originating->stats.checkThread(thread_id, true);
             request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
             stats.addAmt(true, CacheStats::Metric::read, blkSize);
+            request->originating->stats.threadAddAmt(thread_id, true, CacheStats::Metric::read, blkSize);
+            stats.threadAddAmt(thread_id, true, CacheStats::Metric::read, blkSize);
             bufferWrite(request);
         }
     }
