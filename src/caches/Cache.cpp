@@ -345,7 +345,7 @@ bool Cache::bufferWrite(Request *req) {
     }
 
     if (!req->data){ //This will cause a seg fault instead of infinitely spinning
-        debug()<<"EXITING!!!!"<<std::endl;
+        debug()<<"EXITING!!!!"<<__FILE__<<" "<<__LINE__<<std::endl;
         raise(SIGSEGV);
     }
 

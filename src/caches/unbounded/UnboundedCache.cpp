@@ -237,7 +237,7 @@ void UnboundedCache::readBlock(Request* req, std::unordered_map<uint32_t, std::s
     else {
         std::cerr << "[TAZER] "
                   << "shouldnt be here yet... need to handle" << std::endl;
-        debug()<<"EXITING!!!!"<<std::endl;
+        debug()<<"EXITING!!!!"<<__FILE__<<" "<<__LINE__<<std::endl;
         raise(SIGSEGV);
     }
     // if (!prefetch) {

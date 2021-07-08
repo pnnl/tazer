@@ -302,7 +302,7 @@ bool NewBoundedCache<Lock>::writeBlock(Request *req) {
                     if (t_cnt == 0) {
                         debug()<<req->str()<<std::endl;
                         log(this) << _name << " underflow in orig activecnt (" << t_cnt - 1 << ") for blkIndex: " <<  entry->id << " fileIndex: " << fileIndex << " index: " << index << std::endl;
-                        debug()<<"EXITING!!!!"<<std::endl;
+                        debug()<<"EXITING!!!!"<<__FILE__<<" "<<__LINE__<<std::endl;
                         exit(0);
                     }
                 }
@@ -313,8 +313,8 @@ bool NewBoundedCache<Lock>::writeBlock(Request *req) {
                 entry = getBlockEntry(req->indexMap[this], req); 
                 req->trace(_name) <<" entry: "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
                 debug()<<req->str()<<std::endl;
-                debug()<<"EXITING!!!!"<<std::endl;
-                exit(0);
+                // debug()<<"EXITING!!!!"<<__FILE__<<" "<<__LINE__<<<<std::endl;
+                // exit(0);
             }
             _binLock->writerUnlock(binIndex,req);
             // debug()<<_type<<" deleting data "<<req->id<<std::endl;
@@ -599,7 +599,7 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
     else {
         *this /*std::cerr*/ << "[TAZER]"
                             << "shouldnt be here yet... need to handle" << std::endl;
-        debug()<<"EXITING!!!!"<<std::endl;
+        debug()<<"EXITING!!!!"<<__FILE__<<" "<<__LINE__<<std::endl;
         raise(SIGSEGV);
     }
     stats.end(prefetch, CacheStats::Metric::ovh);
