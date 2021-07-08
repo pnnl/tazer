@@ -118,7 +118,7 @@ bool ServeFile::addConnections() {
 
     // std::cout << fd << std::endl;
     uint32_t numServers = 0;
-    if (fd != -1) {
+    if (fd !=  -1) {
         int64_t fileSize = lseek(fd, 0L, SEEK_END);
         lseek(fd, 0L, SEEK_SET);
         char *meta = new char[fileSize + 1];
@@ -129,48 +129,138 @@ bool ServeFile::addConnections() {
             return 0;
         }
         meta[fileSize] = '\0';
-        std::string metaStr(meta);
+        
+        std::string tazerVersion = "TAZER0.1";
+        std::string expectedType = "forwarding";
+        std::stringstream ss(meta);
+        std::string curLine;
+        std::string hostAddr;
+        std::string type = "\0";
+        int port;
+        typedef enum {
+            DEFAULT,
+            SERVER,
+            //OPTIONS,
+            DONE
+        } State;
 
-        size_t cur = 0;
-        size_t l = metaStr.find("|");
-        while (l != std::string::npos) {
-            std::string line = metaStr.substr(cur, l - cur);
-            // std::cout << cur << " " << line << std::endl;
-
-            uint32_t lcur = 0;
-            uint32_t next = line.find(":", lcur);
-            if (next == std::string::npos) {
+        //first line must be TAZER0.1
+        std::getline(ss, curLine);
+        if(curLine.compare(0, tazerVersion.length(), tazerVersion) != 0) {
                 std::cout << "0:improperly formatted meta file" << std::endl;
-                break;
-            }
-            std::string hostAddr = line.substr(lcur, next - lcur);
-
-            // std::cout << "hostaddr: " << hostAddr << std::endl;
-            lcur = next + 1;
-            next = line.size();
-            if (next == std::string::npos) {
+                return (numServers > 0);
+        }
+        //second line must be type=forwarding
+        std::getline(ss, curLine);
+        if(curLine.compare(0, 5, "type=") != 0 || curLine.compare(5, expectedType.length(), expectedType) != 0) {
                 std::cout << "1:improperly formatted meta file" << std::endl;
-                break;
-            }
-            int port = atoi(line.substr(lcur, next - lcur).c_str());
-            // std::cout << "port: " << port << std::endl;
+                return (numServers > 0);
+        }
 
-            Connection *connection = Connection::addNewClientConnection(hostAddr, port);
-            // std::cout << hostAddr << " " << port << " " << connection << std::endl;
-            if (connection) {
-                if (ConnectionPool::useCnt->count(connection->addrport()) == 0) {
-                    ConnectionPool::useCnt->emplace(connection->addrport(), 0);
-                    ConnectionPool::consecCnt->emplace(connection->addrport(), 0);
+        State state = DEFAULT;
+        std::getline(ss, curLine);
+        while(state != DONE) {
+            if(state == SERVER) {
+                //found [server]
+                hostAddr = "\0";
+                port = 0;
+                while(std::getline(ss, curLine)) {
+                    if(curLine.compare(0, 5, "host=") == 0) {
+                        hostAddr = curLine.substr(5, (curLine.length() - 5));
+                        std::cout << "hostaddr: " << hostAddr << std::endl;
+                    }
+                    else if(curLine.compare(0, 5, "port=") == 0) {
+                        port = atoi(curLine.substr(5, (curLine.length() - 5)).c_str());
+                        std::cout << "port: " << port << std::endl;
+                    }
+                    else {
+                        break;
+                    }
                 }
-                _connections.push_back(connection);
-                numServers++;
+                //make sure the host and port were given
+                if(hostAddr == "\0" || port == 0) {
+                    std::cout << "2:improperly formatted meta file" << std::endl;
+                    return (numServers > 0);
+                }
+
+                Connection *connection = Connection::addNewClientConnection(hostAddr, port);
+                if (connection) {
+                    if (ConnectionPool::useCnt->count(connection->addrport()) == 0) {
+                        ConnectionPool::useCnt->emplace(connection->addrport(), 0);
+                        ConnectionPool::consecCnt->emplace(connection->addrport(), 0);
+                    }
+                    _connections.push_back(connection);
+                    numServers++;
+                }
+
+                state = DEFAULT;
             }
-            cur = l + 1;
-            l = metaStr.find("|", cur);
+            else {
+                //DEFAULT
+                if(curLine.compare(0, 8, "[server]") == 0) {
+                    state = SERVER;
+                }
+                else if(!std::getline(ss, curLine)) {
+                    state = DONE;
+                }
+            }
         }
         close(fd);
         delete[] meta;
     }
+    // if (fd != -1) {
+    //     int64_t fileSize = lseek(fd, 0L, SEEK_END);
+    //     lseek(fd, 0L, SEEK_SET);
+    //     char *meta = new char[fileSize + 1];
+    //     int ret = read(fd, (void *)meta, fileSize);
+    //     if (ret < 0) {
+    //         std::cout << "ERROR: Failed to read connections metafile: " << strerror(errno) << std::endl;
+    //         // raise(SIGSEGV);
+    //         return 0;
+    //     }
+    //     meta[fileSize] = '\0';
+    //     std::string metaStr(meta);
+
+    //     size_t cur = 0;
+    //     size_t l = metaStr.find("|");
+    //     while (l != std::string::npos) {
+    //         std::string line = metaStr.substr(cur, l - cur);
+    //         // std::cout << cur << " " << line << std::endl;
+
+    //         uint32_t lcur = 0;
+    //         uint32_t next = line.find(":", lcur);
+    //         if (next == std::string::npos) {
+    //             std::cout << "0:improperly formatted meta file" << std::endl;
+    //             break;
+    //         }
+    //         std::string hostAddr = line.substr(lcur, next - lcur);
+
+    //         // std::cout << "hostaddr: " << hostAddr << std::endl;
+    //         lcur = next + 1;
+    //         next = line.size();
+    //         if (next == std::string::npos) {
+    //             std::cout << "1:improperly formatted meta file" << std::endl;
+    //             break;
+    //         }
+    //         int port = atoi(line.substr(lcur, next - lcur).c_str());
+    //         // std::cout << "port: " << port << std::endl;
+
+    //         Connection *connection = Connection::addNewClientConnection(hostAddr, port);
+    //         // std::cout << hostAddr << " " << port << " " << connection << std::endl;
+    //         if (connection) {
+    //             if (ConnectionPool::useCnt->count(connection->addrport()) == 0) {
+    //                 ConnectionPool::useCnt->emplace(connection->addrport(), 0);
+    //                 ConnectionPool::consecCnt->emplace(connection->addrport(), 0);
+    //             }
+    //             _connections.push_back(connection);
+    //             numServers++;
+    //         }
+    //         cur = l + 1;
+    //         l = metaStr.find("|", cur);
+    //     }
+    //     close(fd);
+    //     delete[] meta;
+    // }
 
     return (numServers > 0);
 }
@@ -209,14 +299,16 @@ void ServeFile::cache_init(void) {
     #endif
 
     
-
+std::cout << "HERE 1" << std::endl;
     if (Config::useBoundedFilelockCache) {
+std::cout << "HERE 2" << std::endl;
         c = BoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
         std::cerr << "[TAZER] " << "bounded filelock cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }
-
+std::cout << "HERE 3" << std::endl;
     if (Config::useServerNetworkCache) {
+std::cout << "HERE 4" << std::endl;
         c = NetworkCache::addNewNetworkCache(NETWORKCACHENAME, CacheType::network, ServeFile::_transferPool, ServeFile::_decompressionPool);
         std::cerr << "[TAZER] " << "net cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
