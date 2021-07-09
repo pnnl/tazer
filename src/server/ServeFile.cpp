@@ -83,9 +83,10 @@
 #include <thread>
 #include <unistd.h>
 
-#include "caches/bounded/deprecated/BoundedFilelockCache.h"
-#include "caches/bounded/deprecated/MemoryCache.h"
-#include "caches/bounded/deprecated/SharedMemoryCache.h"
+#include "caches/Cache.h"
+#include "caches/bounded/NewBoundedFilelockCache.h"
+#include "caches/bounded/NewMemoryCache.h"
+#include "caches/bounded/NewSharedMemoryCache.h"
 #include "caches/unbounded/UrlCache.h"
 #include "caches/LocalFileCache.h"
 #include "caches/NetworkCache.h"
@@ -100,6 +101,8 @@
 #include "UnixIO.h"
 #include "lz4.h"
 #include "lz4hc.h"
+#include "MetaFileParser.h"
+
 
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
@@ -203,76 +206,22 @@ bool ServeFile::addConnections() {
                 else if(!std::getline(ss, curLine)) {
                     state = DONE;
                 }
-            }
+            }  
         }
         close(fd);
         delete[] meta;
     }
-    // if (fd != -1) {
-    //     int64_t fileSize = lseek(fd, 0L, SEEK_END);
-    //     lseek(fd, 0L, SEEK_SET);
-    //     char *meta = new char[fileSize + 1];
-    //     int ret = read(fd, (void *)meta, fileSize);
-    //     if (ret < 0) {
-    //         std::cout << "ERROR: Failed to read connections metafile: " << strerror(errno) << std::endl;
-    //         // raise(SIGSEGV);
-    //         return 0;
-    //     }
-    //     meta[fileSize] = '\0';
-    //     std::string metaStr(meta);
-
-    //     size_t cur = 0;
-    //     size_t l = metaStr.find("|");
-    //     while (l != std::string::npos) {
-    //         std::string line = metaStr.substr(cur, l - cur);
-    //         // std::cout << cur << " " << line << std::endl;
-
-    //         uint32_t lcur = 0;
-    //         uint32_t next = line.find(":", lcur);
-    //         if (next == std::string::npos) {
-    //             std::cout << "0:improperly formatted meta file" << std::endl;
-    //             break;
-    //         }
-    //         std::string hostAddr = line.substr(lcur, next - lcur);
-
-    //         // std::cout << "hostaddr: " << hostAddr << std::endl;
-    //         lcur = next + 1;
-    //         next = line.size();
-    //         if (next == std::string::npos) {
-    //             std::cout << "1:improperly formatted meta file" << std::endl;
-    //             break;
-    //         }
-    //         int port = atoi(line.substr(lcur, next - lcur).c_str());
-    //         // std::cout << "port: " << port << std::endl;
-
-    //         Connection *connection = Connection::addNewClientConnection(hostAddr, port);
-    //         // std::cout << hostAddr << " " << port << " " << connection << std::endl;
-    //         if (connection) {
-    //             if (ConnectionPool::useCnt->count(connection->addrport()) == 0) {
-    //                 ConnectionPool::useCnt->emplace(connection->addrport(), 0);
-    //                 ConnectionPool::consecCnt->emplace(connection->addrport(), 0);
-    //             }
-    //             _connections.push_back(connection);
-    //             numServers++;
-    //         }
-    //         cur = l + 1;
-    //         l = metaStr.find("|", cur);
-    //     }
-    //     close(fd);
-    //     delete[] meta;
-    // }
-
     return (numServers > 0);
 }
 
 void ServeFile::cache_init(void) {
     uint64_t level = 0;
-    Cache *c = MemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::serverCacheSize, Config::serverCacheBlocksize, Config::serverCacheAssociativity);
+    Cache *c = NewMemoryCache::addNewMemoryCache(NEWMEMORYCACHENAME, CacheType::privateMemory, Config::serverCacheSize, Config::serverCacheBlocksize, Config::serverCacheAssociativity);
     std::cerr << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
     ServeFile::_cache.addCacheLevel(c, ++level);
 
     if (Config::useSharedMemoryCache) {
-        c = SharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME, CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
+        c = NewSharedMemoryCache::addNewSharedMemoryCache(NEWSHAREDMEMORYCACHENAME, CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
         std::cerr << "[TAZER] " << "shared mem  cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }
@@ -299,10 +248,9 @@ void ServeFile::cache_init(void) {
     #endif
 
     
-std::cout << "HERE 1" << std::endl;
+
     if (Config::useBoundedFilelockCache) {
-std::cout << "HERE 2" << std::endl;
-        c = BoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
+        c = NewBoundedFilelockCache::addNewBoundedFilelockCache(NEWBOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
         std::cerr << "[TAZER] " << "bounded filelock cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }

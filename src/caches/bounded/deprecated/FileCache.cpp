@@ -252,9 +252,7 @@ FileCache::~FileCache() {
 }
 
 
-void FileCache::cleanUpBlockData(uint8_t *data) {
-    delete[] data;
-}
+
 
 Cache *FileCache::addNewFileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string filePath) {
     // std::string newFileName("FileCache");
@@ -329,6 +327,11 @@ void FileCache::preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t off
     }
     // auto elapsed = Timer::getCurrentTime() - start;
     // updateIoRate(elapsed, origSize);
+}
+
+void FileCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<" delete data"<<std::endl;
+    delete[] data;
 }
 
 uint8_t *FileCache::getBlockData(unsigned int blockIndex) {

@@ -96,6 +96,7 @@ class NetworkCache : public Cache {
     void addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
 
   private:
+    virtual void cleanUpBlockData(uint8_t *data);
     Request *decompress(Request *req, char *compBuf, uint32_t compBufSize, uint32_t blkBufSize, uint32_t blk);
     // std::future<Request*> requestBlk(Connection *server, uint32_t blkStart, uint32_t blkEnd, uint32_t fileIndex, uint32_t priority);
     std::future<Request *> requestBlk(Connection *server, Request *req, uint32_t priority, bool &success);

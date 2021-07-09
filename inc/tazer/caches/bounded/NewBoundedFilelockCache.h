@@ -78,7 +78,7 @@
 #include "FcntlReaderWriterLock.h"
 #include "ReaderWriterLock.h"
 
-#define NewBoundedFilelockCacheNAME "boundedfilelock"
+#define NEWBOUNDEDFILELOCKCACHENAME "boundedfilelock"
 #define BFL_FILENAME_LEN 1024
 
 class NewBoundedFilelockCache : public NewBoundedCache<FcntlBoundedReaderWriterLock> {
@@ -87,6 +87,7 @@ class NewBoundedFilelockCache : public NewBoundedCache<FcntlBoundedReaderWriterL
     virtual ~NewBoundedFilelockCache();
 
     virtual bool writeBlock(Request *req);
+    virtual void readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority);
     static Cache *addNewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
 
   private:

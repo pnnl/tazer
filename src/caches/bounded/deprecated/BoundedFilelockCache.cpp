@@ -598,6 +598,7 @@ bool BoundedFilelockCache::writeBlock(Request *req) {
 }
 
 void BoundedFilelockCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<" delete data"<<std::endl;
     delete[] data;
 }
 

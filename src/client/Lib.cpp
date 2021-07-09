@@ -107,6 +107,10 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
+#define TAZER_ID "TAZER"
+#define TAZER_ID_LEN 5 
+#define TAZER_VERSION "0.1"
+#define TAZER_VERSION_LEN 3 //5+3
 
 
 

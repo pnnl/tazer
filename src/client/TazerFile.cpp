@@ -106,7 +106,6 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
     _eof(false),
     _compress(false),
     _prefetch(false),
-    _save_local(false),
     _blkSize(1),
     _initMetaTime(0),
     _active(false),
@@ -203,14 +202,6 @@ bool TazerFile::readMetaInfo() {
                     _prefetch = false;
                     log(this) << "prefetch: " << _prefetch << std::endl;
                 }
-                else if(curLine.compare(0, 15, "save_local=true") == 0) {
-                    _save_local = true;
-                    log(this) << "save_local: " << _save_local << std::endl;
-                }
-                else if(curLine.compare(0, 16, "save_local=false") == 0) {
-                    _save_local = false;
-                    log(this) << "save_local: " << _save_local << std::endl;
-                }
                 else if(curLine.compare(0, 11, "block_size=") == 0) {
                     _blkSize = atoi(curLine.substr(11, (curLine.length() - 11)).c_str());
                     log(this) << "blkSize: " << _blkSize << std::endl;
@@ -249,12 +240,13 @@ bool TazerFile::readMetaInfo() {
             break;
         }
     }
-
+    
     delete[] meta;
     TIMEON(fprintf(stderr, "Meta Time: %lu\n", Timer::getCurrentTime() - t1));
     _initMetaTime = Timer::getCurrentTime()-start;
     return (numServers > 0);
 }
+
 
 TazerFile::Type TazerFile::type() {
     return _type;

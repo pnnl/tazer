@@ -181,6 +181,7 @@ bool UrlCache::blockSet(unsigned int index, unsigned int fileIndex, uint8_t byte
 }
 
 void UrlCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<" delete data"<<std::endl;
     delete[] data;
 }
 

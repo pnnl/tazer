@@ -102,7 +102,7 @@ class BoundedCache : public Cache {
     virtual void addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
 
     //TODO: merge/reimplement from old cache structure...
-    virtual void cleanReservation();
+    // virtual void cleanReservation();
 
   protected:
     struct BlockEntry {
@@ -146,6 +146,8 @@ class BoundedCache : public Cache {
 
     virtual bool blockReserve(uint32_t index, uint32_t fileIndex, bool &found, int &reservedIndex, Request* req, bool prefetch = false);
 
+    virtual void cleanUpBlockData(uint8_t *data) = 0;
+
     // virtual int getBlockIndex(uint32_t index, uint32_t fileIndex);
     virtual int getBlockIndex(uint32_t index, uint32_t fileIndex, BlockEntry *entry = NULL);
     virtual int oldestBlockIndex(uint32_t index, uint32_t fileIndex, bool &found, Request* req);
@@ -158,6 +160,7 @@ class BoundedCache : public Cache {
     virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL) = 0;
 
     // virtual char *blockMiss(uint32_t index, uint64_t &size, uint32_t fileIndex, std::unordered_map<uint64_t,std::future<std::future<Request*>>> &reads);
+    
     virtual uint8_t *getBlockData(uint32_t blockIndex) = 0;
     virtual void setBlockData(uint8_t *data, uint32_t blockIndex, uint64_t size) = 0;
     virtual void readBlockEntry(uint32_t blockIndex, BlockEntry *entry) = 0;

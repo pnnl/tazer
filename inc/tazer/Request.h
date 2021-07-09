@@ -145,16 +145,14 @@ struct Request {
                                                                                            size(size), time(Timer::getCurrentTime()),retryTime(0), ready(false), 
                                                                                            printTrace(false),globalTrigger(false), waitingCache(CacheType::empty),id(Request::ID_CNT.fetch_add(1)) {
     }
-    ~Request(){
-        if (printTrace){
-            Loggable::log()<<str();
-        }
-    }
+    ~Request();
     std::string str();
-    RequestTrace trace(bool trigger = true);
+    RequestTrace trace(std::string tag = "");
+    RequestTrace trace(bool trigger = true, std::string tag = "");
     private:
         
         static std::atomic<uint64_t> ID_CNT;
+        static std::atomic<uint64_t> RET_ID_CNT;
 };
 
 

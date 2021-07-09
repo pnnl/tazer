@@ -138,7 +138,7 @@ class Cache : public Loggable, public Trackable<std::string, Cache *> {
     virtual void cleanUpBlockData(uint8_t *data);
 
     //TODO: merge/reimplement from old cache structure
-    virtual void cleanReservation();
+    // virtual void cleanReservation();
 
     // virtual void updateIoRate(uint64_t elapsed, uint64_t size);
     void updateRequestTime(uint64_t time);
@@ -203,6 +203,8 @@ class Cache : public Loggable, public Trackable<std::string, Cache *> {
     bool _shared;
     std::atomic<std::uint64_t> _outstandingWrites;
     bool _terminating;
+
+    friend class Request;
   private:
     
     ThreadPool<std::function<void()>> *_writePool;

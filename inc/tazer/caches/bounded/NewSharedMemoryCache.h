@@ -98,6 +98,7 @@ class NewSharedMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
     virtual void blockSet(BlockEntry* blk,  uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch, int activeUpdate,Request* req);
     virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
    
+    virtual void cleanUpBlockData(uint8_t *data);
     virtual uint8_t *getBlockData(unsigned int blockIndex);
     virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size);
     virtual BlockEntry* getBlockEntry(uint32_t blockIndex, Request* req);

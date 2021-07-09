@@ -95,6 +95,7 @@ class SharedMemoryCache : public BoundedCache<MultiReaderWriterLock> {
     };
     virtual uint8_t *getBlockData(uint32_t blockIndex);
     virtual void setBlockData(uint8_t *data, uint32_t blockIndex, uint64_t size);
+    virtual void cleanUpBlockData(uint8_t *data);
     virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch);
     virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
     virtual void readBlockEntry(uint32_t blockIndex, BlockEntry *entry);
@@ -107,6 +108,7 @@ class SharedMemoryCache : public BoundedCache<MultiReaderWriterLock> {
     virtual bool anyUsers(uint32_t blk, Request* req);
 
   private:
+  
     MemBlockEntry *_blkIndex;
     uint8_t *_blocks;
 };

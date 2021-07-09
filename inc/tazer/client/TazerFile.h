@@ -124,11 +124,13 @@ class TazerFile : public Loggable, public Trackable<std::string, TazerFile *> {
     uint64_t blkSize();
     bool compress();
     bool prefetch();
-    virtual bool active();
+    bool active();
     bool eof(uint32_t index);
 
   protected:
+    std::string findMetaParam(std::string param, std::string server, bool required);
     bool readMetaInfo();
+    
 
     TazerFile::Type _type;
     std::string _name;
@@ -141,7 +143,6 @@ class TazerFile : public Loggable, public Trackable<std::string, TazerFile *> {
     //Properties from meta data file
     bool _compress;
     uint32_t _prefetch; //Adding the option to prefetch or not a particular file
-    bool _save_local; //Not used yet
     uint64_t _blkSize;
 
     uint64_t _initMetaTime;

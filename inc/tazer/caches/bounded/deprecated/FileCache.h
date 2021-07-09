@@ -118,6 +118,7 @@ class FileCache : public BoundedCache<MultiReaderWriterLock> {
     virtual int incBlkCnt(uint32_t blk, Request* req);
     virtual int decBlkCnt(uint32_t blk, Request* req);
     virtual bool anyUsers(uint32_t blk, Request* req);
+    
 
     MemBlockEntry *_blkIndex;
 

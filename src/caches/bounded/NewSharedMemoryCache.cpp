@@ -196,8 +196,12 @@ uint8_t *NewSharedMemoryCache::getBlockData(unsigned int blockIndex) {
     return temp;
 }
 
+void NewSharedMemoryCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<" (not)delete data"<<std::endl;
+}
+
 void NewSharedMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate, Request* req) {
-    req->trace()<<"setting block: "<<blockEntryStr(blk)<<std::endl;
+    req->trace(_name)<<"setting block: "<<blockEntryStr(blk)<<std::endl;
     blk->fileIndex = fileIndex;
     blk->blockIndex = blockIndex;
     blk->timeStamp = Timer::getCurrentTime();
@@ -212,7 +216,7 @@ void NewSharedMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_
     else if (activeUpdate < 0){
         decBlkCnt(blk,req);
     }
-    req->trace()<<"blockset: "<<blockEntryStr(blk)<<std::endl;
+    req->trace(_name)<<"blockset: "<<blockEntryStr(blk)<<std::endl;
 }
 
 typename NewBoundedCache<MultiReaderWriterLock>::BlockEntry* NewSharedMemoryCache::getBlockEntry(uint32_t blockIndex, Request* req){
@@ -257,11 +261,11 @@ std::string  NewSharedMemoryCache::blockEntryStr(BlockEntry *entry){
 }
 
 int NewSharedMemoryCache::incBlkCnt(BlockEntry * entry, Request* req) {
-    req->trace()<<"incrementing"<<std::endl;
+    req->trace(_name)<<"incrementing"<<std::endl;
     return ((MemBlockEntry*)entry)->activeCnt.fetch_add(1);
 }
 int NewSharedMemoryCache::decBlkCnt(BlockEntry * entry, Request* req) {
-    req->trace()<<"decrementing"<<std::endl;
+    req->trace(_name)<<"decrementing"<<std::endl;
     return ((MemBlockEntry*)entry)->activeCnt.fetch_sub(1);
 }
 

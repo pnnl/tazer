@@ -210,6 +210,7 @@ NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheTyp
          if (fd < 0 ){
             debug()<<"[TAZER ERROR] "<<_name<<" data creation open error "<<strerror(errno)<<std::endl;
         }
+        debug()<<"cache size: "<<_cacheSize<<" num blocks "<<_numBlocks<<" _blockSize "<<_blockSize <<" calc size "<<  _numBlocks * _blockSize * sizeof(uint8_t)<<std::endl;
         ret = ftruncate(fd, _numBlocks * _blockSize * sizeof(uint8_t));
         if (ret == -1 ){
             debug()<<"[TAZER ERROR] "<<_name<<" data creation ftruncate error "<<strerror(errno)<<std::endl;
@@ -454,9 +455,9 @@ void NewBoundedFilelockCache::writeFileBlockEntry(FileBlockEntry *entry) {
 }
 
 NewBoundedCache<FcntlBoundedReaderWriterLock>::BlockEntry* NewBoundedFilelockCache::getBlockEntry(uint32_t entryIndex, Request* req){
-    req->trace()<<"getting entry before"<<blockEntryStr(&_cacheEntries[entryIndex])<<std::endl;
+    req->trace(_name)<<"getting entry before"<<blockEntryStr(&_cacheEntries[entryIndex])<<std::endl;
     FileBlockEntry* entry = &_cacheEntries[entryIndex];
-    req->trace()<<"getting entry after"<<blockEntryStr(&_cacheEntries[entryIndex])<<std::endl;
+    req->trace(_name)<<"getting entry after"<<blockEntryStr(&_cacheEntries[entryIndex])<<std::endl;
     readFileBlockEntry(entry,req);
     return entry;
 }
@@ -554,24 +555,24 @@ bool NewBoundedFilelockCache::sameBlk(BlockEntry *blk1, BlockEntry *blk2) {
 
 //this assumes the passed in entry is valid, which is should be if the ecompasssing bin is locked (which it should be)
 int NewBoundedFilelockCache::incBlkCnt(BlockEntry * entry, Request* req) {
-    req->trace()<<"incrementing"<<std::endl;
-    req->trace()<<blockEntryStr(entry)<<std::endl;
+    req->trace(_name)<<"incrementing"<<std::endl;
+    req->trace(_name)<<blockEntryStr(entry)<<std::endl;
     int curCnt = ((FileBlockEntry*) entry)->activeCnt;
     ((FileBlockEntry*) entry)->activeCnt+=1;
     ((FileBlockEntry*) entry)->pid = _pid;
     writeFileBlockEntry(((FileBlockEntry*) entry));
-    req->trace()<<blockEntryStr(entry)<<std::endl;
+    req->trace(_name)<<blockEntryStr(entry)<<std::endl;
     return curCnt; //equivalent to what the memcaches do (fetch_add)
 }
 
 int NewBoundedFilelockCache::decBlkCnt(BlockEntry * entry, Request* req) {
-    req->trace()<<"decrementing"<<std::endl;
-    req->trace()<<blockEntryStr(entry)<<std::endl;
+    req->trace(_name)<<"decrementing"<<std::endl;
+    req->trace(_name)<<blockEntryStr(entry)<<std::endl;
     int curCnt = ((FileBlockEntry*) entry)->activeCnt;
     ((FileBlockEntry*) entry)->activeCnt-=1;
     ((FileBlockEntry*) entry)->pid = _pid;
     writeFileBlockEntry(((FileBlockEntry*) entry));
-    req->trace()<<blockEntryStr(entry)<<std::endl;
+    req->trace(_name)<<blockEntryStr(entry)<<std::endl;
     return curCnt; //equivalent to what the memcaches do(fetch_sub)
 }
 
@@ -582,7 +583,7 @@ bool NewBoundedFilelockCache::anyUsers(BlockEntry * entry, Request* req) {
 }
 
 void NewBoundedFilelockCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate,Request* req) {
-    req->trace()<<"setting block: "<<blockEntryStr(blk)<<std::endl;
+    req->trace(_name)<<"setting block: "<<blockEntryStr(blk)<<std::endl;
     FileBlockEntry* entry = (FileBlockEntry*)blk;
     _localLock->readerLock();
     std::string name = _fileMap[fileIndex].name;
@@ -601,17 +602,17 @@ void NewBoundedFilelockCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint
         entry->prefetched = prefetched;
     }
     if (activeUpdate >0){
-        req->trace()<<"incrementing"<<std::endl;
+        req->trace(_name)<<"incrementing"<<std::endl;
         entry->activeCnt+=1; // we do this explicity for files to avoid multiple writes...
     }
     else if (activeUpdate < 0){
-        req->trace()<<"decrementing"<<std::endl;
+        req->trace(_name)<<"decrementing"<<std::endl;
         entry->activeCnt-=1; // we do this explicity for files to avoid multiple writes...
     }
     entry->pid = _pid;
     // log(this) << "blkSet: " << entry.fileIndex << " " << entry.blockIndex << " " << entry.fileName << " " << entry.status << std::endl;
     writeFileBlockEntry(entry);
-    req->trace()<<"blockset: "<<blockEntryStr(entry)<<std::endl;
+    req->trace(_name)<<"blockset: "<<blockEntryStr(entry)<<std::endl;
 
     // FileBlockEntry tempentry;
     // tempentry.id = entry->id;
@@ -626,18 +627,36 @@ void NewBoundedFilelockCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint
 }
 
 bool NewBoundedFilelockCache::writeBlock(Request *req) {
-    _myOutstandingWrites.fetch_add(1);
-    _writePool->addTask([this, req] {
-        //debug()<<"[TAZER] " << "buffered write: " << (void *)originating << std::endl;
-        if (!NewBoundedCache::writeBlock(req)) {
-            DPRINTF("FAILED WRITE...\n");
-        }
-        _myOutstandingWrites.fetch_sub(1);
-    });
+    if (req->reservedMap[this] > 0 || _myOutstandingWrites.load() < 1000 || req->originating == this) {
+        _myOutstandingWrites.fetch_add(1);
+        // std::cout<<"[TAZER] " << "bounded filelock write req id:" << req->id <<" ow: "<<_myOutstandingWrites.load()<< std::endl;
+
+        _writePool->addTask([this, req] {
+            //debug()<<"[TAZER] " << "buffered write: " << (void *)originating << std::endl;
+            if (!NewBoundedCache::writeBlock(req)) {
+                DPRINTF("FAILED WRITE...\n");
+            }
+            _myOutstandingWrites.fetch_sub(1);
+        });
+    }
+    else if (_nextLevel) {
+        _nextLevel->writeBlock(req);
+    }
     return true;
 }
 
+void NewBoundedFilelockCache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
+    
+    if (_myOutstandingWrites.load() < 1000){ 
+        NewBoundedCache::readBlock(req, reads, priority);
+    }
+    else if (_nextLevel) { //so many outstanding requests that we should reduce pressure to the file cache...
+        _nextLevel->readBlock(req, reads, priority);
+    }
+}
+
 void NewBoundedFilelockCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<" delete data"<<std::endl;
     delete[] data;
 }
 
