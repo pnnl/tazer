@@ -406,12 +406,13 @@ bool NewBoundedCache<Lock>::writeBlock(Request *req) {
 
 template <class Lock>
 void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
-    std::thread::id thread_id = std::this_thread::get_id();
+    std::thread::id thread_id = req->threadId;
     stats.checkThread(thread_id, true);
     stats.start(); //read
     stats.start(); //ovh
     stats.threadStart(thread_id);
     stats.threadStart(thread_id);
+
     bool prefetch = priority != 0;
     if (_type == CacheType::globalFileLock){
         req->printTrace=false;
@@ -422,7 +423,6 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
         req->globalTrigger=false;
     }
     req->trace(_name)<<" READ BLOCK"<<std::endl;
-    
     log(this) << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << " nl: " << _nextLevel->name() << std::endl;
     trackBlock(_name, (priority != 0 ? " [BLOCK_PREFETCH_REQUEST] " : " [BLOCK_REQUEST] "), req->fileIndex, req->blkIndex, priority);
     // if ((_nextLevel->name() == NETWORKCACHENAME && getRequestTime() > _nextLevel->getRequestTime()) && Timer::getCurrentTime() % 1000 < 999) {
@@ -443,12 +443,10 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
     uint32_t binIndex = ~0;
     auto index = req->blkIndex;
     auto fileIndex = req->fileIndex;
-
     _localLock->readerLock(); //local lock
     int tsize = _fileMap[fileIndex].blockSize;
     _localLock->readerUnlock();
     binIndex = getBinIndex(index, fileIndex);
-
     if (!req->size) {
         req->size = tsize;
     }
@@ -524,7 +522,6 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
                     stats.threadStart(thread_id);
                 }
                 else { //BLK_WR || BLK_RES || BLK_PRE
-                    
                     incBlkCnt(entry,req); // someone else has already reserved so lets incrememt
                     req->trace(_name)<<"someone else reserved: "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
                     auto  blockIndex= entry->id;

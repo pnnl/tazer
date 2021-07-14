@@ -490,7 +490,7 @@ bool BoundedCache<Lock>::writeBlock(Request *req) {
 
 template <class Lock>
 void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
-    std::thread::id thread_id = std::this_thread::get_id();
+    std::thread::id thread_id = req->threadId;
     stats.checkThread(thread_id, true);
     stats.start(); //read
     stats.start(); //ovh

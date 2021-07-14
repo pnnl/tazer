@@ -21,29 +21,34 @@ make
 
 total_client_nodes=1
 
-workspace=$TAZER_WORKSPACE_ROOT/utils/plot_thread_times/example/workspace
+workspace=/tmp/${USER}_test
 
-data_path=${workspace}/tazer_data
-mkdir -p $data_path
-rm $data_path/test*.dat
-if [ ! -f $data_path/tazer1GB.dat ]; then
-    dd if=/dev/urandom of=$data_path/tazer1GB.dat bs=10M count=100 &
-fi
+data_path=$workspace/server_main
 
-
-tazer_server_port=5001
-tazer_server_task_id=`sbatch -A ippd --parsable --exclude=node04,node33,node23,node24,node43 -N1 start_tazer_server.sh $workspace $TAZER_WORKSPACE_ROOT $TAZER_BUILD_DIR $tazer_server_port`
-tazer_server_nodes=`squeue -j ${tazer_server_task_id} -h -o "%N"`
-while [ -z "$tazer_server_nodes" ]; do
-tazer_server_nodes=`squeue -j ${tazer_server_task_id} -h -o "%N"`
+main_server_port=5001
+tazer_server_task_id=`sbatch -A ippd --parsable --exclude=node04,node33,node23,node24,node43 -N1 main_server.sh $workspace $TAZER_WORKSPACE_ROOT $TAZER_BUILD_DIR $main_server_port`
+main_server_node=`squeue -j ${tazer_server_task_id} -h -o "%N"`
+while [ -z "$main_server_node" ]; do
+main_server_node=`squeue -j ${tazer_server_task_id} -h -o "%N"`
 done
 
-$TAZER_WORKSPACE_ROOT/${TAZER_BUILD_DIR}/test/PingServer $tazer_server_nodes $tazer_server_port 300 1
+$TAZER_WORKSPACE_ROOT/${TAZER_BUILD_DIR}/test/PingServer $main_server_node $main_server_port 300 1
+wait
+
+middle_server_port=5002
+tazer_server_task_id=`sbatch -A ippd --parsable --exclude=node04,node33,node23,node24,node43 -N1 intermediate_server.sh $workspace $TAZER_WORKSPACE_ROOT $TAZER_BUILD_DIR $middle_server_port $main_server_node $main_server_port`
+middle_server_node=`squeue -j ${tazer_server_task_id} -h -o "%N"`
+while [ -z "$middle_server_node" ]; do
+middle_server_node=`squeue -j ${tazer_server_task_id} -h -o "%N"`
+done
+
+$TAZER_WORKSPACE_ROOT/${TAZER_BUILD_DIR}/test/PingServer $middle_server_node $middle_server_port 300 1
 
 wait #need to wait for the temp files to finish being created
 
-sbatch -A ippd --wait --exclude=node04,node33,node23,node24,node43 -N ${total_client_nodes} launch_tazer_clients.sh ${workspace} ${data_path} ${TAZER_WORKSPACE_ROOT} ${TAZER_BUILD_DIR} ${tazer_server_nodes} ${tazer_server_port} 
+sbatch -A ippd --wait --exclude=node04,node33,node23,node24,node43 -N ${total_client_nodes} launch_tazer_clients.sh ${workspace} ${data_path} ${TAZER_WORKSPACE_ROOT} ${TAZER_BUILD_DIR} ${middle_server_node} ${middle_server_port} 
 
 echo "Closing server ..."
 
-$TAZER_WORKSPACE_ROOT/${TAZER_BUILD_DIR}/test/CloseServer $tazer_server_nodes $tazer_server_port 5001
+$TAZER_WORKSPACE_ROOT/${TAZER_BUILD_DIR}/test/CloseServer $main_server_node $main_server_port 5001
+$TAZER_WORKSPACE_ROOT/${TAZER_BUILD_DIR}/test/CloseServer $middle_server_node $middle_server_port 5001

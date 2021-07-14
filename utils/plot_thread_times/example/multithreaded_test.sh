@@ -1,5 +1,5 @@
 #!/bin/bash
-NUM_THREADS=5
+NUM_THREADS=10
 workspace=$1 
 data_path=$2
 tazer_path=$3
@@ -80,7 +80,7 @@ cd ${workspace}/test_${test_id}
     echo "port=${server_port}" >> ${LOCAL_DATA_PATH}/${IN_META_FILE}
     echo "compress=false" >> ${LOCAL_DATA_PATH}/${IN_META_FILE}
     echo "block_size=${blocksize}" >> ${LOCAL_DATA_PATH}/${IN_META_FILE}
-    echo "save_local=false" >> ${LOCAL_DATA_PATH}/${IN_META_FILE}
+    #echo "save_local=false" >> ${LOCAL_DATA_PATH}/${IN_META_FILE}
     echo "prefetch=false" >> ${LOCAL_DATA_PATH}/${IN_META_FILE}
 
     echo "TAZER0.1" | tee ${LOCAL_DATA_PATH}/${OUT_META_FILE}
@@ -91,7 +91,7 @@ cd ${workspace}/test_${test_id}
     echo "port=${server_port}" >> ${LOCAL_DATA_PATH}/${OUT_META_FILE}
     echo "compress=false" >> ${LOCAL_DATA_PATH}/${OUT_META_FILE}
     echo "block_size=${blocksize}" >> ${LOCAL_DATA_PATH}/${OUT_META_FILE}
-    echo "save_local=false" >> ${LOCAL_DATA_PATH}/${OUT_META_FILE}
+    #echo "save_local=false" >> ${LOCAL_DATA_PATH}/${OUT_META_FILE}
     echo "prefetch=false" >> ${LOCAL_DATA_PATH}/${OUT_META_FILE}
     out_file=./log.out
 
@@ -115,10 +115,13 @@ cd ${workspace}/test_${test_id}
     echo "ref_time ${ref_time}"
     #time gdb --ex run --ex bt --args env
     #time gdb --ex run --ex "thread apply all bt" --args env
+
     time TAZER_REF_TIME=${ref_time} TAZER_SHARED_MEM_CACHE=$((${CACHES[0]})) TAZER_SHARED_MEM_CACHE_SIZE=$((${CACHE_SIZES[0]})) \
     TAZER_BB_CACHE=$((${CACHES[1]})) TAZER_BB_CACHE_SIZE=$((${CACHE_SIZES[1]})) \
     TAZER_BOUNDED_FILELOCK_CACHE=${CACHES[2]} TAZER_BOUNDED_FILELOCK_CACHE_SIZE=$((${CACHE_SIZES[2]})) \
     TAZER_PREFETCH=0 LD_PRELOAD=${TAZER_LIB} ${MULTITHREADED_TEST_PATH} ${NUM_THREADS} ${LOCAL_DATA_PATH}/${IN_META_FILE} ${LOCAL_DATA_PATH}/${OUT_META_FILE} ${workspace}/test_${test_id} >& ${output_path}/tazer_output.txt
+
+    
     # /share/apps/gcc/8.1.0/lib64/libasan.so:
     #LD_PRELOAD=/share/apps/gcc/8.1.0/lib64/libasan.so:${TAZER_LIB}
 
@@ -138,6 +141,6 @@ cd ${workspace}/test_${test_id}
 
     python ${tazer_path}/utils/plot_thread_times/plot_thread_times.py ${output_path}/parsed_output.txt ${output_path}/thread_times
 
-} > test_${test_id}.out 2>test_${test_id}.err
+}
 
 exit 0

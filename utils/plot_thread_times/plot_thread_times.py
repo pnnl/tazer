@@ -209,7 +209,6 @@ def plotMachine(machines,s_i,mint):
     snames = np.array(names)[ssind]
     sjobids= np.array(jobids)[ssind]
 
-#figure out which one of these is breaking it
     print(np.sum(tots),np.sum(io_tots),np.sum(exps),np.sum(cpus),"bws: ",np.mean(bws),np.max(bws),np.min(bws))
     global tot_sum
     tot_sum+=np.sum(tots)
@@ -427,14 +426,16 @@ def plotData(path,title,fname,leg_loc):
     # ax.text(0.951, 0.98, "5", transform=ax.transAxes,
     #     verticalalignment='top', bbox=props)
 
-    if "Unbounded" in title or "Local" in title:
-        plt.ylim((0,100))
+    # if "Unbounded" in title or "Local" in title:
+    #     plt.ylim((0,100))
+
+    plt.xticks([])
     # plt.grid(True)
     plt.legend(loc=leg_loc,prop={'size': 12})
     #plt.title(title)
     #plt.ylabel("Exec Time (Minutes)")
     plt.ylabel("Exec Time (Seconds)")
-    plt.xlabel("Thread")
+    plt.xlabel("Threads")
     plt.tight_layout()
     fig.savefig(fname+".pdf")
     plt.show()

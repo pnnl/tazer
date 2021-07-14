@@ -4,6 +4,8 @@ import re
 def getThreads(data):
     pattern = re.compile("^\[TAZER\].* thread [0-9]+")
     id_pattern = re.compile("[0-9]+")
+    cache_names = ["base", "privatememory", "sharedmemory", "burstbuffer", "network", "localfilecache", "boundedfilelock"]
+    is_cache = False
     thread_count = 0
     threads = {}
     threads = set()
@@ -11,7 +13,13 @@ def getThreads(data):
     for line in data:
         if pattern.match(line):
             #print(line)
-            threads.add(id_pattern.search(line).group(0))
+            for cache in cache_names:
+                if cache in line:
+                    is_cache = True
+
+            if is_cache == False:    
+                threads.add(id_pattern.search(line).group(0))
+        is_cache = False
     #print("threads: "+str(threads))
     #print(len(threads))
     return threads
@@ -34,6 +42,8 @@ def getVals(t, data, thread):
                 in_thread = True
             else:
                 in_thread = False
+        if len(line.strip()) == 0:
+            in_thread = False
         # if in_thread:
         #     print(line)
         if "[TAZER] "+t in line:
@@ -83,7 +93,8 @@ def getCacheData(type, name, data, thread):
                 in_thread = True
             else:
                 in_thread = False
-
+        if len(line.strip()) == 0:
+            in_thread = False
         if name+" "+type in line:
             if in_thread:
                 vals = line.split(" ")

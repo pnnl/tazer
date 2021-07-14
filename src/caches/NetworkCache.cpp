@@ -166,6 +166,8 @@ Request *NetworkCache::decompress(Request *req, char *compBuf, uint32_t compBufS
 
 // std::future<Request*> NetworkCache::requestBlk(Connection *server, uint32_t blkStart, uint32_t blkEnd, uint32_t fileIndex, uint32_t priority) {
 std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req, uint32_t priority, bool &success) {
+    std::thread::id thread_id = req->threadId;
+    stats.checkThread(thread_id, true);
     auto fileIndex = req->fileIndex;
     auto blkStart = req->blkIndex;
     auto blkEnd = blkStart;
@@ -207,9 +209,9 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
                 char *data = NULL;
                 uint32_t blk = 0, dataSize = 0;
                 std::string fileName = recSendBlkMsg(server, &data, blk, dataSize, _blkSize);
-                log(this) << fileName << " " << dataSize << " " << blk << std::endl;
+                debug(this) << fileName << " " << dataSize << " " << blk << std::endl;
                 if (data == NULL) {
-                    log(this) << "data null: " << fileName << " " << dataSize << " " << blk << std::endl;
+                    debug(this) << "data null: " << fileName << " " << dataSize << " " << blk << std::endl;
                     success = false;
                     break;
                     // raise(SIGSEGV);
@@ -221,8 +223,8 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
                     if (compress) {
 
                         auto task = std::packaged_task<Request *()>([this, req, data, dataSize, size, blk, priority]() {
-                            std::thread::id thread_id = std::this_thread::get_id();
-                            stats.checkThread(thread_id, true);
+                            std::thread::id thread_id = req->threadId;
+                            // stats.checkThread(thread_id, true);
                             stats.start();
                             stats.threadStart(thread_id);
                             return decompress(req, data, dataSize, size, blk);
@@ -261,12 +263,11 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
     // auto elapsed = Timer::getCurrentTime() - start;
     // updateIoRate(elapsed, sizeSum);
     server->unlock();
-
     return fut;
 }
 
 void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
-    std::thread::id thread_id = std::this_thread::get_id();
+    std::thread::id thread_id = req->threadId;
     stats.checkThread(thread_id, true);
     stats.start(); //read
     stats.start(); //ovh
@@ -282,10 +283,9 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
     req->originating = this;
     req->trace(_name)<<" READ BLOCK"<<std::endl;
     bool prefetch = priority != 0;
-
     auto task = std::packaged_task<std::shared_future<Request *>()>([this, req, priority, prefetch] { //packaged task allow the transfer to execute on an asynchronous tx thread.
-        std::thread::id thread_id = std::this_thread::get_id();
-        stats.checkThread(thread_id, true);
+        std::thread::id thread_id = req->threadId;
+        // stats.checkThread(thread_id, true);
         Connection *sev = NULL;
         _lock->readerLock();
         ConnectionPool* pool = _conPoolMap[req->fileIndex];

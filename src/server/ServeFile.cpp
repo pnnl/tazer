@@ -101,7 +101,7 @@
 #include "UnixIO.h"
 #include "lz4.h"
 #include "lz4hc.h"
-#include "MetaFileParser.h"
+//#include "MetaFileParser.h"
 
 
 
@@ -254,9 +254,7 @@ void ServeFile::cache_init(void) {
         std::cerr << "[TAZER] " << "bounded filelock cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }
-std::cout << "HERE 3" << std::endl;
     if (Config::useServerNetworkCache) {
-std::cout << "HERE 4" << std::endl;
         c = NetworkCache::addNewNetworkCache(NETWORKCACHENAME, CacheType::network, ServeFile::_transferPool, ServeFile::_decompressionPool);
         std::cerr << "[TAZER] " << "net cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
@@ -457,7 +455,6 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
         log(this) << "Transfer blk " << blk << " of " << _numBlks << std::endl;
         while (1) {
             //See if it is in the cache or someone is in the process of loading it
-
             std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> reads;
 
             auto request = _cache.requestBlock(blk, _blkSize, _regFileIndex, reads, 0);
@@ -490,10 +487,9 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
                         _cache.getCacheByType(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, _blkSize);
                         _cache.getCacheByType(request->waitingCache)->stats.threadAddAmt(thread_id, 0, CacheStats::Metric::stalls, _blkSize);
                     }
-                    else{
+                    else{             
                         err(this) << "waiting cache is empty"<<std::endl;
                     }
-
                     request->originating->stats.addAmt(false, CacheStats::Metric::stalled, _blkSize);
                     request->originating->stats.threadAddAmt(thread_id, false, CacheStats::Metric::stalled, _blkSize);
                     return sendData(connection, blk, request);

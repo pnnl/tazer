@@ -151,7 +151,7 @@ void requestBlockFromFile(Connection *connection, char *buff) {
     std::string fileName = parseRequestBlkMsg(buff, start, end);
     //PRINTF("Request blocks %u - %u from %s\n", start, end, fileName.c_str());
     ServeFile *file = ServeFile::getServeFile(fileName);
-    //std::cout<<"[TAZER] "<<"get block "<<fileName<<" "<<connection->addr()<<":"<<connection->port()<<" "<<file<<std::endl;
+    std::cout<<"[TAZER] "<<"get block "<<fileName<<" "<<connection->addr()<<":"<<connection->port()<<" "<<file<<std::endl;
     if (file) {
         for (unsigned int i = start; i <= end; i++) {
             if (!file->transferBlk(connection, i)) {
@@ -317,7 +317,7 @@ int main(int argc, char *argv[]) {
         int newsockfd = raccept(sockfd, (struct sockaddr *)&cli_addr, &clilen); //newsockfd is either used to create a new connection or added to existing connection.
         if (alive.load() && newsockfd > 0) {
             std::string clientAddr(inet_ntoa(cli_addr.sin_addr));
-            //std::cout<<"[TAZER] " << clientAddr << ":" << cli_addr.sin_port << " " << newsockfd << std::endl;
+            std::cout<<"[TAZER] " << clientAddr << ":" << cli_addr.sin_port << " " << newsockfd << std::endl;
             threadPool.addThreadWithTask([=] {
                 bool created = false;
                 Connection *newCon = Connection::addNewHostConnection(clientAddr, cli_addr.sin_port, newsockfd, created);

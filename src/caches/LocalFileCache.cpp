@@ -99,8 +99,8 @@
 LocalFileCache::LocalFileCache(std::string cacheName, CacheType type) : Cache(cacheName,type) {
     std::thread::id thread_id = std::this_thread::get_id();
     stats.checkThread(thread_id, true);
-    stats.threadStart(thread_id);
     stats.start();
+    stats.threadStart(thread_id);
     _lock = new ReaderWriterLock();
     stats.end(false,CacheStats::Metric::constructor);
     stats.threadEnd(thread_id, false,CacheStats::Metric::constructor);
@@ -109,7 +109,16 @@ LocalFileCache::LocalFileCache(std::string cacheName, CacheType type) : Cache(ca
 
 LocalFileCache::~LocalFileCache() {
     ////log(this) /*std::cout*/<<"[TAZER] " << "deleting " << _name << " in network cache" << std::endl;
+    std::thread::id thread_id = std::this_thread::get_id();
+    stats.checkThread(thread_id, true);
+    stats.start();
+    stats.threadStart(thread_id);
+
     delete _lock;
+
+    stats.end(false,CacheStats::Metric::destructor);
+    stats.threadEnd(thread_id, false,CacheStats::Metric::destructor);
+    stats.print(_name);
 }
 
 uint8_t *LocalFileCache::getBlockData(std::ifstream *file, uint32_t blkIndex, uint64_t blkSize,uint64_t fileSize) {
@@ -144,7 +153,7 @@ bool LocalFileCache::writeBlock(Request *req) {
 }
 
 void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
-    std::thread::id thread_id = std::this_thread::get_id();
+    std::thread::id thread_id = req->threadId;
     stats.checkThread(thread_id, true);
     stats.start(); //read
     stats.start(); //ovh

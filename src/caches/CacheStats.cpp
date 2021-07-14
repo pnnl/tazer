@@ -259,9 +259,9 @@ void CacheStats::threadEnd(std::thread::id id, bool prefetch, Metric metric) {
     //     std::cout << "ERROR: depth = " << depth << " for thread id " << id << std::endl;
     //     std::cout << "prefetch = " << prefetch << "Metric = " << metric << std::endl;
     // }
-    // else {
-    //     std::cout << "threadEnd: depth = " << depth << " for thread id " << id << std::endl;
-    // }
+    //else {
+        //std::cout << "threadEnd: depth = " << depth << " for thread id " << id << std::endl;
+    //}
     uint64_t current = (*_thread_stats)[id]->current[depth]->load();
     (*_thread_stats)[id]->time[t][metric]->fetch_add(getCurrentTime() - current);
     (*_thread_stats)[id]->cnt[t][metric]->fetch_add(1);

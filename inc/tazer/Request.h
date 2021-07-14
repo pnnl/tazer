@@ -80,6 +80,7 @@
 
 #include <string.h>
 #include <unordered_map>
+#include <thread>
 
 class Cache;
 
@@ -138,12 +139,13 @@ struct Request {
     std::unordered_map<Cache *, uint64_t> fileIndexMap;
     std::unordered_map<Cache *, uint64_t> statusMap;
     uint64_t id;
+    std::thread::id threadId;
     std::stringstream ss;
 
-    Request() : data(NULL),originating(NULL),blkIndex(0),fileIndex(0),size(0){ }
+    Request() : data(NULL),originating(NULL),blkIndex(0),fileIndex(0),size(0),threadId(std::this_thread::get_id()){ }
     Request(uint32_t blk, uint32_t fileIndex, uint64_t size, Cache *orig, uint8_t *data) : data(data), originating(orig), blkIndex(blk), fileIndex(fileIndex), 
                                                                                            size(size), time(Timer::getCurrentTime()),retryTime(0), ready(false), 
-                                                                                           printTrace(false),globalTrigger(false), waitingCache(CacheType::empty),id(Request::ID_CNT.fetch_add(1)) {
+                                                                                           printTrace(false),globalTrigger(false), waitingCache(CacheType::empty),id(Request::ID_CNT.fetch_add(1)), threadId(std::this_thread::get_id()) {
     }
     ~Request();
     std::string str();

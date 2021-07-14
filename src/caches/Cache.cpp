@@ -417,9 +417,9 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         auto request = requestBlock(blk, blkSize, regFileIndex, reads, priority);
         if (request->ready) { //the block was in a client side cache!!
             //std::cout << "********************Data was on client side!!!" <<std::endl;
-            request->originating->stats.checkThread(thread_id, true);
+            request->originating->stats.checkThread(request->threadId, true);
             request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
-            request->originating->stats.threadAddAmt(thread_id, true, CacheStats::Metric::read, blkSize);
+            request->originating->stats.threadAddAmt(request->threadId, true, CacheStats::Metric::read, blkSize);
 
             bufferWrite(request);
            
@@ -441,10 +441,10 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
 
         if (request->data) { // hmm what does it mean if this is NULL? do we need to catch and report this?
-            request->originating->stats.checkThread(thread_id, true);
+            request->originating->stats.checkThread(request->threadId, true);
             request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
             stats.addAmt(true, CacheStats::Metric::read, blkSize);
-            request->originating->stats.threadAddAmt(thread_id, true, CacheStats::Metric::read, blkSize);
+            request->originating->stats.threadAddAmt(request->threadId, true, CacheStats::Metric::read, blkSize);
             stats.threadAddAmt(thread_id, true, CacheStats::Metric::read, blkSize);
             bufferWrite(request);
             
@@ -454,10 +454,10 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         // uint32_t blk = (*it).first;
         auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
         if (request->data) {                     // hmm what does it mean if this is NULL? do we need to catch and report this?
-            request->originating->stats.checkThread(thread_id, true);
+            request->originating->stats.checkThread(request->threadId, true);
             request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
             stats.addAmt(true, CacheStats::Metric::read, blkSize);
-            request->originating->stats.threadAddAmt(thread_id, true, CacheStats::Metric::read, blkSize);
+            request->originating->stats.threadAddAmt(request->threadId, true, CacheStats::Metric::read, blkSize);
             stats.threadAddAmt(thread_id, true, CacheStats::Metric::read, blkSize);
             bufferWrite(request);
         }

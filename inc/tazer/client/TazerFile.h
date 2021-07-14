@@ -124,7 +124,7 @@ class TazerFile : public Loggable, public Trackable<std::string, TazerFile *> {
     uint64_t blkSize();
     bool compress();
     bool prefetch();
-    bool active();
+    virtual bool active();
     bool eof(uint32_t index);
 
   protected:
