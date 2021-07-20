@@ -161,7 +161,7 @@ fn main() {
                             println!("Closing Tazer Server");
                             match close_tazer_server(message) {
                                 Ok(old_server) => {
-                                    send_response(&stream, "Success");
+                                    send_response(&stream, "Successfully closed tazer server");
                                     if let Some(pos) = active_tazer_servers.iter().position(|x| *x.host == old_server.0 && *x.port == old_server.1) {
                                         active_tazer_servers.remove(pos);
                                     }
@@ -182,6 +182,7 @@ fn main() {
                                 close_message.push_str(&server.port);
                                 let _ = close_tazer_server(close_message);
                             }
+                            send_response(&stream, "Shutting down daemon");
                             break;
                         }
                         else {
