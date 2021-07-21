@@ -1,7 +1,8 @@
 import sys
 import re
+import argparse
 
-def getThreads(data):
+def getThreads(data, count_cache_threads):
     pattern = re.compile("^\[TAZER\].* thread [0-9]+")
     id_pattern = re.compile("[0-9]+")
     cache_names = ["base", "privatememory", "sharedmemory", "burstbuffer", "network", "localfilecache", "boundedfilelock"]
@@ -10,16 +11,21 @@ def getThreads(data):
     threads = {}
     threads = set()
 
-    for line in data:
-        if pattern.match(line):
-            #print(line)
-            for cache in cache_names:
-                if cache in line:
-                    is_cache = True
+    if count_cache_threads:
+        for line in data:
+            if pattern.match(line):
+                threads.add(id_pattern.search(line).group(0))          
+    else:
+        for line in data:
+            if pattern.match(line):
+                #print(line)
+                for cache in cache_names:
+                    if cache in line:
+                        is_cache = True
 
-            if is_cache == False:    
-                threads.add(id_pattern.search(line).group(0))
-        is_cache = False
+                if is_cache == False:    
+                    threads.add(id_pattern.search(line).group(0))
+            is_cache = False
     #print("threads: "+str(threads))
     #print(len(threads))
     return threads
@@ -147,7 +153,13 @@ def getConnectionData(data):
 
 
 if __name__ == "__main__":
-    infile = sys.argv[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("infile", help="input file to be parsed")
+    parser.add_argument("-s", "--server", help="count all threads, use for parsing server output", action='store_true', default=False)
+    args = parser.parse_args(sys.argv[1:])
+
+    print("infile="+args.infile)
+    print("s="+str(args.server))
 
     tazer_input_total = 0
     tazer_input_mem = 0
@@ -162,11 +174,11 @@ if __name__ == "__main__":
     sys_output = 0
 
     data = []
-    with open(sys.argv[1]) as file:
+    with open(args.infile) as file:
         for line in file:
             data.append(line)
 
-    threads = getThreads(data)
+    threads = getThreads(data, args.server)
     types = ["sys", "local", "tazer"]
     names = ["input_time", "input_accesses", "input_amount", "output_time",
              "output_accesses", "output_amount", "destruction_time"]
