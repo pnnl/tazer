@@ -15,7 +15,8 @@ struct TazerServer {
     env_vars:Vec<String>,
 }
 
-fn send_response(mut stream:&TcpStream, message:&str) {    let bytes:usize = message.len();
+fn send_response(mut stream:&TcpStream, message:&str) {
+    let bytes:usize = message.len();
     let mut full_message = bytes.to_string();
     full_message.push(':');
     full_message.push_str(message);
