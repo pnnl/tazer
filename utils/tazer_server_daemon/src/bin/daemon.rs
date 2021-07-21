@@ -15,11 +15,14 @@ struct TazerServer {
     env_vars:Vec<String>,
 }
 
-fn send_response(mut stream:&TcpStream, message:&str) {
-    stream.write(message.as_bytes()).unwrap();
+fn send_response(mut stream:&TcpStream, message:&str) {    let bytes:usize = message.len();
+    let mut full_message = bytes.to_string();
+    full_message.push(':');
+    full_message.push_str(message);
+    stream.write(full_message.as_bytes()).unwrap();
 }
 
-fn close_tazer_server(message:String) -> Result<(String, String), Box<dyn Error>> {
+fn close_tazer_server(message:String) -> Result<(String, String, String), Box<dyn Error>> {
     let split:Vec<&str> = message.split(":").collect();
     let host = split[2].to_string();
     let port = split[3].to_string();
@@ -27,11 +30,12 @@ fn close_tazer_server(message:String) -> Result<(String, String), Box<dyn Error>
     let child_process = Command::new("src/close_tazer_server.sh")
     .arg(host.as_str())
     .arg(port.as_str())
-    .status()
+    .output()
     .expect("Failed to close tazer server");
 
-    if child_process.success() {
-        Ok((host, port))
+    if child_process.status.success() {
+        let server_output:String = String::from_utf8_lossy(&child_process.stdout).to_string();
+        Ok((host, port, server_output))
     }
     else {
         Err("CloseServer failed".into())
@@ -161,7 +165,9 @@ fn main() {
                             println!("Closing Tazer Server");
                             match close_tazer_server(message) {
                                 Ok(old_server) => {
-                                    send_response(&stream, "Successfully closed tazer server");
+                                    let mut resp = String::from("Successfully closed tazer server:\n");
+                                    resp.push_str(&old_server.2);
+                                    send_response(&stream, &resp);
                                     if let Some(pos) = active_tazer_servers.iter().position(|x| *x.host == old_server.0 && *x.port == old_server.1) {
                                         active_tazer_servers.remove(pos);
                                     }

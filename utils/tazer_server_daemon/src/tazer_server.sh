@@ -8,6 +8,7 @@ tazer_root=/people/powe445/Projects/update_tazer_file_format/tazer
 build_dir=build
 tazer_server=$tazer_root/$build_dir/src/server/server
 workspace=/tmp/tazer${USER}/server
+output_path=$tazer_root/utils/tazer_server_daemon/server_output.txt
 
 for ((i=1;i<$argcount;i++)); do 
     env_vars+=${args[${i}]}
@@ -27,4 +28,12 @@ rm -r /tmp/${USER}/*tazer*
 mkdir -p $workspace
 cd $workspace
 
-$env $tazer_server $port $host
+###
+# touch tazerWrite.dat
+# if [ ! -f tazer1GB.dat ]; then
+#     dd if=/dev/urandom of=tazer1GB.dat bs=10M count=100 &
+# fi
+# wait
+###
+
+$env $tazer_server $port $host &> $output_path

@@ -16,10 +16,22 @@ fn send_message(connection:&str, message:&str) {
             println!("Connected to server");
             stream.write(full_message.as_bytes()).unwrap();
 
-            let mut incoming_data = [0 as u8; 2048]; 
-            stream.read(&mut incoming_data).expect("read error");
-            let response = from_utf8(&incoming_data);
-            println!("received message: {}", response.unwrap());
+            //read server response
+            let mut resp = String::new();
+            let mut incoming_data = [0 as u8; 1024]; 
+            let mut total_bytes:usize = stream.read(&mut incoming_data).unwrap();
+            resp.push_str(from_utf8(&incoming_data[0..total_bytes]).unwrap());
+            let split:Vec<&str> = resp.split(":").collect();
+            let incoming_bytes:usize = split[0].parse::<usize>().unwrap() + split[0].len() + 1;
+
+            while total_bytes < incoming_bytes {
+                let bytes = stream.read(&mut incoming_data).unwrap();
+                total_bytes += bytes;
+                resp.push_str(from_utf8(&incoming_data[0..bytes]).unwrap());
+                //println!("total bytes = {}, incoming = {}", total_bytes, incoming_bytes);
+                //println!("received {} bytes: {}", bytes ,resp);
+            }
+            println!("received message: {}", resp);
         }
         Err(e) => {
             println!("Failed to connect to server: {}", e);
