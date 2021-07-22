@@ -32,7 +32,7 @@ def getThreads(data, count_cache_threads):
 
 
 
-def getVals(t, data, thread):
+def getVals(t, data, thread, aggregated):
     input_time = 0.0
     input_accesses = 0.0
     input_amount = 0.0
@@ -41,41 +41,71 @@ def getVals(t, data, thread):
     output_amount = 0.0
     destruction_time = 0.0
     in_thread = False
+    pattern = re.compile("^\[TAZER\].* thread [0-9]+")
     #print("parsing thread "+str(thread))
-    for line in data:
-        if "thread " in line:
-            if "thread "+str(thread) in line:
+    if aggregated:
+        for line in data:
+            if pattern.match(line):
                 in_thread = True
-            else:
+            elif len(line.strip()) == 0:
                 in_thread = False
-        if len(line.strip()) == 0:
-            in_thread = False
-        # if in_thread:
-        #     print(line)
-        if "[TAZER] "+t in line:
-            if in_thread:
-                # print(line)
-                vals = line.split(" ")
-                if vals[2] in ["open", "access", "stat", "seek", "in_open", "in_close", "in_fopen", "in_fclose"]:
-                    input_time += float(vals[3])
-                elif vals[2] in ["read", "fread"]:
-                    input_time += float(vals[3])
-                    input_accesses += float(vals[4])
-                    input_amount += float(vals[5])
-                elif vals[2] in ["close", "fsync", "out_open", "out_close"]:
-                    output_time += float(vals[3])
-                elif vals[2] in ["write", "fwrite"]:
-                    output_time += float(vals[3])
-                    output_accesses += float(vals[4])
-                    output_amount += float(vals[5])
-                elif vals[2] in ["destructor"]:
-                    destruction_time += float(vals[3])
+
+            #if not in_thread:
+                #print(line)
+
+            if "[TAZER] "+t in line:
+                if not in_thread:
+                    #print(line)
+                    vals = line.split(" ")
+                    if vals[2] in ["open", "access", "stat", "seek", "in_open", "in_close", "in_fopen", "in_fclose"]:
+                        input_time += float(vals[3])
+                    elif vals[2] in ["read", "fread"]:
+                        input_time += float(vals[3])
+                        input_accesses += float(vals[4])
+                        input_amount += float(vals[5])
+                    elif vals[2] in ["close", "fsync", "out_open", "out_close"]:
+                        output_time += float(vals[3])
+                    elif vals[2] in ["write", "fwrite"]:
+                        output_time += float(vals[3])
+                        output_accesses += float(vals[4])
+                        output_amount += float(vals[5])
+                    elif vals[2] in ["destructor"]:
+                        destruction_time += float(vals[3])
+    else:
+        for line in data:
+            if pattern.match(line):
+                if "thread "+str(thread) in line:
+                    in_thread = True
+                else:
+                    in_thread = False
+            if len(line.strip()) == 0:
+                in_thread = False
+            # if in_thread:
+            #     print(line)
+            if "[TAZER] "+t in line:
+                if in_thread:
+                    # print(line)
+                    vals = line.split(" ")
+                    if vals[2] in ["open", "access", "stat", "seek", "in_open", "in_close", "in_fopen", "in_fclose"]:
+                        input_time += float(vals[3])
+                    elif vals[2] in ["read", "fread"]:
+                        input_time += float(vals[3])
+                        input_accesses += float(vals[4])
+                        input_amount += float(vals[5])
+                    elif vals[2] in ["close", "fsync", "out_open", "out_close"]:
+                        output_time += float(vals[3])
+                    elif vals[2] in ["write", "fwrite"]:
+                        output_time += float(vals[3])
+                        output_accesses += float(vals[4])
+                        output_amount += float(vals[5])
+                    elif vals[2] in ["destructor"]:
+                        destruction_time += float(vals[3])
     # print(input_time, input_accesses, input_amount, output_time,
     #       output_accesses, output_amount, destruction_time)
     return input_time, input_accesses, input_amount, output_time, output_accesses, output_amount, destruction_time
 
 
-def getCacheData(type, name, data, thread):
+def getCacheData(type, name, data, thread, aggregated):
     hits = 0
     hit_time = 0
     hit_amount = 0
@@ -92,41 +122,80 @@ def getCacheData(type, name, data, thread):
     destruction_time = 0.0
     construction_time = 0.0
     in_thread = False
+    pattern = re.compile("^\[TAZER\].* thread [0-9]+")
 
-    for line in data:
-        if "thread " in line:
-            if "thread "+str(thread) in line:
+    if aggregated:
+        for line in data:
+            if pattern.match(line):
                 in_thread = True
-            else:
+            elif len(line.strip()) == 0:
                 in_thread = False
-        if len(line.strip()) == 0:
-            in_thread = False
-        if name+" "+type in line:
-            if in_thread:
-                vals = line.split(" ")
-                if vals[3] == "hits":
-                    hit_time += float(vals[4])
-                    hits += int(vals[5])
-                    hit_amount += int(vals[6])
-                elif vals[3] == "misses":
-                    miss_time += float(vals[4])
-                    misses += int(vals[5])
-                elif vals[3] == "prefetches":
-                    prefetches += int(vals[5])
-                elif vals[3] == "stalls":
-                    stall_time += float(vals[4])
-                    stalls += int(vals[5])
-                    stall_amount += int(vals[6])
-                elif vals[3] == "ovh":
-                    ovh_time += float(vals[4])
-                elif vals[3] == "read":
-                    read_time += float(vals[4])
-                    reads += int(vals[5])
-                    read_amt += int(vals[6])
-                elif vals[3] == "destructor":
-                    destruction_time += float(vals[4])
-                elif vals[3] == "constructor":
-                    construction_time += float(vals[4])
+
+            #if not in_thread:
+                #print(line)
+
+            if name+" "+type in line:
+                if not in_thread:
+                    #print(line)
+                    vals = line.split(" ")
+                    if vals[3] == "hits":
+                        hit_time += float(vals[4])
+                        hits += int(vals[5])
+                        hit_amount += int(vals[6])
+                    elif vals[3] == "misses":
+                        miss_time += float(vals[4])
+                        misses += int(vals[5])
+                    elif vals[3] == "prefetches":
+                        prefetches += int(vals[5])
+                    elif vals[3] == "stalls":
+                        stall_time += float(vals[4])
+                        stalls += int(vals[5])
+                        stall_amount += int(vals[6])
+                    elif vals[3] == "ovh":
+                        ovh_time += float(vals[4])
+                    elif vals[3] == "read":
+                        read_time += float(vals[4])
+                        reads += int(vals[5])
+                        read_amt += int(vals[6])
+                    elif vals[3] == "destructor":
+                        destruction_time += float(vals[4])
+                    elif vals[3] == "constructor":
+                        construction_time += float(vals[4])
+    else:
+        for line in data:
+            if pattern.match(line):
+                if "thread "+str(thread) in line:
+                    in_thread = True
+                else:
+                    in_thread = False
+            if len(line.strip()) == 0:
+                in_thread = False
+            if name+" "+type in line:
+                if in_thread:
+                    vals = line.split(" ")
+                    if vals[3] == "hits":
+                        hit_time += float(vals[4])
+                        hits += int(vals[5])
+                        hit_amount += int(vals[6])
+                    elif vals[3] == "misses":
+                        miss_time += float(vals[4])
+                        misses += int(vals[5])
+                    elif vals[3] == "prefetches":
+                        prefetches += int(vals[5])
+                    elif vals[3] == "stalls":
+                        stall_time += float(vals[4])
+                        stalls += int(vals[5])
+                        stall_amount += int(vals[6])
+                    elif vals[3] == "ovh":
+                        ovh_time += float(vals[4])
+                    elif vals[3] == "read":
+                        read_time += float(vals[4])
+                        reads += int(vals[5])
+                        read_amt += int(vals[6])
+                    elif vals[3] == "destructor":
+                        destruction_time += float(vals[4])
+                    elif vals[3] == "constructor":
+                        construction_time += float(vals[4])
 
     return hits, hit_time, hit_amount, misses, miss_time, prefetches, stalls, stall_time, stall_amount, ovh_time, reads, read_time, read_amt, destruction_time, construction_time
 
@@ -156,10 +225,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("infile", help="input file to be parsed")
     parser.add_argument("-s", "--server", help="count all threads, use for parsing server output", action='store_true', default=False)
+    parser.add_argument("-a", "--aggregated", help="only count aggregated statistics", action='store_true', default=False)
     args = parser.parse_args(sys.argv[1:])
-
-    print("infile="+args.infile)
-    print("s="+str(args.server))
 
     tazer_input_total = 0
     tazer_input_mem = 0
@@ -178,7 +245,11 @@ if __name__ == "__main__":
         for line in file:
             data.append(line)
 
-    threads = getThreads(data, args.server)
+    if args.aggregated:
+        threads = [0]
+    else:
+        threads = getThreads(data, args.server)
+
     types = ["sys", "local", "tazer"]
     names = ["input_time", "input_accesses", "input_amount", "output_time",
              "output_accesses", "output_amount", "destruction_time"]
@@ -189,7 +260,7 @@ if __name__ == "__main__":
     thread_num = 1
     for thread_id in threads:
         for t in types:
-            vs = getVals(t, data, thread_id)
+            vs = getVals(t, data, thread_id, args.aggregated)
             vals += vs
             for n in names:
                 labels.append(t+"_"+n+"_"+str(thread_num))
@@ -211,7 +282,7 @@ if __name__ == "__main__":
     for thread_id in threads:
         for t in types:
             for c in caches:
-                vs = getCacheData(t, c, data, thread_id)
+                vs = getCacheData(t, c, data, thread_id, args.aggregated)
                 vals += vs
                 for n in names:
                     labels.append(c+"_"+t+"_"+n+"_"+str(thread_num))
