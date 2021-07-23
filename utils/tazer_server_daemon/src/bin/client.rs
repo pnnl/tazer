@@ -46,16 +46,24 @@ fn main() {
         .help("server address and port of daemon: <server address>:<port>")
     )
     .arg(
-        Arg::with_name("start").long("start").takes_value(true)
-        .help("start a new tazer server: <port>:<environment_var1>:<environment_var2>:<environment_var3> . . .")
+        Arg::with_name("start").long("start").takes_value(true).conflicts_with_all(&["stop", "exit"])
+        .help("start a new tazer server: <port>:<environment_var1>,<environment_var2>,<environment_var3>, ...")
     )
     .arg(
-        Arg::with_name("stop").long("stop").takes_value(true)
+        Arg::with_name("stop").long("stop").takes_value(true).conflicts_with_all(&["start", "exit"])
         .help("stop a tazer server: <server address>:<port>")   
     )
     .arg(
-        Arg::with_name("exit").short("e").long("exit").takes_value(false)
+        Arg::with_name("exit").short("e").long("exit").takes_value(false).conflicts_with_all(&["stop", "start"])
         .help("stop the daemon currently listening for requests")
+    )
+    .arg(
+        Arg::with_name("withDataFile").long("withDataFile").takes_value(true).requires("start")
+        .help("create a data file with a given name and size (MB) when starting a server: <file name>:<size MB>")
+    )
+    .arg(
+        Arg::with_name("withMetafile").long("withMetafile").takes_value(true).requires("start")
+        .help("create a tazer metafile when starting a server: <file name>:<line1>,<line2>,<line3>, ...")
     )
     .get_matches();
 
@@ -64,6 +72,23 @@ fn main() {
     if args.is_present("start") {
         let mut message = String::from("AddServer:");
         message.push_str(args.value_of("start").unwrap());
+        if !args.value_of("start").unwrap().contains(":") {
+            message.push(':');
+        }
+        message.push(':');
+        if args.is_present("withDataFile") {
+            message.push_str(args.value_of("withDataFile").unwrap());
+        }
+        else {
+            message.push_str("0:0");
+        }
+        message.push(':');
+        if args.is_present("withMetafile") {
+            message.push_str(args.value_of("withMetafile").unwrap());
+        }
+        else {
+            message.push_str("0:0");
+        }
         send_message(connection, message.as_str());
     }
     if args.is_present("stop") {

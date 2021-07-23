@@ -13,6 +13,10 @@ struct TazerServer {
     host:String,
     port:String,
     env_vars:Vec<String>,
+    data_file:String,
+    data_file_size:String,
+    metafile:String,
+    metafile_lines:Vec<String>,
 }
 
 fn send_response(mut stream:&TcpStream, message:&str) {
@@ -49,18 +53,50 @@ fn add_tazer_server(message:String) -> Result<TazerServer, Box<dyn Error>> {
         host:"".to_string(),
         port:"".to_string(),
         env_vars:Vec::new(),
+        data_file:"".to_string(),
+        data_file_size:"".to_string(),
+        metafile:"".to_string(),
+        metafile_lines:Vec::new(),
     };
 
     let split:Vec<&str> = message.split(":").collect();
+    assert!(split.len() >= 7);
+
     tazer_server.port = split[2].to_string();
-    for i in 3..split.len() {
-        tazer_server.env_vars.push(split[i].to_string());
+    let environment_vars:Vec<&str> = split[3].split(",").collect();
+    for i in 0..environment_vars.len() {
+        tazer_server.env_vars.push(environment_vars[i].to_string());
+    }
+
+    tazer_server.data_file = split[4].to_string();
+    tazer_server.data_file_size = split[5].to_string();
+
+    tazer_server.metafile = split[6].to_string();
+    let lines:Vec<&str> = split[7].split(",").collect();
+    for i in 0..lines.len() {
+        tazer_server.metafile_lines.push(lines[i].to_string());
+    }
+
+    println!("port = {}", tazer_server.port);
+    for e in &tazer_server.env_vars {
+        println!("env_var: {}", e);
+    }
+    println!("file = {}, size = {}", tazer_server.data_file, tazer_server.data_file_size);
+    println!("metafile: {}", &tazer_server.metafile);
+    for l in &tazer_server.metafile_lines {
+        println!("metafile line: {}", l);
     }
 
     //attempt to launch tazer server node
     let child_process = Command::new("src/launch_tazer_server.sh")
     .arg(&tazer_server.port)
+    .arg(&tazer_server.data_file)
+    .arg(&tazer_server.data_file_size)
+    .arg(tazer_server.env_vars.len().to_string())
     .args(&tazer_server.env_vars)
+    .arg(&tazer_server.metafile)
+    .arg(tazer_server.metafile_lines.len().to_string())
+    .args(&tazer_server.metafile_lines)
     .stdout(Stdio::piped())
     .spawn()
     .expect("Failed to start tazer server");

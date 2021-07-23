@@ -28,13 +28,23 @@ client.rs:
     Examples:
 
     Request to start server with a specified port and environment variables:
-    "cargo run --bin=client -- --connection=bluesky.pnl.gov:5001 --start=5123:TAZER_SERVER_CACHE_SIZE=$((128*1024*1024)):TAZER_PRIVATE_MEM_CACHE_SIZE=$((128*1024*1024))"
-    example daemon response: "Success:node28:5123"
+    "cargo run --bin=client -- --connection=bluesky.pnl.gov:5001 --start=5123:TAZER_SERVER_CACHE_SIZE=$((128*1024*1024)),TAZER_PRIVATE_MEM_CACHE_SIZE=$((128*1024*1024))"
+    example daemon response: "19:Success:node02:5123"
 
     Request to close the tazer server that was started in the previous example:
-    "cargo run --bin=client -- --connection=bluesky.pnl.gov:5001 --stop=node28:5123"
-    example daemon response: "Successfully closed tazer server"
+    "cargo run --bin=client -- --connection=bluesky.pnl.gov:5001 --stop=node02:5123"
+    example daemon response: "8250:Successfully closed tazer server:"
 
     Request to shutdown the daemon (also closes active tazer servers):
     "cargo run --bin=client -- --connection=bluesky.pnl.gov:5001 --exit"
-    example daemon response: "Shutting down daemon"
+    example daemon response: " 20:Shutting down daemon"
+
+
+    Additional options for starting tazer servers:
+
+    Request to start a server and create a random data file in the server's working directory:
+    "cargo run --bin=client -- --connection=bluesky.pnl.gov:5001 --start=5123:TAZER_SERVER_CACHE_SIZE=$((128*1024*1024)),TAZER_PRIVATE_MEM_CACHE_SIZE=$((128*1024*1024)) --withDataFile=tazer100MB.dat:100"
+
+    Request to start a server and create a tazer metafile in the server's working directory:
+    "cargo run --bin=client -- --connection=bluesky.pnl.gov:5001 --start=5123:TAZER_SERVER_CACHE_SIZE=$((128*1024*1024)),TAZER_PRIVATE_MEM_CACHE_SIZE=$((128*1024*1024)),TAZER_SERVER_CONNECTIONS=./conns.meta --withMetafile=conns.meta:TAZER0.1,type-forwarding,[server],host=node32,port=1234"
+    
