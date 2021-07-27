@@ -278,6 +278,11 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
                                                                                                                                    _open(false),
                                                                                                                                    _outstandingWrites(0),
                                                                                                                                    _url(supportedUrlType(name)) {
+    std::thread::id thread_id = std::this_thread::get_id();
+    _stats.checkThread(thread_id, true);
+    _stats.start();
+    _stats.threadStart(thread_id);
+    
     _pool.initiate();
     ConnectionPool * pool = NULL;
 
@@ -353,9 +358,17 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
     else {
         std::cout << "ERROR: file " << _name << " does not exists" << std::endl;
     }
+
+    _stats.end(ServeFileStats::Metric::constructor);
+    _stats.threadEnd(thread_id, ServeFileStats::Metric::constructor);
 }
 
 ServeFile::~ServeFile() {
+    std::thread::id thread_id = std::this_thread::get_id();
+    _stats.checkThread(thread_id, true);
+    _stats.start();
+    _stats.threadStart(thread_id);
+
     //Make sure outstanding prefetches are done first!!!
     _prefetchLock.writerLock();
 
@@ -384,6 +397,9 @@ ServeFile::~ServeFile() {
     #endif 
     }
     log(this) << _name << " closed" << std::endl;
+
+    _stats.end(ServeFileStats::Metric::destructor);
+    _stats.threadEnd(thread_id, ServeFileStats::Metric::destructor);
 }
 
 void ServeFile::addCompressTask(uint32_t blk) {
@@ -427,6 +443,11 @@ uint64_t ServeFile::compress(uint64_t blk, uint8_t *blkData, uint8_t *&msgData) 
 }
 
 bool ServeFile::sendData(Connection *connection, uint64_t blk, Request *request) {
+    std::thread::id thread_id = std::this_thread::get_id();
+    _stats.checkThread(thread_id, true);
+    _stats.start();
+    _stats.threadStart(thread_id);
+
     uint8_t *msgData;
     uint64_t msgSize = request->size;
     if (_compress) {
@@ -446,6 +467,9 @@ bool ServeFile::sendData(Connection *connection, uint64_t blk, Request *request)
     }
     ServeFile::_cache.bufferWrite(request);
     log(this) << "sending: " << blk << " size: " << msgSize << " " << ret << std::endl;
+
+    _stats.end(ServeFileStats::Metric::send);
+    _stats.threadEnd(thread_id, ServeFileStats::Metric::send);
     return ret;
 }
 

@@ -1,3 +1,4 @@
+
 // -*-Mode: C++;-*-
 
 //*BeginLicense**************************************************************
@@ -72,7 +73,7 @@
 //
 //*EndLicense****************************************************************
 
-#include "CacheStats.h"
+#include "ServeFileStats.h"
 #include "Config.h"
 #include <fstream>
 #include <iostream>
@@ -90,84 +91,60 @@
 
 extern char *__progname;
 
-thread_local uint64_t _depth_cs = 0;
-thread_local uint64_t _current_cs[100];
+thread_local uint64_t _depth_ss = 0;
+thread_local uint64_t _current_ss[100];
 
-char const *metricTypeName_cs[] = {
-    "request",
-    "prefetch"};
-
-char const *metricName_cs[] = {
-    "hits",
-    "misses",
-    "prefetches",
-    "stalls",
-    "stalled",
-    "ovh",
-    "lock",
-    "write",
-    "read",
+char const *metricName_ss[] = {
+    "send",
     "constructor",
     "destructor"};
 
-CacheStats::CacheStats() {
-    for (int i = 0; i < lastMetric; i++) {
-        for (int j = 0; j < last; j++) {
-            _time[i][j] = 0;
-            _cnt[i][j] = 0;
-            _amt[i][j] = 0;
-        }
+ServeFileStats::ServeFileStats() {
+    for (int i = 0; i < last; i++) {
+        _time[i] = new std::atomic<uint64_t>(std::uint64_t(0));
+        _cnt[i] = new std::atomic<uint64_t>(std::uint64_t(0));
+        _amt[i] = new std::atomic<uint64_t>(std::uint64_t(0));
     }
 
     stdoutcp = dup(1);
     myprogname = __progname;
-    _thread_stats = new std::unordered_map<std::thread::id, CacheStats::ThreadMetric*>;
+    _thread_stats = new std::unordered_map<std::thread::id, ServeFileStats::ThreadMetric*>;
 }
 
-CacheStats::~CacheStats() {
-    std::unordered_map<std::thread::id, CacheStats::ThreadMetric*>::iterator itor;
-    // std::stringstream ss;
-    // ss << std::fixed;
-    // for(int i=0; i<lastMetric; i++) {
-    //     for(int j=0; j<last; j++) {
-    //         ss << "[TAZER] " << metricTypeName_cs[i] << " " << metricName_cs[j] << " " << _time[i][j] / billion << " " << _cnt[i][j] << " " << _amt[i][j] << std::endl;
-    //     }
-    // }
-    // dprintf(stdoutcp, "[TAZER] %s\n%s\n", myprogname.c_str(), ss.str().c_str());
+ServeFileStats::~ServeFileStats() {
+    std::unordered_map<std::thread::id, ServeFileStats::ThreadMetric*>::iterator itor;
+
+    print();
+
+    for (int i = 0; i < last; i++) {
+        delete _time[i];
+        delete _cnt[i];
+        delete _amt[i];
+    }
+
+
     for(itor = _thread_stats->begin(); itor != _thread_stats->end(); itor++) {
         delete itor->second;
     }
     delete _thread_stats;
 }
 
-void CacheStats::print(std::string cacheName) {
+void ServeFileStats::print() {
     if (Config::printStats) {
-        std::cout << cacheName << std::endl;
+        std::cout << "servefile" << std::endl;
         std::stringstream ss;
         std::cout << std::fixed;
-        for (int i = 0; i < lastMetric; i++) {
-            for (int j = 0; j < last; j++) {
-                std::cout << "[TAZER] " << cacheName << " " << metricTypeName_cs[i] << " " << metricName_cs[j] << " " << _time[i][j] / billion << " " << _cnt[i][j] << " " << _amt[i][j] << std::endl;
-            }
-            std::cout << "[TAZER] " << cacheName << " "
-                      << "BW: " << (_amt[i][0] / 1000000.0) / ((_time[i][0] + _time[i][3] + _time[i][4]) / billion) << " effective BW: " << (_amt[i][7] / 1000000.0) / (_time[i][7] / billion) << std::endl;
+        for (int i = 0; i < last; i++) {
+            std::cout << "[TAZER] " << "servefile" << " " << metricName_ss[i] << " " << _time[i]->load() / billion << " " << _cnt[i]->load() << " " << _amt[i]->load() << std::endl;
         }
         std::cout << std::endl;
 
-        std::unordered_map<std::thread::id, CacheStats::ThreadMetric*>::iterator itor;
-        //uint64_t thread_count = 0;
+        std::unordered_map<std::thread::id, ServeFileStats::ThreadMetric*>::iterator itor;
         for(itor = _thread_stats->begin(); itor != _thread_stats->end(); itor++) {
-            //thread_count++;
-            std::cout << "[TAZER] " << cacheName << " thread " << (*itor).first << std::endl;
-            for (int i = 0; i < lastMetric; i++) {
-                for (int j = 0; j < last; j++) {
-                    std::cout << "[TAZER] " << cacheName << " " << metricTypeName_cs[i] << " " << metricName_cs[j] << " " << itor->second->time[i][j]->load() / billion 
-                     << " " << itor->second->cnt[i][j]->load() << " " << itor->second->amt[i][j]->load() << std::endl;
-                }
-                std::cout << "[TAZER] " << cacheName << " "
-                        << "BW: " << (itor->second->amt[i][0]->load() / 1000000.0) /
-                        ((itor->second->time[i][0]->load() + itor->second->time[i][3]->load() + itor->second->time[i][4]->load()) / billion)
-                         << " effective BW: " << (itor->second->amt[i][7]->load() / 1000000.0) / (itor->second->time[i][7]->load() / billion) << std::endl;
+            std::cout << "[TAZER] " << "servefile" << " thread " << (*itor).first << std::endl;
+            for (int i = 0; i < last; i++) {
+                std::cout << "[TAZER] " << "servefile" << " " << metricName_ss[i] << " " << itor->second->time[i]->load() / billion 
+                     << " " << itor->second->cnt[i]->load() << " " << itor->second->amt[i]->load() << std::endl;
             }
             std::cout << std::endl;
         }
@@ -176,7 +153,7 @@ void CacheStats::print(std::string cacheName) {
     // dprintf(stdoutcp, "[TAZER] %s\n%s\n", myprogname.c_str(), ss.str().c_str());
 }
 
-uint64_t CacheStats::getCurrentTime() {
+uint64_t ServeFileStats::getCurrentTime() {
     auto now = std::chrono::high_resolution_clock::now();
     auto now_ms = std::chrono::time_point_cast<std::chrono::nanoseconds>(now);
     auto value = now_ms.time_since_epoch();
@@ -184,113 +161,90 @@ uint64_t CacheStats::getCurrentTime() {
     return ret;
 }
 
-char *CacheStats::printTime() {
+char *ServeFileStats::printTime() {
     auto t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     auto buf = ctime(&t);
     buf[strcspn(buf, "\n")] = 0;
     return buf;
 }
 
-int64_t CacheStats::getTimestamp() {
+int64_t ServeFileStats::getTimestamp() {
     return (int64_t)std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 }
 
-void CacheStats::start() {
-    _current_cs[_depth_cs] = getCurrentTime();
-    _depth_cs++;
+void ServeFileStats::start() {
+    _current_ss[_depth_ss] = getCurrentTime();
+    _depth_ss++;
 }
 
-void CacheStats::end(bool prefetch, Metric metric) {
-    _depth_cs--;
-    CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
-    _time[t][metric].fetch_add(getCurrentTime() - _current_cs[_depth_cs]);
-    _cnt[t][metric].fetch_add(1);
+void ServeFileStats::end(Metric metric) {
+    _depth_ss--;
+    _time[metric]->fetch_add(getCurrentTime() - _current_ss[_depth_ss]);
+    _cnt[metric]->fetch_add(1);
 }
 
-void CacheStats::addTime(bool prefetch, Metric metric, uint64_t time, uint64_t cnt) {
-    CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
-    _time[t][metric].fetch_add(time);
-    _cnt[t][metric].fetch_add(cnt);
+void ServeFileStats::addTime(Metric metric, uint64_t time, uint64_t cnt) {
+    _time[metric]->fetch_add(time);
+    _cnt[metric]->fetch_add(cnt);
 }
 
-void CacheStats::addAmt(bool prefetch, Metric metric, uint64_t amt) {
-    CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
-    _amt[t][metric].fetch_add(amt);
+void ServeFileStats::addAmt(Metric metric, uint64_t amt) {
+    _amt[metric]->fetch_add(amt);
 }
 
-CacheStats::ThreadMetric::ThreadMetric() {
+ServeFileStats::ThreadMetric::ThreadMetric() {
     for (int i = 0; i < 100; i++)
         current[i] = new std::atomic<uint64_t>(std::uint64_t(0));
     depth = new std::atomic<uint64_t>(std::uint64_t(0));
-    for (int i = 0; i < lastMetric; i++) {
-        for (int j = 0; j < last; j++) {
-            time[i][j] = new std::atomic<uint64_t>(std::uint64_t(0));
-            cnt[i][j] = new std::atomic<uint64_t>(std::uint64_t(0));
-            amt[i][j] = new std::atomic<uint64_t>(std::uint64_t(0));
-        }
+    for (int i = 0; i < last; i++) {
+        time[i] = new std::atomic<uint64_t>(std::uint64_t(0));
+        cnt[i] = new std::atomic<uint64_t>(std::uint64_t(0));
+        amt[i] = new std::atomic<uint64_t>(std::uint64_t(0));
     }
 }
 
-CacheStats::ThreadMetric::~ThreadMetric() {
+ServeFileStats::ThreadMetric::~ThreadMetric() {
     for (int i = 0; i < 100; i++)
         delete current[i];
     delete depth;
-        for (int i = 0; i < lastMetric; i++) {
-            for (int j = 0; j < last; j++) {
-                delete time[i][j];
-                delete cnt[i][j];
-                delete amt[i][j];
-            }
+    for (int i = 0; i < last; i++) {
+
+        delete time[i];
+        delete cnt[i];
+        delete amt[i];
     }
 }
 
-void CacheStats::threadStart(std::thread::id id) {
-    // if(checkThread(id, false) == false) {
-    //     std::cout << "Thread " << id << "not found" << std::endl;
-    // } 
-    //these thread timers seem to segfault sometimes when reader lock is not used in threadStart and threadEnd
-    //possibly because more than one thread can sometimes be working on the same thread id? atomics dont seem to be stopping this issue
-    _lock.readerLock();
+void ServeFileStats::threadStart(std::thread::id id) {
     uint64_t depth = (*_thread_stats)[id]->depth->load();
     (*_thread_stats)[id]->current[depth]->store(getCurrentTime());
     (*_thread_stats)[id]->depth->fetch_add(1);
-    _lock.readerUnlock();
-    //std::cout << "threadStart: depth = " << depth+1 << " for thread id " << id << std::endl;
 }
 
-void CacheStats::threadEnd(std::thread::id id, bool prefetch, Metric metric) {
-    _lock.readerLock();
+void ServeFileStats::threadEnd(std::thread::id id, Metric metric) {
     (*_thread_stats)[id]->depth->fetch_sub(1);
-    CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
     uint64_t depth = (*_thread_stats)[id]->depth->load();
     uint64_t current = (*_thread_stats)[id]->current[depth]->load();
-    (*_thread_stats)[id]->time[t][metric]->fetch_add(getCurrentTime() - current);
-    (*_thread_stats)[id]->cnt[t][metric]->fetch_add(1);
-    _lock.readerUnlock();
+    (*_thread_stats)[id]->time[metric]->fetch_add(getCurrentTime() - current);
+    (*_thread_stats)[id]->cnt[metric]->fetch_add(1);
 }
 
-void CacheStats::threadAddTime(std::thread::id id, bool prefetch, Metric metric, uint64_t time, uint64_t cnt) {
-    _lock.readerLock();
-    CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
-    (*_thread_stats)[id]->time[t][metric]->fetch_add(time);
-    (*_thread_stats)[id]->cnt[t][metric]->fetch_add(cnt);
-    _lock.readerUnlock();
+void ServeFileStats::threadAddTime(std::thread::id id, Metric metric, uint64_t time, uint64_t cnt) {
+    (*_thread_stats)[id]->time[metric]->fetch_add(time);
+    (*_thread_stats)[id]->cnt[metric]->fetch_add(cnt);
 }
 
-void CacheStats::threadAddAmt(std::thread::id id, bool prefetch, Metric metric, uint64_t mnt) {
-    _lock.readerLock();
-    CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
-    (*_thread_stats)[id]->amt[t][metric]->fetch_add(mnt);
-    _lock.readerUnlock();
+void ServeFileStats::threadAddAmt(std::thread::id id, Metric metric, uint64_t mnt) {
+    (*_thread_stats)[id]->amt[metric]->fetch_add(mnt);
 }
 
-void CacheStats::addThread(std::thread::id id) {
+void ServeFileStats::addThread(std::thread::id id) {
     _lock.writerLock();
-    (*_thread_stats)[id] = new CacheStats::ThreadMetric();
+    (*_thread_stats)[id] = new ServeFileStats::ThreadMetric();
     _lock.writerUnlock();
 }
 
-bool CacheStats::checkThread(std::thread::id id, bool addIfNotFound) {
+bool ServeFileStats::checkThread(std::thread::id id, bool addIfNotFound) {
     _lock.readerLock();
     bool ret = (_thread_stats->find(id) != _thread_stats->end());
     _lock.readerUnlock();
@@ -300,4 +254,3 @@ bool CacheStats::checkThread(std::thread::id id, bool addIfNotFound) {
 
     return ret;
 }
-

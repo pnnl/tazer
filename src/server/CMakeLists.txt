@@ -1,10 +1,12 @@
 set (TAZER_SERVER_INC_DIR ${TAZER_INC_DIR}/server)
 set(SERVER_HEADERS
     ${TAZER_SERVER_INC_DIR}/ServeFile.h
+    ${TAZER_SERVER_INC_DIR}/ServeFileStats.h
 )
 
 set(SERVER_FILES
     ServeFile.cpp
+    ServeFileStats.cpp
 )
 
 add_executable(server Server.cpp ${SERVER_HEADERS} ${SERVER_FILES} $<TARGET_OBJECTS:common> $<TARGET_OBJECTS:caches>)

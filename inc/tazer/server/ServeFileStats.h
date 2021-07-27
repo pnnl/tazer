@@ -72,89 +72,69 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef SERVEFILE_H_
-#define SERVEFILE_H_
+#ifndef SERVEFILESTATS_H
+#define SERVEFILESTATS_H
 
 #include <atomic>
-#include <condition_variable>
+#include <chrono>
 #include <fstream>
-#include <iostream>
-#include <mutex>
-#include <queue>
 #include <string>
-#include <sys/poll.h>
-#include <sys/socket.h>
 #include <thread>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
-// #include "BlockCache.h"
-#include "Cache.h"
-#include "Connection.h"
-#include "ConnectionPool.h"
-#include "Loggable.h"
 #include "ReaderWriterLock.h"
-#include "ThreadPool.h"
-#include "Trackable.h"
-#include "ServeFileStats.h"
 
-class ServeFile : public Loggable, public Trackable<std::string, ServeFile *> {
+class ServeFileStats {
   public:
-    ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t initialCompressTasks, bool output = false, bool remove = false);
-    ~ServeFile();
+    enum Metric {
+        send,
+        constructor,
+        destructor,
+        last
+    };
 
-    bool transferBlk(Connection *connection, uint32_t blk);
-    bool writeData(char *data, uint64_t size, uint64_t fp);
+    ServeFileStats();
+    ~ServeFileStats();
 
-    std::string name();
-    uint64_t size();
-    uint64_t blkSize();
-    bool compress();
-    bool open();
+    void print();
 
-    static ServeFile *addNewServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t initialCompressTask, bool output, bool remove);
-    static ServeFile *getServeFile(std::string fileName);
-    static bool removeServeFile(std::string fileName);
-    static bool removeServeFile(ServeFile *file);
+    void start();
+    void end(Metric metric);
+    void addTime(Metric metric, uint64_t time, uint64_t cnt = 0);
+    void addAmt(Metric metric, uint64_t mnt);
+    void threadStart(std::thread::id id);
+    void threadEnd(std::thread::id id, Metric metric);
+    void threadAddTime(std::thread::id id, Metric metric, uint64_t time, uint64_t cnt = 0);
+    void threadAddAmt(std::thread::id id, Metric metric, uint64_t mnt);
+    void addThread(std::thread::id id);
+    bool checkThread(std::thread::id id, bool addIfNotFound);
 
-    static void cache_init(void);
+    static uint64_t getCurrentTime();
+    static char *printTime();
+    static int64_t getTimestamp();
 
   private:
-    static bool addConnections();
-    uint64_t compress(uint64_t blk, uint8_t *blkData, uint8_t *&msg);
-    void addCompressTask(uint32_t blk);
-    bool sendData(Connection *connection, uint64_t blk, Request *request);
+    class ThreadMetric {
+      public:
+        ThreadMetric();
+        ~ThreadMetric();
+        std::atomic<uint64_t> *depth;
+        std::atomic<uint64_t> *current[100];
+        std::atomic<uint64_t> *time[ServeFileStats::Metric::last];
+        std::atomic<uint64_t> *cnt[ServeFileStats::Metric::last];
+        std::atomic<uint64_t> *amt[ServeFileStats::Metric::last];
+    };
 
-    std::string _name;
-    bool _output;
-    bool _remove;
-    bool _compress;
-    uint64_t _blkSize;
-    uint64_t _maxCompSize;
-    int _compLevel;
-    uint32_t _initialCompressTasks;
+    const double billion = 1000000000;
+    std::atomic<uint64_t> *_time[ServeFileStats::Metric::last];
+    std::atomic<uint64_t> *_cnt[ServeFileStats::Metric::last];
+    std::atomic<uint64_t> *_amt[ServeFileStats::Metric::last];
+    std::unordered_map<std::thread::id, ServeFileStats::ThreadMetric*> *_thread_stats;
+    ReaderWriterLock _lock;
 
-    uint64_t _size;
-    uint64_t _numBlks;
-    bool _open;
-    bool _url;
-
-    ReaderWriterLock _prefetchLock;
-
-    std::mutex _fileMutex;
-    std::atomic<uint64_t> _outstandingWrites;
-
-    static Cache _cache;
-    uint32_t _regFileIndex;
-    static ThreadPool<std::function<void()>> _pool;
-
-    static std::vector<Connection *> _connections;
-    static PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> _transferPool;
-    static PriorityThreadPool<std::packaged_task<Request *()>> _decompressionPool;
-    // ConnectionPool *_conPool;
-
-    ServeFileStats _stats;
+    int stdoutcp;
+    std::string myprogname;
 };
 
-#endif /* SERVEFILE_H_ */
+#endif /* SERVEFILESTATS_H */
