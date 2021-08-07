@@ -108,8 +108,6 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-
-
 void __attribute__((constructor)) tazerInit(void) {
     std::call_once(log_flag, []() {
         timer.start();
@@ -235,8 +233,10 @@ int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, cons
     TazerFile *file = TazerFile::addNewTazerFile(type, name, metaName, fd);
     if (file)
         TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
-    // std::cout << "tazer open "<<metaName<<" "<<fd<<std::endl;
-
+    else if(fd != -1) {
+        (*unixclose)(fd);
+        fd = -1;
+    }
     return fd;
 }
 
@@ -421,9 +421,7 @@ FILE *tazerFopen(std::string name, std::string metaName, TazerFile::Type type, c
         if (file) {
             TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
             TazerFileStream::addStream(fp, fd);
-            //  std::cout << "tazer open "<<metaName<<" "<<fd<<" "<<fp <<" "<<file->eof()<<std::endl;
         }
-       
     }
     return fp;
 }
