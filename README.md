@@ -8,7 +8,7 @@ TAZeR (Transparent Asynchronous Zero-copy Remote I/O)
 
 **Home**:
   - <https://github.com/pnnl/tazer/>
-  - <https://gitlab.pnnl.gov/perf-lab-hub/tazer>
+  - <https://gitlab.pnnl.gov/perf-lab/tazer>
 
 
 **About**: TAZeR is a remote I/O framework that reduces effective data access latency. It was motivated by scientific workflow analytics. In these workloads inputs are large and read intensive, and include complex access patterns. Outputs are comparatively small and do not overwrite inputs, resulting in a simple data consistency model.
