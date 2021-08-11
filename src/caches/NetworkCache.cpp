@@ -164,6 +164,7 @@ Request *NetworkCache::decompress(Request *req, char *compBuf, uint32_t compBufS
 
 // std::future<Request*> NetworkCache::requestBlk(Connection *server, uint32_t blkStart, uint32_t blkEnd, uint32_t fileIndex, uint32_t priority) {
 std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req, uint32_t priority, bool &success) {
+    stats.checkThread(req->threadId, true);
     auto fileIndex = req->fileIndex;
     auto blkStart = req->blkIndex;
     auto blkEnd = blkStart;
