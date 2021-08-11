@@ -195,27 +195,52 @@ int64_t CacheStats::getTimestamp() {
     return (int64_t)std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 }
 
-void CacheStats::start() {
+void CacheStats::start(bool prefetch, Metric metric, std::thread::id id) {
     _current_cs[_depth_cs] = getCurrentTime();
     _depth_cs++;
+
+    //these thread timers seem to segfault sometimes when reader lock is not used in threadStart and threadEnd
+    //possibly because more than one thread can sometimes be working on the same thread id? atomics dont seem to be stopping this issue
+    _lock.readerLock();
+    uint64_t depth = (*_thread_stats)[id]->depth->load();
+    (*_thread_stats)[id]->current[depth]->store(getCurrentTime());
+    (*_thread_stats)[id]->depth->fetch_add(1);
+    _lock.readerUnlock();
 }
 
-void CacheStats::end(bool prefetch, Metric metric) {
+void CacheStats::end(bool prefetch, Metric metric, std::thread::id id) {
     _depth_cs--;
     CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
     _time[t][metric].fetch_add(getCurrentTime() - _current_cs[_depth_cs]);
     _cnt[t][metric].fetch_add(1);
+
+    _lock.readerLock();
+    (*_thread_stats)[id]->depth->fetch_sub(1);
+    uint64_t depth = (*_thread_stats)[id]->depth->load();
+    uint64_t current = (*_thread_stats)[id]->current[depth]->load();
+    (*_thread_stats)[id]->time[t][metric]->fetch_add(getCurrentTime() - current);
+    (*_thread_stats)[id]->cnt[t][metric]->fetch_add(1);
+    _lock.readerUnlock();
 }
 
-void CacheStats::addTime(bool prefetch, Metric metric, uint64_t time, uint64_t cnt) {
+void CacheStats::addTime(bool prefetch, Metric metric, uint64_t time, std::thread::id id, uint64_t cnt) {
     CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
     _time[t][metric].fetch_add(time);
     _cnt[t][metric].fetch_add(cnt);
+
+    _lock.readerLock();
+    (*_thread_stats)[id]->time[t][metric]->fetch_add(time);
+    (*_thread_stats)[id]->cnt[t][metric]->fetch_add(cnt);
+    _lock.readerUnlock();
 }
 
-void CacheStats::addAmt(bool prefetch, Metric metric, uint64_t amt) {
+void CacheStats::addAmt(bool prefetch, Metric metric, uint64_t amt, std::thread::id id) {
     CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
     _amt[t][metric].fetch_add(amt);
+
+    _lock.readerLock();
+    (*_thread_stats)[id]->amt[t][metric]->fetch_add(amt);
+    _lock.readerUnlock();
 }
 
 CacheStats::ThreadMetric::ThreadMetric() {
@@ -242,46 +267,6 @@ CacheStats::ThreadMetric::~ThreadMetric() {
                 delete amt[i][j];
             }
     }
-}
-
-void CacheStats::threadStart(std::thread::id id) {
-    // if(checkThread(id, false) == false) {
-    //     std::cout << "Thread " << id << "not found" << std::endl;
-    // } 
-    //these thread timers seem to segfault sometimes when reader lock is not used in threadStart and threadEnd
-    //possibly because more than one thread can sometimes be working on the same thread id? atomics dont seem to be stopping this issue
-    _lock.readerLock();
-    uint64_t depth = (*_thread_stats)[id]->depth->load();
-    (*_thread_stats)[id]->current[depth]->store(getCurrentTime());
-    (*_thread_stats)[id]->depth->fetch_add(1);
-    _lock.readerUnlock();
-    //std::cout << "threadStart: depth = " << depth+1 << " for thread id " << id << std::endl;
-}
-
-void CacheStats::threadEnd(std::thread::id id, bool prefetch, Metric metric) {
-    _lock.readerLock();
-    (*_thread_stats)[id]->depth->fetch_sub(1);
-    CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
-    uint64_t depth = (*_thread_stats)[id]->depth->load();
-    uint64_t current = (*_thread_stats)[id]->current[depth]->load();
-    (*_thread_stats)[id]->time[t][metric]->fetch_add(getCurrentTime() - current);
-    (*_thread_stats)[id]->cnt[t][metric]->fetch_add(1);
-    _lock.readerUnlock();
-}
-
-void CacheStats::threadAddTime(std::thread::id id, bool prefetch, Metric metric, uint64_t time, uint64_t cnt) {
-    _lock.readerLock();
-    CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
-    (*_thread_stats)[id]->time[t][metric]->fetch_add(time);
-    (*_thread_stats)[id]->cnt[t][metric]->fetch_add(cnt);
-    _lock.readerUnlock();
-}
-
-void CacheStats::threadAddAmt(std::thread::id id, bool prefetch, Metric metric, uint64_t mnt) {
-    _lock.readerLock();
-    CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
-    (*_thread_stats)[id]->amt[t][metric]->fetch_add(mnt);
-    _lock.readerUnlock();
 }
 
 void CacheStats::addThread(std::thread::id id) {

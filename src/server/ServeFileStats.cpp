@@ -172,24 +172,38 @@ int64_t ServeFileStats::getTimestamp() {
     return (int64_t)std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 }
 
-void ServeFileStats::start() {
+void ServeFileStats::start(Metric metric, std::thread::id id) {
     _current_ss[_depth_ss] = getCurrentTime();
     _depth_ss++;
+
+    uint64_t depth = (*_thread_stats)[id]->depth->load();
+    (*_thread_stats)[id]->current[depth]->store(getCurrentTime());
+    (*_thread_stats)[id]->depth->fetch_add(1);
 }
 
-void ServeFileStats::end(Metric metric) {
+void ServeFileStats::end(Metric metric, std::thread::id id) {
     _depth_ss--;
     _time[metric]->fetch_add(getCurrentTime() - _current_ss[_depth_ss]);
     _cnt[metric]->fetch_add(1);
+
+    (*_thread_stats)[id]->depth->fetch_sub(1);
+    uint64_t depth = (*_thread_stats)[id]->depth->load();
+    uint64_t current = (*_thread_stats)[id]->current[depth]->load();
+    (*_thread_stats)[id]->time[metric]->fetch_add(getCurrentTime() - current);
+    (*_thread_stats)[id]->cnt[metric]->fetch_add(1);
 }
 
-void ServeFileStats::addTime(Metric metric, uint64_t time, uint64_t cnt) {
+void ServeFileStats::addTime(Metric metric, uint64_t time, std::thread::id id, uint64_t cnt) {
     _time[metric]->fetch_add(time);
     _cnt[metric]->fetch_add(cnt);
+
+    (*_thread_stats)[id]->time[metric]->fetch_add(time);
+    (*_thread_stats)[id]->cnt[metric]->fetch_add(cnt);
 }
 
-void ServeFileStats::addAmt(Metric metric, uint64_t amt) {
+void ServeFileStats::addAmt(Metric metric, uint64_t amt, std::thread::id id) {
     _amt[metric]->fetch_add(amt);
+    (*_thread_stats)[id]->amt[metric]->fetch_add(amt);
 }
 
 ServeFileStats::ThreadMetric::ThreadMetric() {
@@ -213,29 +227,6 @@ ServeFileStats::ThreadMetric::~ThreadMetric() {
         delete cnt[i];
         delete amt[i];
     }
-}
-
-void ServeFileStats::threadStart(std::thread::id id) {
-    uint64_t depth = (*_thread_stats)[id]->depth->load();
-    (*_thread_stats)[id]->current[depth]->store(getCurrentTime());
-    (*_thread_stats)[id]->depth->fetch_add(1);
-}
-
-void ServeFileStats::threadEnd(std::thread::id id, Metric metric) {
-    (*_thread_stats)[id]->depth->fetch_sub(1);
-    uint64_t depth = (*_thread_stats)[id]->depth->load();
-    uint64_t current = (*_thread_stats)[id]->current[depth]->load();
-    (*_thread_stats)[id]->time[metric]->fetch_add(getCurrentTime() - current);
-    (*_thread_stats)[id]->cnt[metric]->fetch_add(1);
-}
-
-void ServeFileStats::threadAddTime(std::thread::id id, Metric metric, uint64_t time, uint64_t cnt) {
-    (*_thread_stats)[id]->time[metric]->fetch_add(time);
-    (*_thread_stats)[id]->cnt[metric]->fetch_add(cnt);
-}
-
-void ServeFileStats::threadAddAmt(std::thread::id id, Metric metric, uint64_t mnt) {
-    (*_thread_stats)[id]->amt[metric]->fetch_add(mnt);
 }
 
 void ServeFileStats::addThread(std::thread::id id) {

@@ -185,31 +185,23 @@ int64_t Timer::getTimestamp() {
     return (int64_t)std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 }
 
-void Timer::start() {
+void Timer::start(std::thread::id id) {
     if (!_depth)
         _current = getCurrentTime();
     _depth++;
-}
 
-void Timer::end(MetricType type, Metric metric) {
-    if (_depth == 1) {
-        _time[type][metric] += getCurrentTime() - _current;
-        _cnt[type][metric]++;
-    }
-    _depth--;
-}
-
-void Timer::addAmt(MetricType type, Metric metric, uint64_t amt) {
-    _amt[type][metric] += amt;
-}
-
-void Timer::threadStart(std::thread::id id) {
     if (!(*_thread_timers)[id]->depth->load(std::memory_order_relaxed))
         (*_thread_timers)[id]->current->store(getCurrentTime(), std::memory_order_relaxed);
     (*_thread_timers)[id]->depth->fetch_add(1, std::memory_order_relaxed);
 }
 
-void Timer::threadEnd(std::thread::id id, MetricType type, Metric metric) {
+void Timer::end(MetricType type, Metric metric, std::thread::id id) {
+    if (_depth == 1) {
+        _time[type][metric] += getCurrentTime() - _current;
+        _cnt[type][metric]++;
+    }
+    _depth--;
+
     if ((*_thread_timers)[id]->depth->load(std::memory_order_relaxed) == 1) {
         uint64_t x = getCurrentTime() - (*_thread_timers)[id]->current->load(std::memory_order_relaxed);
         (*_thread_timers)[id]->time[type][metric]->fetch_add(x, std::memory_order_relaxed);
@@ -218,9 +210,29 @@ void Timer::threadEnd(std::thread::id id, MetricType type, Metric metric) {
     (*_thread_timers)[id]->depth->fetch_sub(1, std::memory_order_relaxed);
 }
 
-void Timer::threadAddAmt(std::thread::id id, MetricType type, Metric metric, uint64_t amt) {
+void Timer::addAmt(MetricType type, Metric metric, uint64_t amt, std::thread::id id) {
+    _amt[type][metric] += amt;
     (*_thread_timers)[id]->amt[type][metric]->fetch_add(amt, std::memory_order_relaxed);
 }
+
+// void Timer::threadStart(std::thread::id id) {
+//     if (!(*_thread_timers)[id]->depth->load(std::memory_order_relaxed))
+//         (*_thread_timers)[id]->current->store(getCurrentTime(), std::memory_order_relaxed);
+//     (*_thread_timers)[id]->depth->fetch_add(1, std::memory_order_relaxed);
+// }
+
+// void Timer::threadEnd(std::thread::id id, MetricType type, Metric metric) {
+//     if ((*_thread_timers)[id]->depth->load(std::memory_order_relaxed) == 1) {
+//         uint64_t x = getCurrentTime() - (*_thread_timers)[id]->current->load(std::memory_order_relaxed);
+//         (*_thread_timers)[id]->time[type][metric]->fetch_add(x, std::memory_order_relaxed);
+//         (*_thread_timers)[id]->cnt[type][metric]->fetch_add(1, std::memory_order_relaxed);
+//     }
+//     (*_thread_timers)[id]->depth->fetch_sub(1, std::memory_order_relaxed);
+// }
+
+// void Timer::threadAddAmt(std::thread::id id, MetricType type, Metric metric, uint64_t amt) {
+//     (*_thread_timers)[id]->amt[type][metric]->fetch_add(amt, std::memory_order_relaxed);
+// }
 
 void Timer::addThread(std::thread::id id) {
     //(*_thread_timers)[id] = *(new Timer::ThreadMetric());

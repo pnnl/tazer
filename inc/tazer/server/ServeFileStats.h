@@ -99,14 +99,10 @@ class ServeFileStats {
 
     void print();
 
-    void start();
-    void end(Metric metric);
-    void addTime(Metric metric, uint64_t time, uint64_t cnt = 0);
-    void addAmt(Metric metric, uint64_t mnt);
-    void threadStart(std::thread::id id);
-    void threadEnd(std::thread::id id, Metric metric);
-    void threadAddTime(std::thread::id id, Metric metric, uint64_t time, uint64_t cnt = 0);
-    void threadAddAmt(std::thread::id id, Metric metric, uint64_t mnt);
+    void start(Metric metric, std::thread::id id);
+    void end(Metric metric, std::thread::id id);
+    void addTime(Metric metric, uint64_t time, std::thread::id id, uint64_t cnt = 0);
+    void addAmt(Metric metric, uint64_t mnt, std::thread::id id);
     void addThread(std::thread::id id);
     bool checkThread(std::thread::id id, bool addIfNotFound);
 

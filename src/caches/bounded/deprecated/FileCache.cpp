@@ -102,8 +102,7 @@ FileCache::FileCache(std::string cacheName, CacheType type, uint64_t cacheSize, 
     //_pid = (unsigned int)getpid();
     std::thread::id thread_id = std::this_thread::get_id();
     stats.checkThread(thread_id, true);
-    stats.threadStart(thread_id);
-    stats.start();
+    stats.start(false, CacheStats::Metric::constructor, thread_id);
     _blocksfd = -1;
     _blkIndexfd = -1;
 
@@ -213,15 +212,13 @@ FileCache::FileCache(std::string cacheName, CacheType type, uint64_t cacheSize, 
     //     *indexInit = true;
     // }
     _binLock->writerUnlock(0);
-    stats.end(false, CacheStats::Metric::constructor);
-    stats.threadEnd(thread_id, false, CacheStats::Metric::constructor);
+    stats.end(false, CacheStats::Metric::constructor, thread_id);
 }
 
 FileCache::~FileCache() {
     std::thread::id thread_id = std::this_thread::get_id();
     stats.checkThread(thread_id, true);
-    stats.threadStart(thread_id);
-    stats.start();
+    stats.start(false, CacheStats::Metric::destructor, thread_id);
     std::cout
         << "[TAZER] " << _name << " deleting" << std::endl;
     for (uint32_t i = 0; i < _numBlocks; i++) {
@@ -243,8 +240,7 @@ FileCache::~FileCache() {
     // _blkIndexfd = -1;
     (*_close)(_blocksfd);
     _blocksfd = -1;
-    stats.end(false, CacheStats::Metric::destructor);
-    stats.threadEnd(thread_id, false, CacheStats::Metric::destructor);
+    stats.end(false, CacheStats::Metric::destructor, thread_id);
     stats.print(_name);
     std::cout << std::endl;
 

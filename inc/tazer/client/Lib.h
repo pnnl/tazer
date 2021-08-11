@@ -319,8 +319,7 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
         statsLock.writerUnlock();
     }
 
-    timer->threadStart(thread_id);
-    timer->start();
+    timer->start(thread_id);
 
     //Check if this is a special file to track (from environment variable)
     bool track = trackFile(fileId);
@@ -337,8 +336,7 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
         //Maintain the ignore_fd set
         addToSet(ignore_fd, retValue, posixFun);
         removeFromSet(ignore_fd, retValue, posixFun);
-        timer->end(Timer::MetricType::local, Timer::Metric::dummy); //to offset the call to start()
-        timer->threadEnd(thread_id, Timer::MetricType::local, Timer::Metric::dummy);
+        timer->end(Timer::MetricType::local, Timer::Metric::dummy, thread_id); //to offset the call to start()
     }
     else { //End Timers!
         if (track) {
@@ -349,28 +347,23 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
             std::string("write").compare(std::string(name)) == 0){
                 ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
                 if (ret != -1) {
-                    timer->addAmt(Timer::MetricType::local, metric, ret);
-                    timer->threadAddAmt(thread_id, Timer::MetricType::local, metric, ret);
+                    timer->addAmt(Timer::MetricType::local, metric, ret, thread_id);
                 }
             }
-            timer->end(Timer::MetricType::local, metric);
-            timer->threadEnd(thread_id, Timer::MetricType::local, metric);
+            timer->end(Timer::MetricType::local, metric, thread_id);
         }
         else if (isTazerFile){
-            timer->end(Timer::MetricType::tazer, metric);
-            timer->threadEnd(thread_id, Timer::MetricType::tazer, metric);
+            timer->end(Timer::MetricType::tazer, metric, thread_id);
         }
         else{
             if (std::string("read").compare(std::string(name)) == 0 ||
             std::string("write").compare(std::string(name)) == 0){
                 ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
                 if (ret != -1) {
-                    timer->addAmt(Timer::MetricType::system, metric, ret);
-                    timer->threadAddAmt(thread_id, Timer::MetricType::system, metric, ret);
+                    timer->addAmt(Timer::MetricType::system, metric, ret, thread_id);
                 }
             }
-            timer->end(Timer::MetricType::system, metric);
-            timer->threadEnd(thread_id, Timer::MetricType::system, metric);
+            timer->end(Timer::MetricType::system, metric, thread_id);
         }
     }
 

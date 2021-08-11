@@ -111,8 +111,7 @@ Cache::Cache(std::string name,  CacheType type) : Loggable(Config::CacheLog, nam
 
     std::thread::id thread_id = std::this_thread::get_id();
     stats.checkThread(thread_id, true);
-    stats.threadStart(thread_id);
-    stats.start();
+    stats.start(false, CacheStats::Metric::constructor, thread_id);
 
     // std::cout << "[TAZER] "
     //           << "Constructing " << _name << " in cache" << std::endl;
@@ -184,16 +183,14 @@ Cache::Cache(std::string name,  CacheType type) : Loggable(Config::CacheLog, nam
 
     memset(_ioTimes, 0, _ioWinSize * sizeof(uint64_t));
     memset(_ioAmts, 0, _ioWinSize * sizeof(uint64_t));
-    stats.threadEnd(thread_id, false, CacheStats::Metric::constructor);
-    stats.end(false, CacheStats::Metric::constructor);
+    stats.end(false, CacheStats::Metric::constructor, thread_id);
 }
 
 Cache::~Cache() {
     log(this) << "deleting " << _name << " in cache" << std::endl;
     std::thread::id thread_id = std::this_thread::get_id();
     stats.checkThread(thread_id, true);
-    stats.threadStart(thread_id);
-    stats.start();
+    stats.start(false, CacheStats::Metric::destructor, thread_id);
     while (_outstandingWrites.load()) {
         std::this_thread::yield();
     }
@@ -213,8 +210,7 @@ Cache::~Cache() {
         delete _prefetchPool;
         delete _writePool;
         // delete _fm_lock;
-        stats.threadEnd(thread_id, false, CacheStats::Metric::destructor);
-        stats.end(false, CacheStats::Metric::destructor);
+        stats.end(false, CacheStats::Metric::destructor, thread_id);
         stats.print(_name);
     }
 
@@ -418,8 +414,7 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         if (request->ready) { //the block was in a client side cache!!
             //std::cout << "********************Data was on client side!!!" <<std::endl;
             request->originating->stats.checkThread(request->threadId, true);
-            request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
-            request->originating->stats.threadAddAmt(request->threadId, true, CacheStats::Metric::read, blkSize);
+            request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize, request->threadId);
 
             bufferWrite(request);
            
@@ -442,10 +437,8 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
 
         if (request->data) { // hmm what does it mean if this is NULL? do we need to catch and report this?
             request->originating->stats.checkThread(request->threadId, true);
-            request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
-            stats.addAmt(true, CacheStats::Metric::read, blkSize);
-            request->originating->stats.threadAddAmt(request->threadId, true, CacheStats::Metric::read, blkSize);
-            stats.threadAddAmt(thread_id, true, CacheStats::Metric::read, blkSize);
+            request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize, request->threadId);
+            stats.addAmt(true, CacheStats::Metric::read, blkSize, thread_id);
             bufferWrite(request);
             
         }
@@ -455,10 +448,8 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
         if (request->data) {                     // hmm what does it mean if this is NULL? do we need to catch and report this?
             request->originating->stats.checkThread(request->threadId, true);
-            request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
-            stats.addAmt(true, CacheStats::Metric::read, blkSize);
-            request->originating->stats.threadAddAmt(request->threadId, true, CacheStats::Metric::read, blkSize);
-            stats.threadAddAmt(thread_id, true, CacheStats::Metric::read, blkSize);
+            request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize, request->threadId);
+            stats.addAmt(true, CacheStats::Metric::read, blkSize, thread_id);
             bufferWrite(request);
         }
     }

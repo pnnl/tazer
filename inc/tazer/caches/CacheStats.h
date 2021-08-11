@@ -113,14 +113,14 @@ class CacheStats {
 
     void print(std::string cacheName);
 
-    void start();
-    void end(bool prefetch, Metric metric);
-    void addTime(bool prefetch, Metric metric, uint64_t time, uint64_t cnt = 0);
-    void addAmt(bool prefetch, Metric metric, uint64_t mnt);
-    void threadStart(std::thread::id id);
-    void threadEnd(std::thread::id id, bool prefetch, Metric metric);
-    void threadAddTime(std::thread::id id, bool prefetch, Metric metric, uint64_t time, uint64_t cnt = 0);
-    void threadAddAmt(std::thread::id id, bool prefetch, Metric metric, uint64_t mnt);
+    void start(bool prefetch, Metric metric, std::thread::id id);
+    void end(bool prefetch, Metric metric, std::thread::id id);
+    void addTime(bool prefetch, Metric metric, uint64_t time, std::thread::id id, uint64_t cnt = 0);
+    void addAmt(bool prefetch, Metric metric, uint64_t mnt, std::thread::id id);
+    // void threadStart(std::thread::id id);
+    // void threadEnd(std::thread::id id, bool prefetch, Metric metric);
+    // void threadAddTime(std::thread::id id, bool prefetch, Metric metric, uint64_t time, uint64_t cnt = 0);
+    // void threadAddAmt(std::thread::id id, bool prefetch, Metric metric, uint64_t mnt);
     void addThread(std::thread::id id);
     bool checkThread(std::thread::id id, bool addIfNotFound);
 

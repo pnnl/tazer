@@ -102,8 +102,7 @@ NewMemoryCache::NewMemoryCache(std::string cacheName, CacheType type, uint64_t c
               << "Constructing " << _name << " in memory cache" << std::endl;
     std::thread::id thread_id = std::this_thread::get_id();
     stats.checkThread(thread_id, true);
-    stats.start();
-    stats.threadStart(thread_id);
+    stats.start(false, CacheStats::Metric::constructor, thread_id);
     _binLock = new MultiReaderWriterLock(_numBins);
     _binLock->writerLock(0);
     _blocks = new uint8_t[_cacheSize];
@@ -117,15 +116,13 @@ NewMemoryCache::NewMemoryCache(std::string cacheName, CacheType type, uint64_t c
     }
     // log(this) << (void *)_blkIndex << " " << (void *)((uint8_t *)_blkIndex + (_numBlocks * sizeof(BlockEntry))) << std::endl;
     _binLock->writerUnlock(0);
-    stats.end(false, CacheStats::Metric::constructor);
-    stats.threadEnd(thread_id, false, CacheStats::Metric::constructor);
+    stats.end(false, CacheStats::Metric::constructor, thread_id);
 }
 
 NewMemoryCache::~NewMemoryCache() {
     std::thread::id thread_id = std::this_thread::get_id();
     stats.checkThread(thread_id, true);
-    stats.start();
-    stats.threadStart(thread_id);
+    stats.start(false, CacheStats::Metric::destructor, thread_id);
     // log(this) << "deleting " << _name << " in memory cache, collisions: " << _collisions << std::endl;
     // std::cout<<"[TAZER] " << "numBlks: " << _numBlocks << " numBins: " << _numBins << " cacheSize: " << _cacheSize << std::endl;
     uint32_t numEmpty = 0;
@@ -144,8 +141,7 @@ NewMemoryCache::~NewMemoryCache() {
     delete[] _blocks;
     delete[] _blkIndex;
     delete _binLock;
-    stats.end(false, CacheStats::Metric::destructor);
-    stats.threadEnd(thread_id, false, CacheStats::Metric::destructor);
+    stats.end(false, CacheStats::Metric::destructor, thread_id);
     stats.print(_name);
     std::cout << std::endl;
 }
