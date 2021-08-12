@@ -71,6 +71,7 @@ fn main() {
     )
     .get_matches();
 
+    //setup MetaInfo struct with the strings to be written to the new metafiles
     let mut meta_info = MetaInfo {
         extension: args.value_of("extension").unwrap().to_string(),
         tazer_version: args.value_of("version").unwrap().to_string(),
@@ -96,6 +97,7 @@ fn main() {
     meta_info.block_size.push_str(args.value_of("blocksize").unwrap());
     meta_info.block_size.push('\n');
 
+    //allow for multiple servers
     let server_args: Vec<&str> = args.values_of("server").unwrap().collect();
     for s in  server_args {
         let split: Vec<&str> = s.split(":").collect();
@@ -126,9 +128,11 @@ fn main() {
 
     let md = fs::metadata(&input_path).expect("failed to access file or directory in main()");
     if md.is_dir() {
+        //recursively find each file and create a metafile for it
         find_files(&input_path, &output_path, &meta_info, flat).expect("find_files() failed in main()");
     }
     else if md.is_file() {
+        //input path was a file so just create one metafile
         fs::create_dir_all(output_path).expect("could not create output path");
         let new_file_path = output_path.join(input_path.file_name().unwrap().to_str().unwrap());
         create_tazer_file(&input_path, &new_file_path, &meta_info).expect("create_tazer_file() failed in main()");
@@ -144,6 +148,7 @@ fn find_files(input_path: &Path, output_path: &Path, meta_info: &MetaInfo, flat:
         let md = fs::metadata(&path)?;
 
         if md.is_dir() {
+            //recursive step to search next directory
             if flat {
                 let _ = find_files(&path, &output_path, &meta_info, flat);
             }
@@ -153,6 +158,7 @@ fn find_files(input_path: &Path, output_path: &Path, meta_info: &MetaInfo, flat:
             }
         }
         else if md.is_file() {
+            //found a file, create a metafile for it
             let new_file_path = output_path.join(path.file_name().unwrap().to_str().unwrap());
             let _ = create_tazer_file(&path, &new_file_path, &meta_info)?;
         }
@@ -162,12 +168,14 @@ fn find_files(input_path: &Path, output_path: &Path, meta_info: &MetaInfo, flat:
 }
 
 fn create_tazer_file(input_file_path: &Path, new_file_path: &Path, meta_info: &MetaInfo) -> Result<(), io::Error>{
+    //create the metafile with its extension
     let mut temp = String::from(new_file_path.to_str().unwrap());
     temp.push_str(meta_info.extension.as_str());
     let file_path_with_extension = Path::new(temp.as_str());
     println!("creating tazer file: {}", file_path_with_extension.to_str().unwrap());
     let mut file = fs::File::create(file_path_with_extension).expect("error creating new file");
 
+    //append the file name/path to the given server path to determine the full file path on the server
     let mut file_on_server = String::from(meta_info.server_root.as_str());
     if file_on_server.chars().last().unwrap() != '/' {
         file_on_server.push('/');
@@ -175,6 +183,7 @@ fn create_tazer_file(input_file_path: &Path, new_file_path: &Path, meta_info: &M
     file_on_server.push_str(String::from(input_file_path.to_str().unwrap()).replace("./", "").as_str());
     file_on_server.push('\n');
 
+    //write to the metafile one line at a time, there is potentially multiple servers
     file.write_all(meta_info.tazer_version.as_bytes())?;
     file.write_all(meta_info.file_type.as_bytes())?;
     let mut i: usize = 0;

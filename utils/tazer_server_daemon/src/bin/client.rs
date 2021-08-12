@@ -5,8 +5,9 @@ use std::str::from_utf8;
 use clap::{Arg, App};
 
 fn send_message(connection:&str, message:&str) {
+    //send request to the daemon, wait for a response, print the response
     let bytes:usize = message.len();
-    let mut full_message = bytes.to_string();
+    let mut full_message = bytes.to_string(); //message must start with the total length of the message
     full_message.push(':');
     full_message.push_str(message);
     println!("sending: {}", full_message);
@@ -16,7 +17,7 @@ fn send_message(connection:&str, message:&str) {
             println!("Connected to server");
             stream.write(full_message.as_bytes()).unwrap();
 
-            //read server response
+            //read server response, messages start with their total length
             let mut resp = String::new();
             let mut incoming_data = [0 as u8; 1024]; 
             let mut total_bytes:usize = stream.read(&mut incoming_data).unwrap();
@@ -24,6 +25,7 @@ fn send_message(connection:&str, message:&str) {
             let split:Vec<&str> = resp.split(":").collect();
             let incoming_bytes:usize = split[0].parse::<usize>().unwrap() + split[0].len() + 1;
 
+            //read until full message has been received
             while total_bytes < incoming_bytes {
                 let bytes = stream.read(&mut incoming_data).unwrap();
                 total_bytes += bytes;
@@ -69,6 +71,8 @@ fn main() {
 
     let connection = args.value_of("connection").unwrap();
 
+    //create a message string with fields seperated by ':', to show that a field is blank place a '0'
+    //this mostly applies to start messages
     if args.is_present("start") {
         let mut message = String::from("AddServer:");
         message.push_str(args.value_of("start").unwrap());
@@ -99,8 +103,4 @@ fn main() {
     if args.is_present("exit") {
         send_message(connection, "Exit");
     }
-
-    // send_message(connection, "AddServer:5001:TAZER_SERVER_CACHE_SIZE=$((128*1024*1024)):TAZER_PRIVATE_MEM_CACHE_SIZE=$((128*1024*1024))");
-    // send_message(connection, "CloseServer:hostname:5001");
-    // send_message(connection, "Exit");
 }

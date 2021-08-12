@@ -39,6 +39,7 @@ fn main() -> Result<(), io::Error> {
         .short("e")
         .long("extension")
         .takes_value(true)
+        .requires("recursive")
         .help("Add an extension to the end of the new metafile names and remove the old extension.")
     )
     .arg(
@@ -63,10 +64,12 @@ fn main() -> Result<(), io::Error> {
     }
 
     if args.is_present("recursive") {
+        //if recursive, create output path and recursively search for old metafiles to convert
         create_dir_all(output_path).expect("Error creating directory");
         recursive(input_path, output_path, &extension)?;
     }
     else {
+        //not recursive so just read the old metafile and create the new one
         let meta_info = read_meta_info(input_path);
         let meta_info = match meta_info {
             Some(meta_info) => meta_info,
@@ -79,7 +82,7 @@ fn main() -> Result<(), io::Error> {
 }
 
 fn read_meta_info(path: &Path) -> Option<MetaInfo> {
-
+    //path is assumned to be an old metafile, return a stuct containing info parsed from the old metafile
     let mut meta_info : MetaInfo = MetaInfo {
         tazer_version: "TAZER0.1\n".to_string(),
         file_type: "".to_string(),
@@ -106,6 +109,7 @@ fn read_meta_info(path: &Path) -> Option<MetaInfo> {
         path_str = String::from(path.file_name().unwrap().to_str().unwrap());
     }
 
+    //determine file type based on it's extension
     if path_str.contains(".meta.in") {
         meta_info.file_type = "type=input\n".to_string();
     }
@@ -119,6 +123,7 @@ fn read_meta_info(path: &Path) -> Option<MetaInfo> {
         return None
     }
 
+    //open the old metafile and parse info seperated by ':'
     let file = File::open(&path);
     let mut file = match file {
         Ok(file) => file,
@@ -136,9 +141,11 @@ fn read_meta_info(path: &Path) -> Option<MetaInfo> {
     let sections: Vec<&str> = split.collect();
 
     if sections.len() < 7 {
+        //the old metafiles should allways have at least 7 fields seperated by ':'
         return None
     }
 
+    //set the meta_info struct's fields to the info that was parsed
     meta_info.host_addr = "host=".to_string();
     meta_info.host_addr.push_str(sections[0]);
     meta_info.host_addr.push('\n');
@@ -174,12 +181,14 @@ fn read_meta_info(path: &Path) -> Option<MetaInfo> {
 }
 
 fn create_new_metafile(path: &Path, meta_info: MetaInfo) {
+    //create the new metafile
     let file = File::create(path);
     let mut file = match file {
         Ok(file) => file,
         Err(error) => panic!("Failed to create file {:?}", error),
     };
 
+    //write each field of the meta_info struct to the new file
     file.write_all(meta_info.tazer_version.as_bytes()).expect("write failed");
     file.write_all(meta_info.file_type.as_bytes()).expect("write failed");
     file.write_all("[server]\n".as_bytes()).expect("write failed");
@@ -193,22 +202,28 @@ fn create_new_metafile(path: &Path, meta_info: MetaInfo) {
 }
 
 fn recursive(input_path: &Path, output_path: &Path, extension: &String) -> Result<(), io::Error> {
+    //find all the old metafiles in the input path, for each of them, create a new metafile in the output path
     let paths = read_dir(input_path)?;
     for entry in paths {
         let path = entry.unwrap().path();
         let md = metadata(&path)?;
 
         if md.is_dir() {
+            //found a directory
+            //create the current path in the output path, so that output path mirrors the input path in structure, then call this function recursively 
             let new_output_path = output_path.join(path.file_name().unwrap().to_str().unwrap());
             create_dir_all(&new_output_path).expect("Error creating directory");
             let _ = recursive(path.as_path(), &new_output_path, &extension);
         }
         else if md.is_file() {
+            //found a file, check if its a valid metafile with read_meta_info
             let meta_info = read_meta_info(path.as_path());
             
             if meta_info.is_some() {
+                //succuessfully read the meta info from the old metafile
                 let mut new_file_name = String::from(path.file_name().unwrap().to_str().unwrap());
 
+                //replace the old metafile extension with the new provided extension
                 if new_file_name.contains(".meta.in") {
                     new_file_name = new_file_name.replace(".meta.in", extension.as_str());
                 }
@@ -219,6 +234,7 @@ fn recursive(input_path: &Path, output_path: &Path, extension: &String) -> Resul
                     new_file_name = new_file_name.replace(".meta.local", extension.as_str());
                 }
     
+                //create a new metafile in the output path with the file name determined previously
                 let new_file_path = output_path.join(new_file_name);
     
                 //println!("new filepath: {}", new_file_path.as_path().display());

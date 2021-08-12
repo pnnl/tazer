@@ -21,13 +21,14 @@ struct TazerServer {
 
 fn send_response(mut stream:&TcpStream, message:&str) {
     let bytes:usize = message.len();
-    let mut full_message = bytes.to_string();
+    let mut full_message = bytes.to_string(); //append the size of the message to the front of the message
     full_message.push(':');
     full_message.push_str(message);
     stream.write(full_message.as_bytes()).unwrap();
 }
 
 fn close_tazer_server(message:String) -> Result<(String, String, String), Box<dyn Error>> {
+    //call a shell script to attempt to close a tazer server
     let split:Vec<&str> = message.split(":").collect();
     let host = split[2].to_string();
     let port = split[3].to_string();
@@ -87,7 +88,7 @@ fn add_tazer_server(message:String) -> Result<TazerServer, Box<dyn Error>> {
         println!("metafile line: {}", l);
     }
 
-    //attempt to launch tazer server node
+    //attempt to launch tazer server node using a shell script
     let child_process = Command::new("src/launch_tazer_server.sh")
     .arg(&tazer_server.port)
     .arg(&tazer_server.data_file)
@@ -120,7 +121,7 @@ fn add_tazer_server(message:String) -> Result<TazerServer, Box<dyn Error>> {
 }
 
 fn message_to_string(mut stream: &TcpStream) -> Result<String, Box<dyn Error>> {
-    //let mut incoming_data = [0 as u8; 2048]; 
+    //parse incoming message, assume message starts with it's length
     let mut message = String::new();
     let mut incoming_data = [0 as u8; 1024]; 
     let mut total_bytes:usize = stream.read(&mut incoming_data)?;
@@ -128,6 +129,7 @@ fn message_to_string(mut stream: &TcpStream) -> Result<String, Box<dyn Error>> {
     let split:Vec<&str> = message.split(":").collect();
     let incoming_bytes:usize = split[0].parse::<usize>().unwrap() + split[0].len() + 1;
 
+    //keep reading until we have received the total bytes in the message
     while total_bytes < incoming_bytes {
         let bytes = stream.read(&mut incoming_data)?;
         total_bytes += bytes;
@@ -164,6 +166,7 @@ fn main() {
     let stdout = File::create("./daemon.out").unwrap();
     let stderr = File::create("./daemon.err").unwrap();
 
+    //run this server as a background process
     let daemonize = Daemonize::new()
     .pid_file("./daemon.pid")
     .chown_pid_file(true)
@@ -180,9 +183,11 @@ fn main() {
         match stream {
             Ok(stream) => {
                 match message_to_string(&stream) {
+                    //determine what to do based on the message received
                     Ok(message) => {
                         if message.contains("AddServer") {
                             println!("Adding Tazer Server");
+                            //start a new tazer server and respond to the client with success or fail
                             match add_tazer_server(message) {
                                 Ok(new_server) => {
                                     let mut resp = String::from("Success:");
@@ -190,7 +195,7 @@ fn main() {
                                     resp.push(':');
                                     resp.push_str(&new_server.port);
                                     send_response(&stream, &resp);
-                                    active_tazer_servers.push(new_server);
+                                    active_tazer_servers.push(new_server); //add to the list of active tazer servers
                                 }
                                 Err(e) => {
                                     println!("Error adding tazer server: {}", e);
@@ -200,13 +205,14 @@ fn main() {
                         }
                         else if message.contains("CloseServer") {
                             println!("Closing Tazer Server");
+                            //close the given tazer server and respond to the client with success or fail
                             match close_tazer_server(message) {
                                 Ok(old_server) => {
                                     let mut resp = String::from("Successfully closed tazer server:\n");
                                     resp.push_str(&old_server.2);
                                     send_response(&stream, &resp);
                                     if let Some(pos) = active_tazer_servers.iter().position(|x| *x.host == old_server.0 && *x.port == old_server.1) {
-                                        active_tazer_servers.remove(pos);
+                                        active_tazer_servers.remove(pos); //remove the server we just closed from the list
                                     }
                                 }
                                 Err(e) => {
@@ -217,7 +223,7 @@ fn main() {
                         }
                         else if message.contains("Exit") {
                             println!("Exiting");
-                            //first close all tazer servers
+                            //first close all tazer servers, then stop the daemon
                             for server in active_tazer_servers {
                                 let mut close_message = "0:CloseServer:".to_string();
                                 close_message.push_str(&server.host);
