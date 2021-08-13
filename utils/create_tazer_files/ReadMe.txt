@@ -23,7 +23,7 @@ Arguments List:
 Examples:
 
 Create a single metafile for a given file:
-    "cargo run -- --path=/tmp/files/file1 --version=TAZER0.1 --type=input --blocksize=1048576 --compression=false --prefetch=false --savelocal=false
+    "cargo run -- --path=files/file1 --version=TAZER0.1 --type=input --blocksize=1048576 --compression=false --prefetch=false --savelocal=false 
         --server=127.0.0.1:5001 --serverroot=/tmp/server_data/ --outputpath=/tmp/metafiles"
 
     Produces a metafile called /tmp/metafiles/file1, with the following contents:
@@ -32,14 +32,14 @@ Create a single metafile for a given file:
     [server]
     host=127.0.0.1
     port=5001
-    file=/tmp/server_data//tmp/files/file1
+    file=/tmp/server_data/files/file1
     block_size=1048576
     compress=false
     prefetch=false
     save_local=false
 
 Create a single metafile with an added extension:
-    "cargo run -- --path=/tmp/files/file1 --version=TAZER0.1 --type=input --blocksize=1048576 --compression=false --prefetch=false --savelocal=false 
+    "cargo run -- --path=files/file1 --version=TAZER0.1 --type=input --blocksize=1048576 --compression=false --prefetch=false --savelocal=false
         --server=127.0.0.1:5001 --serverroot=/tmp/server_data/ --outputpath=/tmp/metafiles --extension=.meta.in"
 
     Produces a metafile called /tmp/metafiles/file1.meta.in with the same contents as the previous example.
