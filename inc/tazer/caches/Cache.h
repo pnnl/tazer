@@ -106,7 +106,7 @@ class Cache : public Loggable, public Trackable<std::string, Cache *> {
     //
     // the return value either returns the request block if it is present in any of the client side caches, or it signfies we need to wait for the network requests to finish (aka call get on the futures in "reads").
 
-    Request *requestBlock(uint32_t index, uint64_t &size, uint32_t fileIndex, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority);
+    Request *requestBlock(uint32_t index, uint64_t &size, uint32_t fileIndex, uint64_t offset, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority);
     virtual void readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority);
 
     virtual void addCacheLevel(Cache *, uint64_t level = 0);

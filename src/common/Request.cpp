@@ -82,11 +82,16 @@ std::atomic<uint64_t> Request::ID_CNT(0);
 
 RequestTrace Request::trace( bool trigger){
     if (trigger && globalTrigger){
-        return RequestTrace(&ss,true) << "[" <<Timer::getCurrentTime()<<"]";
+        return RequestTrace(&ss,true) << "[" << id << " " << Timer::getCurrentTime()<<"]";
     }
     else{
         return RequestTrace(&ss,false);
     }    
+}
+
+void Request::flushTrace(){
+    ss << std::endl;
+    std::cout << ss.str();
 }
 
 std::string Request::str(){

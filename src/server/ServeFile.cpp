@@ -419,7 +419,7 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
 
             std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> reads;
 
-            auto request = _cache.requestBlock(blk, _blkSize, _regFileIndex, reads, 0);
+            auto request = _cache.requestBlock(blk, _blkSize, _regFileIndex, 0, reads, 0);
             if (request->ready) {
                 request->originating->stats.addAmt(false, CacheStats::Metric::read, _blkSize);
                 // std::cout << "cache: " << _name << " " << blk << std::endl;

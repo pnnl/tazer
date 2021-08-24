@@ -223,7 +223,7 @@ void Cache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex) {
 }
 
 bool Cache::writeBlock(Request *req) {
-
+    req->trace() << "WRITE " << _name << std::endl;
     if (_nextLevel) {
         // std::cout<<"[TAZER] " << _name << " writeblock " << std::hex << (void *)buffer << std::dec << std::endl;
         return _nextLevel->writeBlock(req);
@@ -231,8 +231,9 @@ bool Cache::writeBlock(Request *req) {
     return false;
 }
 
-Request *Cache::requestBlock(uint32_t index, uint64_t &size, uint32_t fileIndex, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
-    Request *req = new Request(index, fileIndex, size, this, NULL);
+Request *Cache::requestBlock(uint32_t index, uint64_t &size, uint32_t fileIndex, uint64_t offset, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
+    Request *req = new Request(index, fileIndex, size, offset, this, NULL);
+    req->trace() << _name << " " << this << std::endl;
     // std::cout<<"New Request!! "<<req->str()<<std::endl;
     Cache *tmp = this;
     while (tmp) {
@@ -399,7 +400,7 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
 
     for (auto blk : blocks) {
         uint32_t priority = 1 + (blk - startBlk);
-        auto request = requestBlock(blk, blkSize, regFileIndex, reads, priority);
+        auto request = requestBlock(blk, blkSize, regFileIndex, 0, reads, priority);
         if (request->ready) { //the block was in a client side cache!!
             //std::cout << "********************Data was on client side!!!" <<std::endl;
             request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);

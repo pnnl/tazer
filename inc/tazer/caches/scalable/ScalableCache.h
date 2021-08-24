@@ -8,6 +8,8 @@
 #include "UnixIO.h"
 #include <future>
 #include <memory>
+#include <deque>
+#include <array>
 
 #define BLK_EMPTY 0
 #define BLK_PRE 1
@@ -119,7 +121,6 @@ class ScalableCache : public Cache {
 
     //key = fileIndex + Index, value = blockMeta
     std::unordered_map<uint64_t, BlockEntry*> _blkMap;
-
     ReaderWriterLock *_localLock;
 
     enum ReadPattern {
@@ -127,14 +128,28 @@ class ScalableCache : public Cache {
       LINEAR
     };
 
-    ReadPattern _pattern;
-    bool _onLinearTrack = false; 
-    std::atomic<uint32_t> _hitsSinceLastMiss;
-    BlockEntry* _lastAccessedBlock = NULL;
+    struct MetaData {
+      ReadPattern pattern;
+      std::deque<std::array<uint64_t, 3>> window;
+      int64_t lastDiff;
+      uint64_t consecutiveHits;
+      uint64_t totalBlocks;
+      MetaData():
+        pattern(RANDOM),
+        lastDiff(-1),
+        consecutiveHits(0),
+        totalBlocks(0) {}
+    };
+
+    ReaderWriterLock *_patternLock;
+    std::unordered_map<uint32_t, MetaData> _meta;
 
   private:
     void trackBlock(std::string cacheName, std::string action, uint32_t fileIndex, uint32_t blockIndex, uint64_t priority);
-    void checkPattern();
+    void checkPattern(unsigned int fileIndex);
+    void addAccessMeta(unsigned int fileIndex, uint64_t blockIndex, uint64_t readIndex);
+    void updateHitMeta(unsigned int fileIndex, bool hit);
 };
 
+const char* const patternName[] = { "Random", "Linear" };
 #endif /* ScalableCache_H */

@@ -103,9 +103,8 @@ std::string ScalableMemoryCache::blockEntryStr(BlockEntry *entry){
 
 //Must lock first!
 //This uses the actual index (it does not do a search)
-void ScalableMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate,Request* req) {
+void ScalableMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate, Request* req) {
     //LOCK ME
-
     std::string hashstr(std::to_string(fileIndex) + std::to_string(blockIndex)); 
     uint64_t key = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
     
@@ -136,11 +135,13 @@ void ScalableMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t
     }
     blk->origCache.store(type);
     blk->status = status;
-    if (activeUpdate >0){
-        incBlkCnt(blk,NULL);
+    if (activeUpdate > 0){
+        auto val = incBlkCnt(blk,NULL);
+        req->trace() << "blockSet inc: " << val << std::endl;
     }
     else if (activeUpdate < 0){
-        decBlkCnt(blk,NULL);
+        auto val = decBlkCnt(blk,NULL);
+        req->trace() << "blockSet dec: " << val << std::endl;
     }
     //UNLOCK ME
 }

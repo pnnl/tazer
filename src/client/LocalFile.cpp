@@ -276,7 +276,7 @@ ssize_t LocalFile::read(void *buf, size_t count, uint32_t index) {
         std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> reads;
         uint64_t priority = 0;
         for (uint32_t blk = startBlock; blk < endBlock; blk++) {
-            auto request = _cache->requestBlock(blk, _blkSize, _regFileIndex, reads, priority);
+            auto request = _cache->requestBlock(blk, _blkSize, _regFileIndex, _filePos[index], reads, priority);
             if (request->ready) {
                 copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
                 _cache->bufferWrite(request);

@@ -125,6 +125,7 @@ struct Request {
     Cache *originating;
     uint32_t blkIndex;
     uint32_t fileIndex;
+    uint64_t offset;
     uint64_t size;
     uint64_t time;
     uint64_t retryTime;
@@ -140,18 +141,21 @@ struct Request {
     uint64_t id;
     std::stringstream ss;
 
-    Request() : data(NULL),originating(NULL),blkIndex(0),fileIndex(0),size(0){ }
-    Request(uint32_t blk, uint32_t fileIndex, uint64_t size, Cache *orig, uint8_t *data) : data(data), originating(orig), blkIndex(blk), fileIndex(fileIndex), 
-                                                                                           size(size), time(Timer::getCurrentTime()),retryTime(0), ready(false), 
+    Request() : data(NULL), originating(NULL), blkIndex(0), fileIndex(0), offset(0), size(0), globalTrigger(false) { }
+    Request(uint32_t blk, uint32_t fileIndex, uint64_t size, uint64_t offset, Cache *orig, uint8_t *data) : data(data), originating(orig), blkIndex(blk), fileIndex(fileIndex), 
+                                                                                           offset(offset), size(size), time(Timer::getCurrentTime()),retryTime(0), ready(false), 
                                                                                            printTrace(false),globalTrigger(false), waitingCache(CacheType::empty),id(Request::ID_CNT.fetch_add(1)) {
     }
     ~Request(){
         if (printTrace){
             Loggable::log()<<str();
         }
+        // flushTrace();
     }
     std::string str();
     RequestTrace trace(bool trigger = true);
+    void flushTrace();
+
     private:
         
         static std::atomic<uint64_t> ID_CNT;

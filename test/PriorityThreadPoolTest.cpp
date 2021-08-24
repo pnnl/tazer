@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
         auto task = std::packaged_task<std::future<Request*>()>([i, buf, cache] { //packaged task allow the transfer to execute on an asynchronous tx thread.
             std::promise<Request*> prom;
             auto fut = prom.get_future();
-            prom.set_value(new Request(i,0,0,cache,buf));
+            prom.set_value(new Request(i,0,0,0,cache,buf));
             std::cout << " index: " << i << std::endl;
             return fut;
         });

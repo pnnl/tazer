@@ -76,6 +76,9 @@ configure_file(ConvertToRecords.py ${CMAKE_BINARY_DIR}/test/ConverToRecords.py @
 add_executable(PriorityThreadPoolTest PriorityThreadPoolTest.cpp)
 target_link_libraries(PriorityThreadPoolTest testLib)
 
+add_executable(CheckCp CheckCp.cpp )
+target_link_libraries(CheckCp threadPool)
+
 if(CURL_LIB)
     add_executable(SimpleUrlTest SimpleUrlTest.cpp)
     target_link_libraries(SimpleUrlTest testLib )

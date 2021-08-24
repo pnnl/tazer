@@ -251,14 +251,14 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
 
 template <class Lock>
 bool NewBoundedCache<Lock>::writeBlock(Request *req) {
-    if (_type == CacheType::boundedGlobalFile){
-        req->printTrace=true;
-        req->globalTrigger=true;
-    }
-    else{
-        req->printTrace=false; 
-        req->globalTrigger=false;
-    }
+    // if (_type == CacheType::boundedGlobalFile){
+    //     req->printTrace=true;
+    //     req->globalTrigger=true;
+    // }
+    // else{
+    //     req->printTrace=false; 
+    //     req->globalTrigger=false;
+    // }
     req->trace()<<_name<<" WRITE BLOCK"<<std::endl;
     
     bool ret = false;
@@ -299,7 +299,7 @@ bool NewBoundedCache<Lock>::writeBlock(Request *req) {
             ret = true;
         }
         else {
-            req->trace()<<"not originating cache"<<std::endl;
+            req->trace()<<"not originating cache ---"<<std::endl;
 
             DPRINTF("beg wb blk: %u out: %u\n", index, _outstanding.load());
 
@@ -391,14 +391,14 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
     stats.start(); //read
     stats.start(); //ovh
     bool prefetch = priority != 0;
-    if (_type == CacheType::boundedGlobalFile){
-        req->printTrace=true;
-        req->globalTrigger=true;
-    }
-    else{
-        req->printTrace=false; 
-        req->globalTrigger=false;
-    }
+    // if (_type == CacheType::boundedGlobalFile){
+    //     req->printTrace=true;
+    //     req->globalTrigger=true;
+    // }
+    // else{
+    //     req->printTrace=false; 
+    //     req->globalTrigger=false;
+    // }
     req->trace()<<_name<<" READ BLOCK"<<std::endl;
     
     log(this) << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << " nl: " << _nextLevel->name() << std::endl;

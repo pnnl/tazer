@@ -79,7 +79,8 @@
 #include <unordered_map>
 #include "Cache.h"
 
-#define RANDOM_BLOCK_LIMIT 10 //a temporary value to start each file with a max # of allowed blocks
+#define RANDOM_BLOCK_LIMIT  -1 
+//10 //a temporary value to start each file with a max # of allowed blocks
 
 //template <class Lock>
 class ScalableRegistry{
@@ -91,7 +92,7 @@ class ScalableRegistry{
     uint8_t * stealBlock(int n);
     void fileClosed (Cache* cache);
     void fileOpened (Cache* cache);
-    void updateCachePattern(Cache* cache, uint32_t p);
+    void updateCachePattern(Cache* cache, uint32_t p, uint64_t maxBlocks);
 
     static ScalableRegistry *addNewScalableRegistry(uint64_t maxCacheSize, uint64_t blockSize);
     

@@ -16,9 +16,9 @@ ScalableCache<Lock>::ScalableCache(std::string cacheName, CacheType type, uint64
     // required initializations
     stats.start();
     _maxNumBlocks = _registry->registerCache(this); //we might add pattern here in the future, for when we know the pattern beforehand (from metadata? ) 
-    _pattern = RANDOM;
     log(this) << _name << " " << _blockSize << " " << _maxNumBlocks << std::endl;
     _localLock = new ReaderWriterLock();
+    _patternLock = new ReaderWriterLock();
     stats.end(false, CacheStats::Metric::constructor);
 }
 
@@ -34,16 +34,7 @@ ScalableCache<Lock>::~ScalableCache() {
 
 template <class Lock>
 bool ScalableCache<Lock>::writeBlock(Request *req){
-
-    if (_type == CacheType::boundedGlobalFile){
-        req->printTrace=true;
-        req->globalTrigger=true;
-    }
-    else{
-        req->printTrace=false; 
-        req->globalTrigger=false;
-    }
-    req->trace()<<_name<<" WRITE BLOCK"<<std::endl;
+    req->trace()<<_name<<" WRITE BLOCK !@#"<<std::endl;
 
     bool ret = false;
     if (req->reservedMap[this] > 0 || !_terminating) { //when terminating dont waste time trying to write orphan requests
@@ -80,7 +71,7 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
             ret = true;
         }
         else {
-            req->trace()<<"not originating cache"<<std::endl;
+            req->trace()<<"not originating cache " << req->size << " " << _blockSize <<std::endl;
 
 //            DPRINTF("beg wb blk: %u out: %u\n", index, _outstanding.load());
             DPRINTF("beg wb blk: %u out: %u\n", index,0);
@@ -88,10 +79,9 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
             if (req->size <= _blockSize) {
                 _blkMapLock->writerLock(0,req); //LOCK ME
                 BlockEntry* entry = oldestBlock(req->blkIndex, req->fileIndex, req);
-
                 trackBlock(_name, "[BLOCK_WRITE]", req->fileIndex, req->blkIndex, 0);
-
-                if (entry){ //a slot for the block is present in the cache       
+                req->trace() << "LOOK: " << entry << std::endl;
+                if (entry){ //a slot for the block is present in the cache   
                     if ((entry->status != BLK_WR && entry->status != BLK_AVAIL) || entry->status == BLK_EVICT) { //not found means we evicted some block
                         if(entry->status == BLK_EVICT && req->reservedMap[this] ){
                             req->trace()<<"evicted "<<blockEntryStr(entry)<<std::endl;
@@ -110,7 +100,8 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
                         setBlockData(req->data,  entry->id, req->size);
 
                         req->trace()<<"update entry to avail "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-                        blockSet( entry, req->fileIndex, req->blkIndex, BLK_AVAIL, req->originating->type(), entry->prefetched, req->reservedMap[this], req); //write the name of the originating cache so we can properly attribute stall time...
+                        // blockSet( entry, req->fileIndex, req->blkIndex, BLK_AVAIL, req->originating->type(), entry->prefetched, req->reservedMap[this], req); //write the name of the originating cache so we can properly attribute stall time...
+                        blockSet( entry, req->fileIndex, req->blkIndex, BLK_AVAIL, req->originating->type(), entry->prefetched, -1, req);
                         if(entry->status == BLK_EVICT){
                              req->trace()<<"new entry/evict "<<" "<<(void*)entry<<std::endl;
                              req->trace()<<blockEntryStr( entry)<<" "<<(void*)entry<<std::endl;                             
@@ -118,7 +109,8 @@ bool ScalableCache<Lock>::writeBlock(Request *req){
                     }
                     else if (entry->status == BLK_AVAIL) {
                         req->trace()<<"update time "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-                        blockSet( entry, req->fileIndex, req->blkIndex, BLK_AVAIL, req->originating->type(), entry->prefetched,req->reservedMap[this], req); //update timestamp
+                        // blockSet( entry, req->fileIndex, req->blkIndex, BLK_AVAIL, req->originating->type(), entry->prefetched, req->reservedMap[this], req); //update timestamp
+                        blockSet( entry, req->fileIndex, req->blkIndex, BLK_AVAIL, req->originating->type(), entry->prefetched, -1, req);
                     }
                     else { //the writer will update the timestamp
                         req->trace()<<"other will update"<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
@@ -161,57 +153,56 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
     stats.start(); //read
     stats.start(); //ovh
     bool prefetch = priority != 0;
-    if (_type == CacheType::boundedGlobalFile){
-        req->printTrace=true;
-        req->globalTrigger=true;
-    }
-    else{
-        req->printTrace=false; 
-        req->globalTrigger=false;
-    }
-    req->trace()<<_name<<" READ BLOCK"<<std::endl;
-    
+
     log(this) << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << " nl: " << _nextLevel->name() << std::endl;
     trackBlock(_name, (priority != 0 ? " [BLOCK_PREFETCH_REQUEST] " : " [BLOCK_REQUEST] "), req->fileIndex, req->blkIndex, priority);
-
+    req->trace()<<_name<<" READ BLOCK"<<std::endl;
     req->time = Timer::getCurrentTime();
-
+    
     uint8_t *buff = nullptr;
     auto index = req->blkIndex;
     auto fileIndex = req->fileIndex;
-
-    // find if we have the block
-
+    addAccessMeta(fileIndex, req->blkIndex, req->offset);
+    checkPattern(fileIndex);
+    // Get the size
      _localLock->readerLock(); //local lock
     int tsize = _fileMap[fileIndex].blockSize;
+    int fsize = _fileMap[fileIndex].fileSize;
     _localLock->readerUnlock();
-    if (!req->size) {
+
+    if (!req->size)
         req->size = tsize;
-    }
+    
     if (req->size <= _blockSize) {
         _blkMapLock->writerLock(0,req); //LOCK ME
-        BlockEntry *entry = oldestBlock(index, fileIndex, req); 
+        BlockEntry *entry = oldestBlock(index, fileIndex, req);
+
         if (entry) { // an entry is available for this block
-            _lastAccessedBlock = entry;
-            req->trace()<<"found entry: "<<blockEntryStr(entry)<<" "<<" "<<(void*)entry<<std::endl;
+            req->trace() << "found entry: " << blockEntryStr(entry) << "  " << (void*)entry << std::endl;
             req->reservedMap[this] = 1; // indicate we will need to do a decrement in write
+
             if (entry->status == BLK_AVAIL){ //its a hit!
                 trackBlock(_name, "[BLOCK_READ_HIT]", fileIndex, index, priority);
-                req->trace()<<"hit "<<blockEntryStr(entry)<<std::endl;
+                req->trace() << "hit " << blockEntryStr(entry) << std::endl;
                 entry->currentHits.fetch_add(1);
-                _hitsSinceLastMiss.fetch_add(1);
+                updateHitMeta(fileIndex, true);
+
                 if (entry->prefetched > 0) {
                     stats.addAmt(prefetch, CacheStats::Metric::prefetches, 1);
                     entry->prefetched = prefetch;
                 }
-                else {
+                else
                     stats.addAmt(prefetch, CacheStats::Metric::hits, req->size);
-                }
-                req->trace()<<"update access time"<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
+                
+                req->trace() << "update access time" << blockEntryStr(entry) << " " << (void*)entry << std::endl;
                 blockSet(entry, fileIndex, index, BLK_AVAIL, _type, entry->prefetched, 1, req); //increment is handled here
                 stats.end(prefetch, CacheStats::Metric::ovh);
+                
                 stats.start(); // hits
                 buff = entry->blkAddr;
+                stats.end(prefetch, CacheStats::Metric::hits);
+                
+                stats.start(); // ovh
                 req->data = buff;
                 req->originating = this;
                 req->ready = true;
@@ -221,35 +212,34 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
                 req->fileIndexMap[this]=entry->fileIndex;
                 req->statusMap[this]=entry->status;
                 updateRequestTime(req->time);
-                req->trace()<<"done in hit "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
+                req->trace() << "done in hit " << blockEntryStr(entry) << " " << (void*)entry << std::endl;
                 _blkMapLock->writerUnlock(0,req); //UNLOCK ME
             }
-            else{ // we have an entry but the data isnt there, either wait for someone else or grab ourselves
-                req->trace()<<"miss "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
+            else{ // we have an entry but the data isn't there, either wait for someone else or grab ourselves
+                req->trace() << "miss " << blockEntryStr(entry) << " " << (void*) entry <<std::endl;
                 trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
+                updateHitMeta(fileIndex, false);
                 stats.addAmt(prefetch, CacheStats::Metric::misses, 1);
                 
                 if (entry->status == BLK_EMPTY || entry->status == BLK_EVICT){ // we need to get the data!
-                    req->trace()<<"we reserve: "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-                    if (prefetch) {
-                        blockSet(entry, fileIndex, index, BLK_PRE, _type, prefetch,1,req);//the incrememt happens here
-                    }
-                    else {
-                        blockSet(entry, fileIndex, index, BLK_RES, _type, prefetch,1,req);//the increment happens here
-                    }
-                    _blkMapLock->writerUnlock(0,req);   //UNLOCK ME          
+                    req->trace() << "we reserve: " << blockEntryStr(entry) << " " << (void*)entry << std::endl;
+                    blockSet(entry, fileIndex, index, (prefetch) ? BLK_PRE : BLK_RES, _type, prefetch,1,req);//the incrememt happens here
+                    _blkMapLock->writerUnlock(0,req);   //UNLOCK ME 
+
                     req->time = Timer::getCurrentTime() - req->time;
-                    req->trace()<<"reserved go to next level "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
+                    req->trace() << "reserved go to next level " << blockEntryStr(entry) << " " << (void*)entry << std::endl;
                     updateRequestTime(req->time);
                     stats.end(prefetch, CacheStats::Metric::ovh);
+                    
                     stats.start(); //miss
                     _nextLevel->readBlock(req, reads, priority);
                     stats.end(prefetch, CacheStats::Metric::misses);
+
                     stats.start(); //ovh
                 }
                 else { //BLK_WR || BLK_RES || BLK_PRE
                     incBlkCnt(entry,req); // someone else has already reserved so lets incrememt
-                    req->trace()<<"someone else reserved: "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
+                    req->trace() << "someone else reserved: " << blockEntryStr(entry) << " " << (void*)entry << std::endl;
                     auto  blockId= entry->id;
                     _blkMapLock->writerUnlock(0,req); //UNLOCK ME  
                     auto fut = std::async(std::launch::deferred, [this, req,  blockId, prefetch, entry] { 
@@ -259,12 +249,13 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
                         bool avail = false;
                         uint8_t *buff = NULL;
                         double curTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
-                        while (!avail && curTime < std::min(_lastLevel->getRequestTime() * 10,60.0) ) {                      // exit loop if request is 10x times longer than average network request or longer than 1 minute
+                        while (!avail && curTime < std::min(_lastLevel->getRequestTime() * 10, 60.0) ) { // exit loop if request is 10x times longer than average network request or longer than 1 minute
                             avail = blockAvailable( blockId, req->fileIndex, true, cnt, &waitingCacheType); //maybe pass in a char* to capture the name of the originating cache?
                             sched_yield();
                             cnt++;
                             curTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
                         }
+
                         if (avail) {
                             BlockEntry* entry2 = getBlockEntry(blockId, req);
                             req->trace()<<"received, entry: "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
@@ -282,7 +273,7 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
                             std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> reads;
                             double reqTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
                             req->retryTime = Timer::getCurrentTime();
-                            req->trace()<<" retrying ("<<req->blkIndex<<","<<req->fileIndex<<")"<<" bi:"<< blockId<<std::endl;
+                            req->trace() << " retrying (" << req->blkIndex << "," << req->fileIndex << ")" << " bi:" << blockId << std::endl;
                             _lastLevel->readBlock(req, reads, 0); //rerequest block from next level, note this updates the request data structure so we do not need to update it manually;
                             log(this) << Timer::printTime() << " " << _name << "timeout, rereqeusting block " << req->blkIndex <<" from "<<_lastLevel->name()<< " " << req->fileIndex << " " << getRequestTime() << " " << _lastLevel->getRequestTime() << " " << reqTime << " " << reads.size() << std::endl;
                             req->retryTime = Timer::getCurrentTime()-req->retryTime;
@@ -293,7 +284,7 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
                             else{
                                 waitingCacheType = _lastLevel->type();
                             }
-                            req->trace()<<"recieved"<<std::endl;
+                            req->trace() << "recieved" << std::endl;
                             log(this) <<"[TAZER] got block "<<req->blkIndex<<" after retrying! from: "<<req->originating->name()<<" waiting on cache type: "<<cacheTypeName(waitingCacheType)<<" "<<req->retryTime<<std::endl;
                         }
 
@@ -312,52 +303,24 @@ void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, s
             _blkMapLock->writerUnlock(0,req); //UNLOCK ME
         
             req->time = Timer::getCurrentTime() - req->time;
-            req->trace()<<"no space got to next level ("<<req->blkIndex<<","<<req->fileIndex<<")"<<std::endl;
+            req->trace() << "no space got to next level (" << req->blkIndex << "," << req->fileIndex << ")" << std::endl;
             updateRequestTime(req->time);
             stats.end(prefetch, CacheStats::Metric::ovh);
+            
             stats.start(); //miss
             _nextLevel->readBlock(req, reads, priority);
             stats.end(prefetch, CacheStats::Metric::misses);
+            
             stats.start(); //ovh
         }
     }
     else {
-        *this /*std::cerr*/ << "[TAZER]"
-                            << "shouldnt be here yet... need to handle" << std::endl;
+        *this << "[TAZER]" << "shouldnt be here yet... need to handle" << std::endl;
         raise(SIGSEGV);
     }
     stats.end(prefetch, CacheStats::Metric::ovh);
     stats.end(prefetch, CacheStats::Metric::read);
 }
-
-
-
-
-//     BlockEntry* blockRef = getBlock(req->blkIndex, req->fileIndex, req); 
-
-//     if( blockRef == NULL) {
-//         req->time = Timer::getCurrentTime() - req->time;
-//         req->trace()<<"no space got to next level ("<<req->blkIndex<<","<<req->fileIndex<<")"<<std::endl;
-//         updateRequestTime(req->time);
-//         stats.end(prefetch, CacheStats::Metric::ovh);
-//         stats.start(); //miss
-//         _nextLevel->readBlock(req, reads, priority);
-//         stats.end(prefetch, CacheStats::Metric::misses);
-//         stats.start(); //ovh
-//         //we don't have the block
-//     }
-//     else {
-//         uint8_t *buff = nullptr;
-//         buff = blockRef->blkAddr;
-//         req->data = buff;
-//         req->originating = this;
-//         req->ready = true;
-//     }
-//     // if(blockRef < 0)
-//     // ask next level
-//     // else 
-//     // update request with blockData
-// }
 
 template <class Lock>
 void ScalableCache<Lock>::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize){
@@ -370,11 +333,14 @@ void ScalableCache<Lock>::addFile(uint32_t index, std::string filename, uint64_t
         uint64_t hash = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
 
         _fileMap.emplace(index, FileEntry{filename, blockSize, fileSize, hash});
-
-        //uint64_t temp = _fileMap[index];
+        
+        // Add metaData for particular file
+        _patternLock->writerLock();
+        _meta[index] = MetaData();
+        _meta[index].totalBlocks = fileSize / blockSize + ((fileSize % blockSize) ? 1 : 0);
+        _patternLock->writerUnlock();
     }
     sendOpenSignal(index);
-    _pattern = RANDOM; //when a file first opened, assume random read pattern until we recognize another pattern
     _localLock->writerUnlock();
     // if (_nextLevel && _nextLevel->name() != NETWORKCACHENAME) { //quick hack to allow tasks to simulate unqiue files...
     if (_nextLevel) {
@@ -410,13 +376,12 @@ typename ScalableCache<Lock>::BlockEntry* ScalableCache<Lock>::oldestBlock(uint3
     std::string hashstr(std::to_string(fileIndex) + std::to_string(index)); 
     uint64_t key = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
     if(_blkMap.count(key) > 0 ) { // look for actual entry
-        req->trace()<<"found entry: "<<blockEntryStr(_blkMap[key])<<std::endl;
+        req->trace() << "found entry: " << blockEntryStr(_blkMap[key]) << std::endl;
         return _blkMap[key];
     }
     else{ 
         //update pattern according to current hit/miss
-        checkPattern();
-
+        // checkPattern(fileIndex);
         bool LRUsearch = true;
         if(_curNumBlocks < _maxNumBlocks){ //if we can have more blocks 
             uint8_t* addr = _registry->allocateBlock(this);//ask for a block from registry //send hit/miss for pattern detection
@@ -523,45 +488,54 @@ void ScalableCache<Lock>::trackBlock(std::string cacheName, std::string action, 
     }
 }
 
-template <class Lock> 
-void ScalableCache<Lock>::checkPattern() {
-    //LOCK ME 
-    if (_lastAccessedBlock){ //if last accessed block is NULL, this is the very first block allocation, so we skip this check
-        uint32_t curHits = _lastAccessedBlock->currentHits.load();
-        uint32_t allHits = _hitsSinceLastMiss.load();
-        if(_pattern == RANDOM){
-            if(_onLinearTrack){
-                //if all hits since last block request (miss) are to the same block, we detect a linear pattern
-                if( curHits == allHits ) {
-                    _pattern = LINEAR;
-                    _registry->updateCachePattern(this, _pattern); 
-                }
-                else {
-                    //we accessed multiple blocks since last block request, so not a linear access pattern
-                    _pattern = RANDOM; 
-                    _onLinearTrack = false;
-                }
-            }
-            else {
-                if( curHits == allHits ) {
-                    _onLinearTrack = true;
-                    //we wait for one more block access of similar properties to decide that it is a linear read pattern , so this is a mid-state
-                }
-            }
-        }
-        else { //if we already observed a linear pattern
-            if( curHits != allHits ) {
-                _pattern = RANDOM;
-                _registry->updateCachePattern(this, _pattern); 
-                _onLinearTrack = false;
-            }
-        }
+template <class Lock>
+void ScalableCache<Lock>::addAccessMeta(unsigned int fileIndex, uint64_t blockIndex, uint64_t readIndex) {
+    _patternLock->writerLock();
+    std::array<uint64_t, 3> access = {readIndex, blockIndex, Timer::getTimestamp()};
+    _meta[fileIndex].window.push_front(access);
+    if(_meta[fileIndex].window.size() == 6)
+        _meta[fileIndex].window.pop_back();
+    _patternLock->writerUnlock();
+}
 
-        //reset counters for hits
-        _lastAccessedBlock->currentHits = 0;
-        _hitsSinceLastMiss = 0;
+template <class Lock>
+void ScalableCache<Lock>::updateHitMeta(unsigned int fileIndex, bool hit){
+    _patternLock->writerLock();
+    if(hit)
+        _meta[fileIndex].consecutiveHits++;
+    else
+        _meta[fileIndex].consecutiveHits = 0;
+    _patternLock->writerUnlock();
+}
+
+template <class Lock> 
+void ScalableCache<Lock>::checkPattern(unsigned int fileIndex) {
+    _patternLock->readerLock();
+    // for (int i = 0; i < _meta[fileIndex].window.size(); i++) {
+    //     fprintf(stderr, "%d: %lu %lu %lu\n", i, _meta[fileIndex].window[i][0], _meta[fileIndex].window[i][1], _meta[fileIndex].window[i][2]);
+    //     fflush(stderr);
+    // }
+
+    auto oldPattern = _meta[fileIndex].pattern;
+    if (_meta[fileIndex].window.size() > 2) {
+        _meta[fileIndex].pattern = LINEAR;
+        uint64_t first;
+        for (int i = 1; i < _meta[fileIndex].window.size(); i++) {
+            uint64_t stride = _meta[fileIndex].window[i-1][1] - _meta[fileIndex].window[i][1];
+            // fprintf(stderr, "%d - %d: %lu\n", i, i-1, stride);
+            // fflush(stderr);
+            if (stride < 0 || stride > 1) {
+                _meta[fileIndex].pattern = RANDOM;
+            }
+        }
     }
-    //UNLOCK ME
+    auto newPattern = _meta[fileIndex].pattern;
+    _patternLock->readerUnlock();
+    if(oldPattern != newPattern) {
+        fprintf(stderr, "Updating cache pattern: %s\n", (newPattern) ? "LINEAR" : "RANDOM");
+        fflush(stderr);
+        _registry->updateCachePattern(this, newPattern, _meta[fileIndex].totalBlocks);
+    }
 }
 
 template <class Lock>

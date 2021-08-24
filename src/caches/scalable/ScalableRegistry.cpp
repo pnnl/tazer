@@ -142,12 +142,12 @@ void ScalableRegistry::fileClosed (Cache* cache) {
     std::cerr << "registry close -- exit" << std::endl;
 }
 
-void ScalableRegistry::updateCachePattern(Cache* cache, uint32_t p){ //RANDOM = 0, LINEAR=1
+void ScalableRegistry::updateCachePattern(Cache* cache, uint32_t p, uint64_t maxBlocks){ //RANDOM = 0, LINEAR=1
     if (p == 1){
         ((ScalableMemoryCache*)cache)->updateMaxBlocks(1);
     }
     else {
-        ((ScalableMemoryCache*)cache)->updateMaxBlocks(RANDOM_BLOCK_LIMIT);
+        ((ScalableMemoryCache*)cache)->updateMaxBlocks(maxBlocks);
     }
 
     //check if the cache has more than allowed limit, if so add to the victims list - but it's still in the active cache list
