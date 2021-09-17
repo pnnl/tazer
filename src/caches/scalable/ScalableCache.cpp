@@ -84,8 +84,8 @@
 #include <deque>
 #include <queue>
 
-// #define DPRINTF(...)
-#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define DPRINTF(...)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type) {
@@ -184,25 +184,28 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
         }
 
         //JS: Try to backout
-        if(meta->backOutOfReservation(blockIndex))
+        if(!dest && meta->backOutOfReservation(blockIndex))
             break;
 
-        //JS: Try random steal
-        sourceFileIndex = rand() % _metaMap.size();
-        auto randomMeta = _metaMap[sourceFileIndex];
-        dest = randomMeta->oldestBlock(sourceBlockIndex);
-        if(dest)
-            trackBlock(_name, "[BLOCK_EVICTED]", sourceFileIndex, sourceBlockIndex, 0);
+        if(!dest) {
+            //JS: Try random steal
+            sourceFileIndex = rand() % _metaMap.size();
+            auto randomMeta = _metaMap[sourceFileIndex];
+            dest = randomMeta->oldestBlock(sourceBlockIndex);
+            if(dest)
+                trackBlock(_name, "[BLOCK_EVICTED]", sourceFileIndex, sourceBlockIndex, 0);
+        }
     }
     
     if(dest) {
+        DPRINTF("[JS] ScalableCache::setBlock got dest\n");
         //JS: Copy the block back to our cache
         memcpy(dest, data, dataSize);
         meta->setBlock(blockIndex, dest);
         trackBlock(_name, "[BLOCK_WRITE]", fileIndex, blockIndex, 0);
     }
     else {
-        std::cerr << "[Tazer] Allocation failed, potential race condition!" << std::endl;
+        DPRINTF("[Tazer] Allocation failed, potential race condition!\n");
     }
     _cacheLock->readerUnlock();
 }
@@ -361,6 +364,7 @@ uint8_t * StealingAllocator::allocateBlock() {
     uint32_t sourceFileIndex;
 
     //JS: Can we allocate new blocks
+    //JS TODO: Check for race
     if(_availBlocks.fetch_sub(1)) {
         DPRINTF("[JS] StealingAllocator::allocateBlock new block\n");
         return new uint8_t[_blockSize];
@@ -370,8 +374,8 @@ uint8_t * StealingAllocator::allocateBlock() {
     //JS: Try to take from closed files first
     uint8_t * ret = NULL;
     allocLock.writerLock();
-    if(victims.size()) {
-        auto meta = victims.back();
+    if(priorityVictims.size()) {
+        auto meta = priorityVictims.back();
         ret = meta->oldestBlock(sourceBlockIndex);
         DPRINTF("[JS] StealingAllocator::allocateBlock taking from victim %p\n", ret);
     }
@@ -390,7 +394,7 @@ uint8_t * StealingAllocator::allocateBlock() {
 
 void StealingAllocator::closeFile(ScalableMetaData * meta) {
     allocLock.writerLock();
-    victims.push_back(meta);
+    priorityVictims.push_back(meta);
     DPRINTF("[JS] StealingAllocator::closeFile adding a victim file\n");
     allocLock.writerUnlock();
 }

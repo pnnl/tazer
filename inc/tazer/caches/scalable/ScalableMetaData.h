@@ -86,8 +86,9 @@ const char* const patternName[] = { "Random", "Linear" };
 struct ScalableMetaData {
     private:
         enum StridePattern {
-            RANDOM = 0,
-            LINEAR
+            //JS TODO: update name to BLOCKSTREAMING and UNKNOWN
+            BLOCKSTREAMING = 0,
+            UNKNOWN
         };
 
         struct BlockEntry {
@@ -110,7 +111,7 @@ struct ScalableMetaData {
     public:
         ScalableMetaData(uint64_t bSize, uint64_t fSize):
             totalBlocks(fSize / bSize + ((fSize % bSize) ? 1 : 0)),
-            pattern(RANDOM),
+            pattern(UNKNOWN),
             numBlocks(0) {
                 blocks = new BlockEntry[totalBlocks];
                 for(unsigned int i=0; i<totalBlocks; i++) {

@@ -137,7 +137,7 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
 //bmutlu
     if (Config::useMemoryCache) {
         //Cache *c = NewMemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
-        Cache *c = ScalableCache::addScalableCache(SCALABLECACHENAME, CacheType::scalable, Config::memoryCacheBlocksize, 16*Config::memoryCacheBlocksize);
+        Cache *c = ScalableCache::addScalableCache(SCALABLECACHENAME, CacheType::scalable, Config::memoryCacheBlocksize, 128*Config::memoryCacheBlocksize);
         std::cerr << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }

@@ -74,8 +74,8 @@
 
 #include "ScalableMetaData.h"
 
-#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-// #define DPRINTF(...)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define DPRINTF(...)
 
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
     bool toReserve = false;
@@ -87,6 +87,7 @@ uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffse
         auto old = blockEntry->blkLock.readerLock();
         toReserve = (old == 0);
         blockEntry->timeStamp.store(timeStamp);
+        DPRINTF("ScalableMetaData::getBlockData blockIndex: %lu reserve: %d\n", blockIndex, old);
     }
 
     //JS: Look to see if the data is avail, notice this is after a reader lock
@@ -105,7 +106,8 @@ void ScalableMetaData::setBlock(uint64_t blockIndex, uint8_t * data) {
     blockEntry->data.store(data);
 
     //JS: Dec our usage. It was inc'ed in getBlock
-    blockEntry->blkLock.readerUnlock();
+    auto temp = blockEntry->blkLock.readerUnlock();
+    DPRINTF("ScalableMetaData::setBlock unlock: %lu\n", temp);
 
     metaLock.writerLock();
     currentBlocks.push_back(blockEntry);
@@ -113,7 +115,8 @@ void ScalableMetaData::setBlock(uint64_t blockIndex, uint8_t * data) {
 }
 
 void ScalableMetaData::decBlockUsage(uint64_t blockIndex) {
-    blocks[blockIndex].blkLock.readerUnlock();
+    auto temp = blocks[blockIndex].blkLock.readerUnlock();
+    DPRINTF("ScalableMetaData::decBlockUsage unlock: %lu\n", temp);
 }
 
 bool ScalableMetaData::backOutOfReservation(uint64_t blockIndex) {
@@ -137,37 +140,32 @@ uint64_t ScalableMetaData::trackAccess(uint64_t blockIndex, uint64_t readIndex) 
     return timeStamp;
 }
 
+//JS TODO: add to trackBlock with -1 for blockIndex and priority
 bool ScalableMetaData::checkPattern() {
-    // std::cerr << "[JS] CHECKING PATTERN" << std::endl;
     bool ret = true;
     metaLock.readerLock();
-    // for (int i = 0; i < meta->window.size(); i++) {
-    //     fprintf(stderr, "%d: %lu %lu %lu\n", i, meta->window[i][0], meta->window[i][1], meta->window[i][2]);
-    //     fflush(stderr);
-    // }
 
     auto newPattern = pattern;
     auto oldPattern = pattern;
     if (window.size() > 2) {
-        newPattern = LINEAR;
+        newPattern = BLOCKSTREAMING;
         for (unsigned int i = 1; i < window.size(); i++) {
             uint64_t stride = window[i-1][1] - window[i][1];
-            // fprintf(stderr, "%d - %d: %lu\n", i, i-1, stride);
-            // fflush(stderr);
+            DPRINTF("%d:%lu - %d:%lu %lu\n", i, window[i-1][1], i-1, window[i][1], stride);
             if (stride < 0 || stride > 1) {
-                newPattern = RANDOM;
+                newPattern = UNKNOWN;
             }
         }
     }
-
+    DPRINTF("oldPattern: %s newPattern: %s\n", (oldPattern) ? "LINEAR" : "RANDOM", (newPattern) ? "LINEAR" : "RANDOM");
     //JS: For now the only case that limits is linear with more than one block
-    if(newPattern == LINEAR && numBlocks.load())
+    if(newPattern == BLOCKSTREAMING && numBlocks.load())
         ret = false;
 
     metaLock.readerUnlock();
 
     if(oldPattern != newPattern) {
-        // std::cerr << "[JS] Updating cache pattern" << (newPattern) ? "LINEAR" : "RANDOM" << std::endl;
+        DPRINTF("[JS] Updating cache pattern %s\n", (newPattern) ? "LINEAR" : "RANDOM");
         metaLock.writerLock();
         pattern = newPattern;
         metaLock.writerUnlock();
@@ -184,11 +182,14 @@ uint64_t ScalableMetaData::getLastTimeStamp() {
 
 uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex) {
     metaLock.writerLock();
-    
-    sort(currentBlocks.begin(), currentBlocks.end(), 
-        [](BlockEntry* lhs, BlockEntry* rhs) {
-            return lhs->timeStamp.load() < rhs->timeStamp.load();
-        });
+
+    if(currentBlocks.size() > 1) {
+    DPRINTF("ScalableMetaData::oldestBlock CurrentBlock.size(): %d\n", currentBlocks.size());
+        sort(currentBlocks.begin(), currentBlocks.end(), 
+            [](BlockEntry* lhs, BlockEntry* rhs) {
+                return lhs->timeStamp.load() < rhs->timeStamp.load();
+            });
+    }
     // std::cerr << meta->currentBlocks.front()->timeStamp.load() << " " << meta->currentBlocks.back()->timeStamp.load() << std::endl;
     
     uint8_t * ret = NULL;
@@ -197,6 +198,7 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex) {
         if ((*it)->blkLock.cowardlyTryWriterLock()) {
             //JS: For tracking...
             blockIndex = (*it)->blockIndex;
+            DPRINTF("block: %lu timestamp: %lu\n", blockIndex, (*it)->timeStamp.load());
             //JS: Take its memory!!!
             ret = (*it)->data;
             (*it)->data.store(NULL);

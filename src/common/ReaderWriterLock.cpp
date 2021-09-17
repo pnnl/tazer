@@ -111,8 +111,8 @@ unsigned int ReaderWriterLock::readerLock() {
     return ret;
 }
 
-void ReaderWriterLock::readerUnlock() {
-    _readers.fetch_sub(1);
+unsigned int ReaderWriterLock::readerUnlock() {
+    return _readers.fetch_sub(1);
 }
 
 void ReaderWriterLock::writerLock() {

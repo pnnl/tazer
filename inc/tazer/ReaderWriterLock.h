@@ -82,7 +82,7 @@
 class ReaderWriterLock {
   public:
     unsigned int readerLock();
-    void readerUnlock();
+    unsigned int readerUnlock();
 
     void writerLock();
     void fairWriterLock();

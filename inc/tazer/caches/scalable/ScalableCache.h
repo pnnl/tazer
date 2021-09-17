@@ -116,7 +116,7 @@ class StealingAllocator : public TazerAllocator
 {
     private:
         ReaderWriterLock allocLock;
-        std::vector<ScalableMetaData*> victims;
+        std::vector<ScalableMetaData*> priorityVictims;
         ScalableCache * scalableCache;
 
     public:
