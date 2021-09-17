@@ -81,7 +81,7 @@
 
 class ReaderWriterLock {
   public:
-    void readerLock();
+    unsigned int readerLock();
     void readerUnlock();
 
     void writerLock();
@@ -92,6 +92,7 @@ class ReaderWriterLock {
     bool tryWriterLock();
     bool cowardlyTryWriterLock();
     bool tryReaderLock();
+    bool cowardlyUpdgradeWriterLock();
 
     ReaderWriterLock();
     ~ReaderWriterLock();

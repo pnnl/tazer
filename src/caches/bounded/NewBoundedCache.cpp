@@ -605,22 +605,3 @@ void NewBoundedCache<Lock>::addFile(uint32_t index, std::string filename, uint64
 template class NewBoundedCache<MultiReaderWriterLock>;
 template class NewBoundedCache<FcntlBoundedReaderWriterLock>;
 template class NewBoundedCache<FileLinkReaderWriterLock>;
-
-template <class Lock>
-void NewBoundedCache<Lock>::trackBlock(std::string cacheName, std::string action, uint32_t fileIndex, uint32_t  blockIndex, uint64_t priority) {
-    if (Config::TrackBlockStats) {
-        auto fut = std::async(std::launch::async, [cacheName, action, fileIndex,  blockIndex, priority] {
-            unixopen_t unixopen = (unixopen_t)dlsym(RTLD_NEXT, "open");
-            unixclose_t unixclose = (unixclose_t)dlsym(RTLD_NEXT, "close");
-            unixwrite_t unixwrite = (unixwrite_t)dlsym(RTLD_NEXT, "write");
-
-            int fd = (*unixopen)("block_stats.txt", O_WRONLY | O_APPEND | O_CREAT, 0660);
-            if (fd != -1) {
-                std::stringstream ss;
-                ss << cacheName << " " << action << " " << fileIndex << " " <<  blockIndex << " " << priority << std::endl;
-                unixwrite(fd, ss.str().c_str(), ss.str().length());
-                unixclose(fd);
-            }
-        });
-    }
-}

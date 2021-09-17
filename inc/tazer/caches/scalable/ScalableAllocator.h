@@ -72,72 +72,52 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef SCALABLECACHE_H
-#define SCALABLECACHE_H
-#include "Cache.h"
-#include "Loggable.h"
-#include "Trackable.h"
-#include "ReaderWriterLock.h"
+#ifndef SCALABLE_ALLOCATOR_H
+#define SCALABLE_ALLOCATOR_H
 #include "ScalableMetaData.h"
-#include "ScalableAllocator.h"
-#include <map>
+#include <vector>
+#include <atomic>
 
-#define SCALABLECACHENAME "scalable"
 
-class ScalableCache : public Cache {
-  public:
-    ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize);
-    virtual ~ScalableCache();
-    
-    static Cache* addScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize);
-
-    virtual bool writeBlock(Request *req);
-    virtual void readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority);
-    
-    virtual void addFile(uint32_t fileIndex, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
-    virtual void closeFile(uint32_t fileIndex);
-
-    virtual ScalableMetaData * oldestFile(uint32_t &oldestFileIndex);
-    void trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex);
-  
-  protected:
-    ReaderWriterLock *_cacheLock;
-    std::unordered_map<uint32_t, ScalableMetaData*> _metaMap;
-    uint64_t _blockSize;
-    TazerAllocator * _allocator;
-
-  private:
-    uint8_t * getBlockData(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset);
-    uint8_t * getBlockDataOrReserve(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset, bool &reserve);
-    void setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * data, uint64_t dataSize);
-};
-
-class StealingAllocator : public TazerAllocator
+class TazerAllocator : public Trackable<std::string, TazerAllocator *>
 {
-    private:
-        ReaderWriterLock allocLock;
-        std::vector<ScalableMetaData*> victims;
-        ScalableCache * scalableCache;
+    protected:
+        uint64_t _blockSize;
+        uint64_t _maxSize;
+
+        std::atomic<uint64_t> _availBlocks;
+    
+        TazerAllocator(uint64_t blockSize, uint64_t maxSize):
+            _blockSize(blockSize),
+            _maxSize(maxSize),
+            _availBlocks(maxSize/blockSize) { }
+
+        ~TazerAllocator() { }
+
+        template<class T>
+        static TazerAllocator * addAllocator(std::string name, uint64_t blockSize, uint64_t maxSize) {
+            bool created = false;
+            auto ret = Trackable<std::string, TazerAllocator *>::AddTrackable(
+                name, [&]() -> TazerAllocator * {
+                    TazerAllocator *temp = new T(blockSize, maxSize);
+                    return temp;
+                }, created);
+            return ret;
+        }
 
     public:
-        StealingAllocator(uint64_t blockSize, uint64_t maxSize):
+        virtual uint8_t * allocateBlock() = 0;
+        virtual void closeFile(ScalableMetaData * meta) { }
+};
+
+class SimpleAllocator : public TazerAllocator
+{
+    public:
+        SimpleAllocator(uint64_t blockSize, uint64_t maxSize):
             TazerAllocator(blockSize, maxSize) { }
 
         uint8_t * allocateBlock();
-        virtual void closeFile(ScalableMetaData * meta);
-        static TazerAllocator * addStealingAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache);
-        void setCache(ScalableCache * cache);
+        static TazerAllocator * addSimpleAllocator(uint64_t blockSize, uint64_t maxSize);
 };
 
-#endif // SCALABLECACHE_H
-
-//JS: MetaData for Ocean
-//Cache Name
-//Action --> string --> trace of action
-// --- Evictions
-// --- Read hits and misses
-//FileIndex
-//BlockIndex
-//Priority
-
-//Track block
+#endif /* SCALABLE_ALLOCATOR_H */

@@ -87,7 +87,6 @@
 #include "caches/NetworkCache.h"
 //bmutlu
 #include "caches/scalable/ScalableCache.h"
-#include "caches/scalable/ScalableMemoryCache.h"
 //end bmutlu
 #include "Config.h"
 #include "Connection.h"
@@ -115,10 +114,6 @@
 #include <thread>
 #include <unistd.h>
 
-//bmutlu
-#include "caches/scalable/ScalableRegistry.h"
-//end bmutlu
-
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
@@ -133,9 +128,6 @@ PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>>* InputFi
 PriorityThreadPool<std::packaged_task<Request *()>>* InputFile::_decompressionPool;
 
 Cache *InputFile::_cache = NULL; //(BASECACHENAME);
-ScalableRegistry *InputFile::_scalableRegistry = NULL;
-
-
 std::chrono::time_point<std::chrono::high_resolution_clock> *InputFile::_time_of_last_read = NULL;
 
 void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
@@ -144,9 +136,8 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
 
 //bmutlu
     if (Config::useMemoryCache) {
-        InputFile::_scalableRegistry = ScalableRegistry::addNewScalableRegistry(20*Config::memoryCacheBlocksize, Config::memoryCacheBlocksize);
         //Cache *c = NewMemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
-        Cache *c = ScalableMemoryCache::addScalableMemoryCache(SCALABLEMEMORYCACHENAME, CacheType::scalable, Config::memoryCacheBlocksize, _scalableRegistry);
+        Cache *c = ScalableCache::addScalableCache(SCALABLECACHENAME, CacheType::scalable, Config::memoryCacheBlocksize, 16*Config::memoryCacheBlocksize);
         std::cerr << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }
@@ -325,9 +316,9 @@ void InputFile::close() {
         ((LocalFileCache*)_cache->getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
     }
     //bmutlu
-    if (Config::useMemoryCache) {
-        ((ScalableMemoryCache*)_cache->getCacheByName(SCALABLEMEMORYCACHENAME))->sendCloseSignal(_regFileIndex);
-    }
+    // if (Config::useMemoryCache) {
+    //     ((ScalableMemoryCache*)_cache->getCacheByName(SCALABLEMEMORYCACHENAME))->sendCloseSignal(_regFileIndex);
+    // }
     //end bmutlu
     lock.unlock();
     // std::cout << "Closing file " << _name << std::endl;

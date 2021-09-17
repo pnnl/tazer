@@ -86,7 +86,7 @@
 #include <string>
 #include <unordered_set>
 
-class ScalableRegistry;
+class ScalableFileRegistry;
 
 class InputFile : public TazerFile {
   public:
@@ -108,8 +108,6 @@ class InputFile : public TazerFile {
     static PriorityThreadPool<std::packaged_task<Request*()>>* _decompressionPool;
 
     static Cache *_cache;
-    //bmutlu 
-    static ScalableRegistry* _scalableRegistry;
     static std::chrono::time_point<std::chrono::high_resolution_clock>*  _time_of_last_read;
 
   private:

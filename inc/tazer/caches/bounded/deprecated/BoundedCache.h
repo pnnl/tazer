@@ -190,9 +190,6 @@ class BoundedCache : public Cache {
     // T *_lock;
     Lock *_binLock;
     ReaderWriterLock *_localLock;
-
-  private:
-    void trackBlock(std::string cacheName, std::string action, uint32_t fileIndex, uint32_t blockIndex, uint64_t priority);
 };
 
 #endif /* BOUNDEDCACHE_H */

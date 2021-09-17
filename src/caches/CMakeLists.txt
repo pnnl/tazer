@@ -30,9 +30,9 @@ set(CACHE_HEADERS
     ${UNBOUNDED_INC_DIR}/FilelockCache.h
     ${UNBOUNDED_INC_DIR}/FcntlCache.h
 
-    ${SCALABLE_INC_DIR}/ScalableMemoryCache.h
+    ${SCALABLE_INC_DIR}/ScalableMetaData.h
+    ${SCALABLE_INC_DIR}/ScalableAllocator.h
     ${SCALABLE_INC_DIR}/ScalableCache.h
-    ${SCALABLE_INC_DIR}/ScalableRegistry.h
 )
 
 set(CACHE_FILES
@@ -58,9 +58,9 @@ set(CACHE_FILES
     unbounded/FilelockCache.cpp
     unbounded/FcntlCache.cpp
 
-    scalable/ScalableMemoryCache.cpp
+    scalable/ScalableMetaData.cpp
+    scalable/ScalableAllocator.cpp
     scalable/ScalableCache.cpp
-    scalable/ScalableRegistry.cpp
 )
 
 if(CURL_LIB)

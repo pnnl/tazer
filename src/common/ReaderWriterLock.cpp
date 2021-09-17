@@ -96,17 +96,19 @@ ReaderWriterLock::~ReaderWriterLock() {
     }
 }
 
-void ReaderWriterLock::readerLock() {
+unsigned int ReaderWriterLock::readerLock() {
+    unsigned int ret;
     while (1) {
         while (_writers.load()) {
             std::this_thread::yield();
         }
-        _readers.fetch_add(1);
+        ret = _readers.fetch_add(1);
         if (!_writers.load()) {
             break;
         }
         _readers.fetch_sub(1);
     }
+    return ret;
 }
 
 void ReaderWriterLock::readerUnlock() {
@@ -162,6 +164,18 @@ bool ReaderWriterLock::cowardlyTryWriterLock() {
             return false;
         }
         return true;
+    }
+    return false;
+}
+
+//JS: Never use this to block.  Will lead to deadlock!
+bool ReaderWriterLock::cowardlyUpdgradeWriterLock() {
+    unsigned int one = 1;
+    unsigned int zero = 0;
+    if (_writers.exchange(one) == 0) {
+        if (_readers.compare_exchange_weak(one, zero))
+            return true;
+        _writers.store(0);
     }
     return false;
 }

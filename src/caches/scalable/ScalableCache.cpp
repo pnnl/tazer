@@ -1,553 +1,396 @@
-//TODO
+// -*-Mode: C++;-*- // technically C99
+
+//*BeginLicense**************************************************************
+//
+//---------------------------------------------------------------------------
+// TAZeR (github.com/pnnl/tazer/)
+//---------------------------------------------------------------------------
+//
+// Copyright ((c)) 2019, Battelle Memorial Institute
+//
+// 1. Battelle Memorial Institute (hereinafter Battelle) hereby grants
+//    permission to any person or entity lawfully obtaining a copy of
+//    this software and associated documentation files (hereinafter "the
+//    Software") to redistribute and use the Software in source and
+//    binary forms, with or without modification.  Such person or entity
+//    may use, copy, modify, merge, publish, distribute, sublicense,
+//    and/or sell copies of the Software, and may permit others to do
+//    so, subject to the following conditions:
+//    
+//    * Redistributions of source code must retain the above copyright
+//      notice, this list of conditions and the following disclaimers.
+//
+//    * Redistributions in binary form must reproduce the above
+//      copyright notice, this list of conditions and the following
+//      disclaimer in the documentation and/or other materials provided
+//      with the distribution.
+//
+//    * Other than as used herein, neither the name Battelle Memorial
+//      Institute or Battelle may be used in any form whatsoever without
+//      the express written consent of Battelle.
+//
+// 2. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+//    CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+//    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+//    MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+//    DISCLAIMED. IN NO EVENT SHALL BATTELLE OR CONTRIBUTORS BE LIABLE
+//    FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+//    CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+//    OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+//    BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+//    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+//    USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+//    DAMAGE.
+//
+// ***
+//
+// This material was prepared as an account of work sponsored by an
+// agency of the United States Government.  Neither the United States
+// Government nor the United States Department of Energy, nor Battelle,
+// nor any of their employees, nor any jurisdiction or organization that
+// has cooperated in the development of these materials, makes any
+// warranty, express or implied, or assumes any legal liability or
+// responsibility for the accuracy, completeness, or usefulness or any
+// information, apparatus, product, software, or process disclosed, or
+// represents that its use would not infringe privately owned rights.
+//
+// Reference herein to any specific commercial product, process, or
+// service by trade name, trademark, manufacturer, or otherwise does not
+// necessarily constitute or imply its endorsement, recommendation, or
+// favoring by the United States Government or any agency thereof, or
+// Battelle Memorial Institute. The views and opinions of authors
+// expressed herein do not necessarily state or reflect those of the
+// United States Government or any agency thereof.
+//
+//                PACIFIC NORTHWEST NATIONAL LABORATORY
+//                             operated by
+//                               BATTELLE
+//                               for the
+//                  UNITED STATES DEPARTMENT OF ENERGY
+//                   under Contract DE-AC05-76RL01830
+// 
+//*EndLicense****************************************************************
+
 #include "ScalableCache.h"
 #include <signal.h>
 #include "xxhash.h"
 #include <fcntl.h>
+#include <stdlib.h>
+#include <time.h>
 #include <future>
+#include <algorithm>
+#include <memory>
+#include <deque>
+#include <queue>
 
-#define DPRINTF(...)
-// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define DPRINTF(...)
+#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
-
-template <class Lock>
-ScalableCache<Lock>::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, ScalableRegistry *registry) : Cache(cacheName, type), 
-                                                                                                                    _blockSize(blockSize), 
-                                                                                                                    _registry(registry) {
-    // required initializations
+ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
+Cache(cacheName, type) {
     stats.start();
-    _maxNumBlocks = _registry->registerCache(this); //we might add pattern here in the future, for when we know the pattern beforehand (from metadata? ) 
-    log(this) << _name << " " << _blockSize << " " << _maxNumBlocks << std::endl;
-    _localLock = new ReaderWriterLock();
-    _patternLock = new ReaderWriterLock();
+    log(this) << _name << std::endl;
+    _cacheLock = new ReaderWriterLock();
+    _blockSize = blockSize;
+    _allocator = StealingAllocator::addStealingAllocator(blockSize, maxCacheSize, this);
+    srand(time(NULL));
     stats.end(false, CacheStats::Metric::constructor);
 }
 
-template <class Lock>
-ScalableCache<Lock>::~ScalableCache() {
-    //deconstructor here
-    //call regisrty to be a victim?
+ScalableCache::~ScalableCache() {
     _terminating = true;
-    log(this) << _name << " cache collisions: " << _collisions.load() << " prefetch collisions: " << _prefetchCollisions.load() << std::endl;
     log(this) << "deleting " << _name << " in ScalableCache" << std::endl;
-    delete _localLock;
+    delete _cacheLock;
+    stats.print(_name);
 }
 
-template <class Lock>
-bool ScalableCache<Lock>::writeBlock(Request *req){
-    req->trace()<<_name<<" WRITE BLOCK !@#"<<std::endl;
+Cache* ScalableCache::addScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) {
+    bool created = false;
+    auto ret = Trackable<std::string, Cache *>::AddTrackable(
+        cacheName, [&]() -> Cache * {
+            Cache *temp = new ScalableCache(cacheName, type, blockSize, maxCacheSize);
+            return temp;
+        }, created);
+    return ret;
+}
 
-    bool ret = false;
-    if (req->reservedMap[this] > 0 || !_terminating) { //when terminating dont waste time trying to write orphan requests
-        if (req->originating == this) {
-            req->trace()<<"originating cache"<<std::endl;
-            _blkMapLock->writerLock(0,req); //LOCK ME
-            BlockEntry* entry = getBlock(req->blkIndex, req->fileIndex, req);
-            if (entry) {
-                if (req->reservedMap[this] > 0) {
-                    req->trace()<<"decrement "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-                    auto t_cnt = decBlkCnt(entry, req);
-                    req->trace()<<" dec cnt "<<t_cnt<<std::endl;
-                    if (t_cnt == 0) {
-                        debug()<<req->str()<<std::endl;
-                        log(this) << _name << " underflow in orig activecnt (" << t_cnt - 1 << ") for blkIndex: " <<  entry->blockIndex << " fileIndex: " << entry->fileIndex << " index: " << entry->blockIndex << std::endl;
-                        exit(0);
-                    }
-                }
-            }
-            // the "else" would trigger in the case this cache was completely filled and active when the request was initiated so we didnt have a reservation for this block
-            else {
-                req->trace() << "writeblock should this even be possible?" << std::endl;
-                entry = getBlockEntry(req->indexMap[this], req); 
-                req->trace() <<" entry: "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-                debug()<<req->str()<<std::endl;
-                exit(0);
-            }
-            _blkMapLock->writerUnlock(0,req); //UNLOCK ME
-            cleanUpBlockData(req->data);
-            req->trace()<<"deleting req"<<std::endl;  
-            req->printTrace=false;           
-            delete req;
-            
-            ret = true;
-        }
-        else {
-            req->trace()<<"not originating cache " << req->size << " " << _blockSize <<std::endl;
+void ScalableCache::addFile(uint32_t fileIndex, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
+    trackBlock(_name, "[ADD_FILE]", fileIndex, blockSize, fileSize);
 
-//            DPRINTF("beg wb blk: %u out: %u\n", index, _outstanding.load());
-            DPRINTF("beg wb blk: %u out: %u\n", index,0);
-
-            if (req->size <= _blockSize) {
-                _blkMapLock->writerLock(0,req); //LOCK ME
-                BlockEntry* entry = oldestBlock(req->blkIndex, req->fileIndex, req);
-                trackBlock(_name, "[BLOCK_WRITE]", req->fileIndex, req->blkIndex, 0);
-                req->trace() << "LOOK: " << entry << std::endl;
-                if (entry){ //a slot for the block is present in the cache   
-                    if ((entry->status != BLK_WR && entry->status != BLK_AVAIL) || entry->status == BLK_EVICT) { //not found means we evicted some block
-                        if(entry->status == BLK_EVICT && req->reservedMap[this] ){
-                            req->trace()<<"evicted "<<blockEntryStr(entry)<<std::endl;
-                            req->trace()<<"is this the problem?  blockIndex: "<< entry->id<<std::endl;
-                            //this part is for debugging ? 
-                            // auto binBlocks = readBin(binIndex);
-                            // for( auto blk : binBlocks){
-                            //     req->trace()<<blockEntryStr(blk)<<std::endl;
-                            // }
-                        }
-                        //we done need this step since the bin is locked, no one else will access the block until data is written...
-                        // req->trace()<<"update entry to writing "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-                        // blockSet( entry, fileIndex, index, BLK_WR, req->originating->type(), entry->prefetched,0, req); //dont decrement...
-                                                
-                        req->trace()<<"writing data "<<blockEntryStr(entry)<<std::endl;
-                        setBlockData(req->data,  entry->id, req->size);
-
-                        req->trace()<<"update entry to avail "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-                        // blockSet( entry, req->fileIndex, req->blkIndex, BLK_AVAIL, req->originating->type(), entry->prefetched, req->reservedMap[this], req); //write the name of the originating cache so we can properly attribute stall time...
-                        blockSet( entry, req->fileIndex, req->blkIndex, BLK_AVAIL, req->originating->type(), entry->prefetched, -1, req);
-                        if(entry->status == BLK_EVICT){
-                             req->trace()<<"new entry/evict "<<" "<<(void*)entry<<std::endl;
-                             req->trace()<<blockEntryStr( entry)<<" "<<(void*)entry<<std::endl;                             
-                        }
-                    }
-                    else if (entry->status == BLK_AVAIL) {
-                        req->trace()<<"update time "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-                        // blockSet( entry, req->fileIndex, req->blkIndex, BLK_AVAIL, req->originating->type(), entry->prefetched, req->reservedMap[this], req); //update timestamp
-                        blockSet( entry, req->fileIndex, req->blkIndex, BLK_AVAIL, req->originating->type(), entry->prefetched, -1, req);
-                    }
-                    else { //the writer will update the timestamp
-                        req->trace()<<"other will update"<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-                    }
-                    ret = true;
-                }
-                _blkMapLock->writerUnlock(0,req); // UNLOCK ME
-            }
-//            DPRINTF("end wb blk: %u out: %u\n", index, _outstanding.load());
-            DPRINTF("end wb blk: %u out: %u\n", req->blkIndex, 0);
-            req->printTrace=false;    
-            if (_nextLevel) {
-                ret &= _nextLevel->writeBlock(req);
-            }
-            else{
-                req->trace()<<"not sure how I got here"<<std::endl;
-                delete req;
-            }
-        }
+    _cacheLock->writerLock();
+    if (_fileMap.count(fileIndex) == 0) {
+        std::string hashstr(_name + filename);
+        uint64_t hash = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
+        _fileMap.emplace(fileIndex, FileEntry{filename, blockSize, fileSize, hash});
+        _metaMap[fileIndex] = new ScalableMetaData(blockSize, fileSize);
+        DPRINTF("[JS] ScalableCache::addFile %s %u\n", filename.c_str(), fileIndex);
     }
-    else { //we are terminating and this was an 'orphan request' (possibly from bypassing disk to goto network when resource balancing)
-        if (req->originating == this) {
-            cleanUpBlockData(req->data);
-            delete req;
-            ret = true;
+    _cacheLock->writerUnlock();
+    
+    if (_nextLevel) {
+        _nextLevel->addFile(fileIndex, filename, blockSize, fileSize);
+    }
+}
+
+void ScalableCache::closeFile(uint32_t fileIndex) {
+    DPRINTF("[JS] ScalableCache::closeFile %u\n", fileIndex);
+    _cacheLock->readerLock();
+    _allocator->closeFile(_metaMap[fileIndex]);
+    _cacheLock->readerUnlock();
+}
+
+uint8_t * ScalableCache::getBlockDataOrReserve(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset, bool &reserve) {
+    _cacheLock->readerLock();
+    auto ret = _metaMap[fileIndex]->getBlockData(blockIndex, fileOffset, reserve, true);
+    _cacheLock->readerUnlock();
+    DPRINTF("[JS] ScalableCache::getBlockDataOrReserve %u\n", reserve);
+    return ret;
+    // reserve = true;
+    // return NULL;
+}
+
+uint8_t * ScalableCache::getBlockData(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset) {
+    bool dontCare;
+    _cacheLock->readerLock();
+    auto ret = _metaMap[fileIndex]->getBlockData(blockIndex, fileOffset, dontCare, false);
+    _cacheLock->readerUnlock();
+    return ret;
+}
+
+void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * data, uint64_t dataSize) {
+    //JS: For trackBlock
+    uint64_t sourceBlockIndex;
+    uint32_t sourceFileIndex;
+    
+    _cacheLock->readerLock();
+    auto meta = _metaMap[fileIndex];
+    uint8_t * dest = NULL;
+    auto doAlloc = meta->checkPattern();
+
+    while(!dest) {
+        //JS: Are we allowed to get more blocks
+        if(doAlloc) {
+            DPRINTF("[JS] ScalableCache::setBlock new block\n");
+            dest = _allocator->allocateBlock();
         }
+
+        //JS: We can't due to our pattern so lets LRU ourself
+        if(!dest) {
+            DPRINTF("[JS] ScalableCache::setBlock Reusing block\n");
+            dest = meta->oldestBlock(sourceBlockIndex);
+            if(dest)
+                trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, sourceBlockIndex, 0);
+        }
+
+        //JS: Try to backout
+        if(meta->backOutOfReservation(blockIndex))
+            break;
+
+        //JS: Try random steal
+        sourceFileIndex = rand() % _metaMap.size();
+        auto randomMeta = _metaMap[sourceFileIndex];
+        dest = randomMeta->oldestBlock(sourceBlockIndex);
+        if(dest)
+            trackBlock(_name, "[BLOCK_EVICTED]", sourceFileIndex, sourceBlockIndex, 0);
+    }
+    
+    if(dest) {
+        //JS: Copy the block back to our cache
+        memcpy(dest, data, dataSize);
+        meta->setBlock(blockIndex, dest);
+        trackBlock(_name, "[BLOCK_WRITE]", fileIndex, blockIndex, 0);
+    }
+    else {
+        std::cerr << "[Tazer] Allocation failed, potential race condition!" << std::endl;
+    }
+    _cacheLock->readerUnlock();
+}
+
+bool ScalableCache::writeBlock(Request *req){
+    DPRINTF("[JS] ScalableCache::writeBlock start\n");
+    req->time = Timer::getCurrentTime();
+    bool ret = false;
+    if (req->originating == this) {
+        DPRINTF("[JS] ScalableCache::writeBlock hit cleanup\n");
+        //JS: Decrement our block usage
+        _cacheLock->readerLock();
+        _metaMap[req->fileIndex]->decBlockUsage(req->blkIndex);
+        _cacheLock->readerUnlock();
+        delete req;
+        ret = true;
+    }
+    else {
+        DPRINTF("[JS] ScalableCache::writeBlock pass cleanup\n");
+        //JS: Write block to cache
+        setBlock(req->fileIndex, req->blkIndex, req->data, req->size);
         if (_nextLevel) {
             ret &= _nextLevel->writeBlock(req);
         }
-        else{
-            req->trace()<<"not sure how I got here"<<std::endl;
-            delete req;
+    }
+    DPRINTF("[JS] ScalableCache::writeBlock done\n");
+    return ret;
+}
+
+void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority){
+    stats.start(); //read
+    uint8_t *buff = nullptr;
+    auto index = req->blkIndex;
+    auto fileIndex = req->fileIndex;
+    auto fileOffset = req->offset;
+
+    if (!req->size) { //JS: This get the blockSize from the file
+        _cacheLock->readerLock();
+        req->size = _fileMap[fileIndex].blockSize;
+        _cacheLock->readerUnlock();
+    }
+    
+    DPRINTF("[JS] ScalableCache::readBlock req->size: %lu req->blkIndex: %lu\n", req->size, req->blkIndex);
+    trackBlock(_name, (priority != 0 ? " [BLOCK_PREFETCH_REQUEST] " : " [BLOCK_REQUEST] "), fileIndex, index, priority);
+    
+    if (req->size <= _blockSize) {
+        bool reserve;
+        //JS: Fill in the data if we have it
+        buff = getBlockDataOrReserve(fileIndex, index, fileOffset, reserve);
+        // std::cerr << " [JS] readBlock " << buff << " " << reserve << std::endl;
+        if(buff) {
+            DPRINTF("[JS] ScalableCache::readBlock hit\n");
+            //JS: Update the req, block is currently held by count
+            req->data=buff;
+            req->originating=this;
+            req->reservedMap[this]=1;
+            req->ready = true;
+            req->time = Timer::getCurrentTime() - req->time;
+            updateRequestTime(req->time);
+
+            trackBlock(_name, "[BLOCK_READ_HIT]", fileIndex, index, priority);
+            stats.addAmt(false, CacheStats::Metric::hits, req->size);
+            stats.end(false, CacheStats::Metric::hits);
         }
+        else { //JS: Data not currently present
+            trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
+            stats.addAmt(false, CacheStats::Metric::misses, 1);
+            stats.end(false, CacheStats::Metric::misses);
+
+            if (reserve) { //JS: We reserved block
+                DPRINTF("[JS] ScalableCache::readBlock reseved\n");
+                _nextLevel->readBlock(req, reads, priority);
+            }
+            else { //JS: Someone else will fullfill request
+                DPRINTF("[JS] ScalableCache::readBlock waiting\n");
+                auto fut = std::async(std::launch::deferred, [this, req] {
+                    uint64_t offset = req->offset;
+                    auto blockIndex = req->blkIndex;
+                    auto fileIndex = req->fileIndex;
+
+                    //JS: Wait for data to be ready
+                    uint8_t * buff = getBlockData(fileIndex, blockIndex, offset);
+                    while (!buff) {
+                        sched_yield();
+                        buff = getBlockData(fileIndex, blockIndex, offset);
+                    }
+
+                    //JS: Update the req
+                    req->data=buff;
+                    req->originating=this;
+                    req->reservedMap[this]=1;
+                    req->ready = true;
+
+                    //JS TODO: Check if this is right and add to unbounded cache
+                    req->waitingCache = _lastLevel->type();
+                    req->time = Timer::getCurrentTime()-req->time;
+                    updateRequestTime(req->time);
+
+                    //JS: Future of a future required by network cache impl
+                    std::promise<Request*> prom;
+                    auto innerFuture = prom.get_future();
+                    prom.set_value(req);
+                    return innerFuture.share();
+                });
+                reads[index] = fut.share();
+            }
+        }
+    }
+    else {
+        std::cerr << "[TAZER] We do not currently support blockSizes bigger than cache size!" << std::endl;
+        raise(SIGSEGV);
+    }
+    DPRINTF("[JS] ScalableCache::readBlock done\n");
+}
+
+ScalableMetaData * ScalableCache::oldestFile(uint32_t &oldestFileIndex) {
+    //JS: Switch to writeLock to shut everything else down!
+    _cacheLock->readerLock();
+    uint64_t minTime = (uint32_t)-1;
+    oldestFileIndex = (uint32_t) -1;
+    for (auto const &x : _metaMap) {
+        auto fileIndex = x.first;
+        auto meta = x.second;
+        uint64_t temp = meta->getLastTimeStamp();
+        if(temp < minTime) {
+            minTime = temp;
+            oldestFileIndex = fileIndex;
+        }
+    }
+
+    ScalableMetaData * ret = NULL;
+    if(minTime < (uint64_t)-1)
+        ret = _metaMap[oldestFileIndex];
+    _cacheLock->readerUnlock();
+    return ret;
+}
+
+//JS: Wrote this function for allocator to track an eviction (trackBlock is private)
+void ScalableCache::trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex) {
+    trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, blockIndex, 0);
+}
+
+void StealingAllocator::setCache(ScalableCache * cache) {
+    scalableCache = cache;
+}
+
+TazerAllocator * StealingAllocator::addStealingAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache) {
+    StealingAllocator * ret = (StealingAllocator*) addAllocator<StealingAllocator>(std::string("StealingAllocator"), blockSize, maxSize);
+    ret->setCache(cache);
+    return ret;
+}
+
+uint8_t * StealingAllocator::allocateBlock() {
+    //JS: For trackBlock
+    uint64_t sourceBlockIndex;
+    uint32_t sourceFileIndex;
+
+    //JS: Can we allocate new blocks
+    if(_availBlocks.fetch_sub(1)) {
+        DPRINTF("[JS] StealingAllocator::allocateBlock new block\n");
+        return new uint8_t[_blockSize];
+    }
+    _availBlocks.fetch_add(1);
+
+    //JS: Try to take from closed files first
+    uint8_t * ret = NULL;
+    allocLock.writerLock();
+    if(victims.size()) {
+        auto meta = victims.back();
+        ret = meta->oldestBlock(sourceBlockIndex);
+        DPRINTF("[JS] StealingAllocator::allocateBlock taking from victim %p\n", ret);
+    }
+    allocLock.writerUnlock();
+
+    //JS: Try to steal
+    if(!ret) {
+        auto meta = scalableCache->oldestFile(sourceFileIndex);
+        ret = meta->oldestBlock(sourceBlockIndex);
+        DPRINTF("[JS] StealingAllocator::allocateBlock trying to steal %p\n", ret);
+        if(ret)
+            scalableCache->trackBlockEviction(sourceFileIndex, sourceBlockIndex);
     }
     return ret;
 }
 
-template <class Lock>
-void ScalableCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority){
-    stats.start(); //read
-    stats.start(); //ovh
-    bool prefetch = priority != 0;
-
-    log(this) << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << " nl: " << _nextLevel->name() << std::endl;
-    trackBlock(_name, (priority != 0 ? " [BLOCK_PREFETCH_REQUEST] " : " [BLOCK_REQUEST] "), req->fileIndex, req->blkIndex, priority);
-    req->trace()<<_name<<" READ BLOCK"<<std::endl;
-    req->time = Timer::getCurrentTime();
-    
-    uint8_t *buff = nullptr;
-    auto index = req->blkIndex;
-    auto fileIndex = req->fileIndex;
-    addAccessMeta(fileIndex, req->blkIndex, req->offset);
-    checkPattern(fileIndex);
-    // Get the size
-     _localLock->readerLock(); //local lock
-    int tsize = _fileMap[fileIndex].blockSize;
-    int fsize = _fileMap[fileIndex].fileSize;
-    _localLock->readerUnlock();
-
-    if (!req->size)
-        req->size = tsize;
-    
-    if (req->size <= _blockSize) {
-        _blkMapLock->writerLock(0,req); //LOCK ME
-        BlockEntry *entry = oldestBlock(index, fileIndex, req);
-
-        if (entry) { // an entry is available for this block
-            req->trace() << "found entry: " << blockEntryStr(entry) << "  " << (void*)entry << std::endl;
-            req->reservedMap[this] = 1; // indicate we will need to do a decrement in write
-
-            if (entry->status == BLK_AVAIL){ //its a hit!
-                trackBlock(_name, "[BLOCK_READ_HIT]", fileIndex, index, priority);
-                req->trace() << "hit " << blockEntryStr(entry) << std::endl;
-                entry->currentHits.fetch_add(1);
-                updateHitMeta(fileIndex, true);
-
-                if (entry->prefetched > 0) {
-                    stats.addAmt(prefetch, CacheStats::Metric::prefetches, 1);
-                    entry->prefetched = prefetch;
-                }
-                else
-                    stats.addAmt(prefetch, CacheStats::Metric::hits, req->size);
-                
-                req->trace() << "update access time" << blockEntryStr(entry) << " " << (void*)entry << std::endl;
-                blockSet(entry, fileIndex, index, BLK_AVAIL, _type, entry->prefetched, 1, req); //increment is handled here
-                stats.end(prefetch, CacheStats::Metric::ovh);
-                
-                stats.start(); // hits
-                buff = entry->blkAddr;
-                stats.end(prefetch, CacheStats::Metric::hits);
-                
-                stats.start(); // ovh
-                req->data = buff;
-                req->originating = this;
-                req->ready = true;
-                req->time = Timer::getCurrentTime() - req->time;
-                req->indexMap[this]= entry->id;
-                req->blkIndexMap[this]=entry->blockIndex;
-                req->fileIndexMap[this]=entry->fileIndex;
-                req->statusMap[this]=entry->status;
-                updateRequestTime(req->time);
-                req->trace() << "done in hit " << blockEntryStr(entry) << " " << (void*)entry << std::endl;
-                _blkMapLock->writerUnlock(0,req); //UNLOCK ME
-            }
-            else{ // we have an entry but the data isn't there, either wait for someone else or grab ourselves
-                req->trace() << "miss " << blockEntryStr(entry) << " " << (void*) entry <<std::endl;
-                trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
-                updateHitMeta(fileIndex, false);
-                stats.addAmt(prefetch, CacheStats::Metric::misses, 1);
-                
-                if (entry->status == BLK_EMPTY || entry->status == BLK_EVICT){ // we need to get the data!
-                    req->trace() << "we reserve: " << blockEntryStr(entry) << " " << (void*)entry << std::endl;
-                    blockSet(entry, fileIndex, index, (prefetch) ? BLK_PRE : BLK_RES, _type, prefetch,1,req);//the incrememt happens here
-                    _blkMapLock->writerUnlock(0,req);   //UNLOCK ME 
-
-                    req->time = Timer::getCurrentTime() - req->time;
-                    req->trace() << "reserved go to next level " << blockEntryStr(entry) << " " << (void*)entry << std::endl;
-                    updateRequestTime(req->time);
-                    stats.end(prefetch, CacheStats::Metric::ovh);
-                    
-                    stats.start(); //miss
-                    _nextLevel->readBlock(req, reads, priority);
-                    stats.end(prefetch, CacheStats::Metric::misses);
-
-                    stats.start(); //ovh
-                }
-                else { //BLK_WR || BLK_RES || BLK_PRE
-                    incBlkCnt(entry,req); // someone else has already reserved so lets incrememt
-                    req->trace() << "someone else reserved: " << blockEntryStr(entry) << " " << (void*)entry << std::endl;
-                    auto  blockId= entry->id;
-                    _blkMapLock->writerUnlock(0,req); //UNLOCK ME  
-                    auto fut = std::async(std::launch::deferred, [this, req,  blockId, prefetch, entry] { 
-                        uint64_t stime = Timer::getCurrentTime();
-                        CacheType waitingCacheType = CacheType::empty;
-                        uint64_t cnt = 0;
-                        bool avail = false;
-                        uint8_t *buff = NULL;
-                        double curTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
-                        while (!avail && curTime < std::min(_lastLevel->getRequestTime() * 10, 60.0) ) { // exit loop if request is 10x times longer than average network request or longer than 1 minute
-                            avail = blockAvailable( blockId, req->fileIndex, true, cnt, &waitingCacheType); //maybe pass in a char* to capture the name of the originating cache?
-                            sched_yield();
-                            cnt++;
-                            curTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
-                        }
-
-                        if (avail) {
-                            BlockEntry* entry2 = getBlockEntry(blockId, req);
-                            req->trace()<<"received, entry: "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-                            req->trace()<<"received, get data, (entry2):"<<blockEntryStr(entry2)<<" "<<(void*)entry2<<std::endl;
-                            buff = entry2->blkAddr;
-                            //buff = getBlockData(blockIndex);
-                            req->data = buff;
-                            req->originating = this;
-                            req->ready = true;
-                            req->time = Timer::getCurrentTime() - req->time;
-                            updateRequestTime(req->time);
-                        }
-                        else {
-                            waitingCacheType = CacheType::empty;
-                            std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> reads;
-                            double reqTime = (Timer::getCurrentTime() - stime) / 1000000000.0;
-                            req->retryTime = Timer::getCurrentTime();
-                            req->trace() << " retrying (" << req->blkIndex << "," << req->fileIndex << ")" << " bi:" << blockId << std::endl;
-                            _lastLevel->readBlock(req, reads, 0); //rerequest block from next level, note this updates the request data structure so we do not need to update it manually;
-                            log(this) << Timer::printTime() << " " << _name << "timeout, rereqeusting block " << req->blkIndex <<" from "<<_lastLevel->name()<< " " << req->fileIndex << " " << getRequestTime() << " " << _lastLevel->getRequestTime() << " " << reqTime << " " << reads.size() << std::endl;
-                            req->retryTime = Timer::getCurrentTime()-req->retryTime;
-                            if (!req->ready){
-                                reads[req->blkIndex].get().get();
-                                waitingCacheType = req->waitingCache;
-                            }
-                            else{
-                                waitingCacheType = _lastLevel->type();
-                            }
-                            req->trace() << "recieved" << std::endl;
-                            log(this) <<"[TAZER] got block "<<req->blkIndex<<" after retrying! from: "<<req->originating->name()<<" waiting on cache type: "<<cacheTypeName(waitingCacheType)<<" "<<req->retryTime<<std::endl;
-                        }
-
-                        req->waitingCache = waitingCacheType;
-                        std::promise<Request *> prom;
-                        auto inner_fut = prom.get_future();
-                        prom.set_value(req);
-                        // log(this) << _name << " done read wait: blkIndex: " <<  entry->id << " fi: " << fileIndex << " i:" << index << std::endl;
-                        return inner_fut.share();
-                    });
-                    reads[index] = fut.share();
-                }
-            } 
-        }
-        else{ // no space available
-            _blkMapLock->writerUnlock(0,req); //UNLOCK ME
-        
-            req->time = Timer::getCurrentTime() - req->time;
-            req->trace() << "no space got to next level (" << req->blkIndex << "," << req->fileIndex << ")" << std::endl;
-            updateRequestTime(req->time);
-            stats.end(prefetch, CacheStats::Metric::ovh);
-            
-            stats.start(); //miss
-            _nextLevel->readBlock(req, reads, priority);
-            stats.end(prefetch, CacheStats::Metric::misses);
-            
-            stats.start(); //ovh
-        }
-    }
-    else {
-        *this << "[TAZER]" << "shouldnt be here yet... need to handle" << std::endl;
-        raise(SIGSEGV);
-    }
-    stats.end(prefetch, CacheStats::Metric::ovh);
-    stats.end(prefetch, CacheStats::Metric::read);
+void StealingAllocator::closeFile(ScalableMetaData * meta) {
+    allocLock.writerLock();
+    victims.push_back(meta);
+    DPRINTF("[JS] StealingAllocator::closeFile adding a victim file\n");
+    allocLock.writerUnlock();
 }
-
-template <class Lock>
-void ScalableCache<Lock>::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize){
-    //trackBlock(_name, "[ADD_FILE]", index, blockSize, fileSize);
-
-    std::cerr <<" [BURCU] scalablecache add file " << std::endl;
-    _localLock->writerLock();
-    if (_fileMap.count(index) == 0) {
-        std::string hashstr(_name + filename); //should cause each level of the cache to have different indicies for a given file
-        uint64_t hash = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
-
-        _fileMap.emplace(index, FileEntry{filename, blockSize, fileSize, hash});
-        
-        // Add metaData for particular file
-        _patternLock->writerLock();
-        _meta[index] = MetaData();
-        _meta[index].totalBlocks = fileSize / blockSize + ((fileSize % blockSize) ? 1 : 0);
-        _patternLock->writerUnlock();
-    }
-    sendOpenSignal(index);
-    _localLock->writerUnlock();
-    // if (_nextLevel && _nextLevel->name() != NETWORKCACHENAME) { //quick hack to allow tasks to simulate unqiue files...
-    if (_nextLevel) {
-        _nextLevel->addFile(index, filename, blockSize, fileSize);
-    }
-}
-
-template <class Lock>
-typename ScalableCache<Lock>::BlockEntry* ScalableCache<Lock>::getBlock(uint32_t index, uint32_t fileIndex, Request* req){
-    //req->trace()<<"searching for block: "<<index<<" "<<fileIndex<<std::endl;
-    std::string hashstr(std::to_string(fileIndex) + std::to_string(index)); 
-    uint64_t key = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
-    if(_blkMap.count(key) > 0 ) {
-        if(_blkMap[key]->status == BLK_AVAIL){
-            //req->trace()<<"found block: "<<blockEntryStr(blkEntries[i])<<std::endl;
-            return (_blkMap[key]);
-        }
-    }
-    //    req->trace()<<"block not found "<<std::endl;
-    return NULL;
-}
-
-
-template <class Lock>
-void ScalableCache<Lock>::cleanReservation() {
-    // todo 
-}
-
-template <class Lock>
-typename ScalableCache<Lock>::BlockEntry* ScalableCache<Lock>::oldestBlock(uint32_t index, uint32_t fileIndex, Request* req) {
-
-    //check if block exists 
-    std::string hashstr(std::to_string(fileIndex) + std::to_string(index)); 
-    uint64_t key = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
-    if(_blkMap.count(key) > 0 ) { // look for actual entry
-        req->trace() << "found entry: " << blockEntryStr(_blkMap[key]) << std::endl;
-        return _blkMap[key];
-    }
-    else{ 
-        //update pattern according to current hit/miss
-        // checkPattern(fileIndex);
-        bool LRUsearch = true;
-        if(_curNumBlocks < _maxNumBlocks){ //if we can have more blocks 
-            uint8_t* addr = _registry->allocateBlock(this);//ask for a block from registry //send hit/miss for pattern detection
-            if( addr != NULL){ //registry sent a block 
-                LRUsearch = false;
-                BlockEntry* newBlk = new BlockEntry();
-                newBlk->init(this, key);
-                newBlk->blkAddr = addr;
-                _blkMap.emplace(key, newBlk);
-                _curNumBlocks++;
-                return newBlk;
-            }
-        }
-        if (LRUsearch){ //max number of blocks is reached or registry sent NULL, try to use one of the blocks we have 
-            BlockEntry* blk = NULL;
-            uint32_t minTime = -1; //this is max uint32_t
-            BlockEntry *minEntry = NULL;
-            uint32_t minPrefetchTime = -1; //Prefetched block
-            BlockEntry *minPrefetchEntry = NULL;
-            
-            for( auto entry : _blkMap) {
-                blk = entry.second;
-                if(blk->status == BLK_AVAIL){
-                    if (!anyUsers(blk,req)) { 
-                        if (blk->timeStamp < minTime) {
-                            minTime = blk->timeStamp;
-                            minEntry = blk;
-                        }
-                        if (Config::prefetchEvict && blk->prefetched && blk->timeStamp < minPrefetchTime) {
-                            minPrefetchTime = blk->timeStamp;
-                            minPrefetchEntry = blk;
-                        }
-                    }
-                }
-            }
-            //If a prefetched block is found, we evict it
-            if (Config::prefetchEvict && minPrefetchTime != (uint32_t)-1 && minPrefetchEntry) {
-                _prefetchCollisions++;
-                trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 1);
-                minPrefetchEntry->status = BLK_EVICT;
-                req->trace()<<"evicting prefected entry: "<<blockEntryStr(minPrefetchEntry)<<std::endl;
-                return minPrefetchEntry;
-            }
-            if (minTime != (uint32_t)-1 && minEntry) { //Did we find a space
-                _collisions++;
-                trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 0);
-                minEntry->status = BLK_EVICT;
-                req->trace()<<"evicting  entry: "<<blockEntryStr(minEntry)<<std::endl;
-                return minEntry;
-            }
-            log(this)<< _name << " All space is reserved..." << std::endl;
-            req->trace()<<"no entries found"<<std::endl;
-            return NULL;
-        }
-    }
-    log(this)<<" [BMUTLU] ScalableCache.cpp 478 - why are we here " << std::endl;
-    return NULL;
-}
-
-template <class Lock>
-void ScalableCache<Lock>::sendCloseSignal(uint32_t index) {
-    _registry->fileClosed(this);
-}
-
-template <class Lock>
-void ScalableCache<Lock>::sendOpenSignal(uint32_t index) {
-    _registry->fileOpened(this);
-}
-
-template <class Lock>
-uint8_t* ScalableCache<Lock>::sendBlock() {
-    if(_curNumBlocks == 0) {
-        return NULL;
-    }
-    else { // look for a block to evict
-        for( auto entry : _blkMap) {
-            if((entry.second)->status == BLK_AVAIL && (entry.second)->activeCnt.load() == 0 ) {
-                BlockEntry* item = entry.second;
-                _blkMap.erase(entry.first);
-                _curNumBlocks--;
-                return item->blkAddr;
-            }
-        }
-        return NULL;
-    }
-}
-
-template <class Lock>
-void ScalableCache<Lock>::trackBlock(std::string cacheName, std::string action, uint32_t fileIndex, uint32_t  blockIndex, uint64_t priority) {
-    if (Config::TrackBlockStats) {
-        auto fut = std::async(std::launch::async, [cacheName, action, fileIndex,  blockIndex, priority] {
-            unixopen_t unixopen = (unixopen_t)dlsym(RTLD_NEXT, "open");
-            unixclose_t unixclose = (unixclose_t)dlsym(RTLD_NEXT, "close");
-            unixwrite_t unixwrite = (unixwrite_t)dlsym(RTLD_NEXT, "write");
-
-            int fd = (*unixopen)("block_stats.txt", O_WRONLY | O_APPEND | O_CREAT, 0660);
-            if (fd != -1) {
-                std::stringstream ss;
-                ss << cacheName << " " << action << " " << fileIndex << " " <<  blockIndex << " " << priority << std::endl;
-                unixwrite(fd, ss.str().c_str(), ss.str().length());
-                unixclose(fd);
-            }
-        });
-    }
-}
-
-template <class Lock>
-void ScalableCache<Lock>::addAccessMeta(unsigned int fileIndex, uint64_t blockIndex, uint64_t readIndex) {
-    _patternLock->writerLock();
-    std::array<uint64_t, 3> access = {readIndex, blockIndex, Timer::getTimestamp()};
-    _meta[fileIndex].window.push_front(access);
-    if(_meta[fileIndex].window.size() == 6)
-        _meta[fileIndex].window.pop_back();
-    _patternLock->writerUnlock();
-}
-
-template <class Lock>
-void ScalableCache<Lock>::updateHitMeta(unsigned int fileIndex, bool hit){
-    _patternLock->writerLock();
-    if(hit)
-        _meta[fileIndex].consecutiveHits++;
-    else
-        _meta[fileIndex].consecutiveHits = 0;
-    _patternLock->writerUnlock();
-}
-
-template <class Lock> 
-void ScalableCache<Lock>::checkPattern(unsigned int fileIndex) {
-    _patternLock->readerLock();
-    // for (int i = 0; i < _meta[fileIndex].window.size(); i++) {
-    //     fprintf(stderr, "%d: %lu %lu %lu\n", i, _meta[fileIndex].window[i][0], _meta[fileIndex].window[i][1], _meta[fileIndex].window[i][2]);
-    //     fflush(stderr);
-    // }
-
-    auto oldPattern = _meta[fileIndex].pattern;
-    if (_meta[fileIndex].window.size() > 2) {
-        _meta[fileIndex].pattern = LINEAR;
-        uint64_t first;
-        for (int i = 1; i < _meta[fileIndex].window.size(); i++) {
-            uint64_t stride = _meta[fileIndex].window[i-1][1] - _meta[fileIndex].window[i][1];
-            // fprintf(stderr, "%d - %d: %lu\n", i, i-1, stride);
-            // fflush(stderr);
-            if (stride < 0 || stride > 1) {
-                _meta[fileIndex].pattern = RANDOM;
-            }
-        }
-    }
-    auto newPattern = _meta[fileIndex].pattern;
-    _patternLock->readerUnlock();
-    if(oldPattern != newPattern) {
-        fprintf(stderr, "Updating cache pattern: %s\n", (newPattern) ? "LINEAR" : "RANDOM");
-        fflush(stderr);
-        _registry->updateCachePattern(this, newPattern, _meta[fileIndex].totalBlocks);
-    }
-}
-
-template <class Lock>
-void ScalableCache<Lock>::updateMaxBlocks(uint32_t blockSize){
-    _maxNumBlocks = blockSize;
-}
-
-template <class Lock>
-uint32_t ScalableCache<Lock>::getMaxBlocks(){
-    return _maxNumBlocks;
-}
-
-template class ScalableCache<MultiReaderWriterLock>;
-//template class ScalableCache<FcntlBoundedReaderWriterLock>;
-//template class ScalableCache<FileLinkReaderWriterLock>;

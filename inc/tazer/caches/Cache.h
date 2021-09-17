@@ -143,6 +143,7 @@ class Cache : public Loggable, public Trackable<std::string, Cache *> {
     // virtual void updateIoRate(uint64_t elapsed, uint64_t size);
     void updateRequestTime(uint64_t time);
 
+    void trackBlock(std::string cacheName, std::string action, uint32_t fileIndex, uint32_t  blockIndex, uint64_t priority);
     //-----------------------------------------------------------------------------------
 
     // std::atomic<uint64_t> _hits;

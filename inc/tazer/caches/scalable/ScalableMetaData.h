@@ -72,72 +72,68 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef SCALABLECACHE_H
-#define SCALABLECACHE_H
-#include "Cache.h"
-#include "Loggable.h"
-#include "Trackable.h"
+#ifndef SCALABLE_META_DATA_H
+#define SCALABLE_META_DATA_H
 #include "ReaderWriterLock.h"
-#include "ScalableMetaData.h"
-#include "ScalableAllocator.h"
-#include <map>
+#include "Trackable.h"
+#include <atomic>
+#include <deque>
+#include <vector>
+#include <array>
 
-#define SCALABLECACHENAME "scalable"
+const char* const patternName[] = { "Random", "Linear" };
 
-class ScalableCache : public Cache {
-  public:
-    ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize);
-    virtual ~ScalableCache();
-    
-    static Cache* addScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize);
-
-    virtual bool writeBlock(Request *req);
-    virtual void readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority);
-    
-    virtual void addFile(uint32_t fileIndex, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
-    virtual void closeFile(uint32_t fileIndex);
-
-    virtual ScalableMetaData * oldestFile(uint32_t &oldestFileIndex);
-    void trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex);
-  
-  protected:
-    ReaderWriterLock *_cacheLock;
-    std::unordered_map<uint32_t, ScalableMetaData*> _metaMap;
-    uint64_t _blockSize;
-    TazerAllocator * _allocator;
-
-  private:
-    uint8_t * getBlockData(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset);
-    uint8_t * getBlockDataOrReserve(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset, bool &reserve);
-    void setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * data, uint64_t dataSize);
-};
-
-class StealingAllocator : public TazerAllocator
-{
+struct ScalableMetaData {
     private:
-        ReaderWriterLock allocLock;
-        std::vector<ScalableMetaData*> victims;
-        ScalableCache * scalableCache;
+        enum StridePattern {
+            RANDOM = 0,
+            LINEAR
+        };
+
+        struct BlockEntry {
+            int64_t blockIndex;
+            ReaderWriterLock blkLock;
+            std::atomic<uint64_t> timeStamp;
+            std::atomic<uint8_t*> data;
+            BlockEntry(): blockIndex(0), timeStamp(0), data(0) { }
+        };
+
+        uint64_t totalBlocks;
+        StridePattern pattern;
+        ReaderWriterLock metaLock;
+        BlockEntry * blocks;
+
+        std::atomic<uint64_t> numBlocks;
+        std::deque<std::array<uint64_t, 3>> window;
+        std::vector<BlockEntry*> currentBlocks;
 
     public:
-        StealingAllocator(uint64_t blockSize, uint64_t maxSize):
-            TazerAllocator(blockSize, maxSize) { }
+        ScalableMetaData(uint64_t bSize, uint64_t fSize):
+            totalBlocks(fSize / bSize + ((fSize % bSize) ? 1 : 0)),
+            pattern(RANDOM),
+            numBlocks(0) {
+                blocks = new BlockEntry[totalBlocks];
+                for(unsigned int i=0; i<totalBlocks; i++) {
+                    blocks[i].data.store(NULL);
+                    blocks[i].blockIndex = i;
+                }
+            }
+        
+        //JS: These are modifying blocks data, meta data, and usage
+        uint8_t * getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track);
+        void setBlock(uint64_t blockIndex, uint8_t * data);
+        void decBlockUsage(uint64_t blockIndex);
+        bool backOutOfReservation(uint64_t blockIndex); 
 
-        uint8_t * allocateBlock();
-        virtual void closeFile(ScalableMetaData * meta);
-        static TazerAllocator * addStealingAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache);
-        void setCache(ScalableCache * cache);
+        //JS: These are huristics to support cache/allocators
+        bool checkPattern();
+        uint8_t * oldestBlock(uint64_t &blockIndex);
+        uint64_t getLastTimeStamp();
+
+    private:
+        uint64_t trackAccess(uint64_t blockIndex, uint64_t readIndex);
 };
 
-#endif // SCALABLECACHE_H
+#endif //SCALABLE_META_DATA_H
 
-//JS: MetaData for Ocean
-//Cache Name
-//Action --> string --> trace of action
-// --- Evictions
-// --- Read hits and misses
-//FileIndex
-//BlockIndex
-//Priority
-
-//Track block
+  

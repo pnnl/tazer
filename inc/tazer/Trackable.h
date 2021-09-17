@@ -130,6 +130,10 @@ class Trackable {
         return ret;
     }
 
+    static Value AddTrackable(Key k, std::function<Value(void)> createNew, bool &created) {
+        return AddTrackable(k, createNew, NULL, created);
+    }
+
     static Value AddTrackable(Key k, std::function<Value(void)> createNew) {
         bool dontCare;
         return AddTrackable(k, createNew, NULL, dontCare);

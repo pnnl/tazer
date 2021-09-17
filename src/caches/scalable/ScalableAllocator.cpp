@@ -71,44 +71,20 @@
 //                   under Contract DE-AC05-76RL01830
 // 
 //*EndLicense****************************************************************
+#include "ScalableAllocator.h"
+#include <unistd.h>
+#include <memory>
+#include <random>
+#include <algorithm>
+#include <string.h>
 
-#ifndef SCALABLE_REGISTRY_H
-#define SCALABLE_REGISTRY_H
+#define DPRINTF(...)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
-#include <vector>
-#include <unordered_map>
-#include "Cache.h"
+TazerAllocator * SimpleAllocator::addSimpleAllocator(uint64_t blockSize, uint64_t maxSize) {
+    return addAllocator<SimpleAllocator>(std::string("SimpleAllocator"), blockSize, maxSize);
+}
 
-#define RANDOM_BLOCK_LIMIT  -1 
-//10 //a temporary value to start each file with a max # of allowed blocks
-
-//template <class Lock>
-class ScalableRegistry{
-  public:
-    ScalableRegistry(uint64_t maxCacheSize, uint64_t blockSize);
-    uint32_t registerCache(Cache* cache);
-    uint8_t * allocateBlock(Cache* cache);
-    uint8_t * stealBlock(Cache* cache);
-    uint8_t * stealBlock(int n);
-    void fileClosed (Cache* cache);
-    void fileOpened (Cache* cache);
-    void updateCachePattern(Cache* cache, uint32_t p, uint64_t maxBlocks);
-
-    static ScalableRegistry *addNewScalableRegistry(uint64_t maxCacheSize, uint64_t blockSize);
-    
-    //closeFile() //fill this to close a file , remove from cachesinuse, remove from cachemap, add cachemap vector to availableblocks
-  protected:
- 
-  private:
-    uint64_t _maxBlocks;
-    uint64_t _allocatedBlocks;
-    uint32_t _maxCacheSize;
-    uint32_t _blockSize;
-    uint32_t _fileBlockLimit = RANDOM_BLOCK_LIMIT;
-    std::unordered_map< Cache*, std::vector<uint8_t*> > _cacheMap; // map to keep trck of all the blocks allocated for each cache
-    std::vector<Cache*> _cachesInUse; //vector of all active caches 
-    std::vector<Cache*> _victims;
-    //std::vector<uint8_t *> _availableBlocks; //closed file blocks will be returned to this list 
-};
-
-#endif /* SCALABLE_REGISTRY_H */
+uint8_t * SimpleAllocator::allocateBlock() {
+    return new uint8_t[_blockSize];
+}
