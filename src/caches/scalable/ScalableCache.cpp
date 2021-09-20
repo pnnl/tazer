@@ -166,7 +166,7 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
     _cacheLock->readerLock();
     auto meta = _metaMap[fileIndex];
     uint8_t * dest = NULL;
-    auto doAlloc = meta->checkPattern();
+    auto doAlloc = meta->checkPattern(this, fileIndex);
 
     while(!dest) {
         //JS: Are we allowed to get more blocks
@@ -346,6 +346,11 @@ ScalableMetaData * ScalableCache::oldestFile(uint32_t &oldestFileIndex) {
 //JS: Wrote this function for allocator to track an eviction (trackBlock is private)
 void ScalableCache::trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex) {
     trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, blockIndex, 0);
+}
+
+void ScalableCache::trackPattern(uint32_t fileIndex, std::string pattern) {
+    DPRINTF("SETTING PATTER %s\n", pattern.c_str());
+    trackBlock(_name, pattern, fileIndex, -1, -1);
 }
 
 void StealingAllocator::setCache(ScalableCache * cache) {

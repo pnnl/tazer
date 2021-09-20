@@ -99,6 +99,7 @@ class ScalableCache : public Cache {
 
     virtual ScalableMetaData * oldestFile(uint32_t &oldestFileIndex);
     void trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex);
+    void trackPattern(uint32_t fileIndex, std::string pattern);
   
   protected:
     ReaderWriterLock *_cacheLock;

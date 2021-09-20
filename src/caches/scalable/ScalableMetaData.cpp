@@ -73,6 +73,7 @@
 //*EndLicense****************************************************************
 
 #include "ScalableMetaData.h"
+#include "ScalableCache.h"
 
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define DPRINTF(...)
@@ -141,7 +142,7 @@ uint64_t ScalableMetaData::trackAccess(uint64_t blockIndex, uint64_t readIndex) 
 }
 
 //JS TODO: add to trackBlock with -1 for blockIndex and priority
-bool ScalableMetaData::checkPattern() {
+bool ScalableMetaData::checkPattern(Cache * cache, uint32_t fileIndex) {
     bool ret = true;
     metaLock.readerLock();
 
@@ -157,7 +158,7 @@ bool ScalableMetaData::checkPattern() {
             }
         }
     }
-    DPRINTF("oldPattern: %s newPattern: %s\n", (oldPattern) ? "LINEAR" : "RANDOM", (newPattern) ? "LINEAR" : "RANDOM");
+    DPRINTF("oldPattern: %s newPattern: %s\n", patternName[oldPattern], patternName[newPattern]);
     //JS: For now the only case that limits is linear with more than one block
     if(newPattern == BLOCKSTREAMING && numBlocks.load())
         ret = false;
@@ -165,7 +166,8 @@ bool ScalableMetaData::checkPattern() {
     metaLock.readerUnlock();
 
     if(oldPattern != newPattern) {
-        DPRINTF("[JS] Updating cache pattern %s\n", (newPattern) ? "LINEAR" : "RANDOM");
+        DPRINTF("[JS] Updating cache pattern %s\n", patternName[newPattern]);
+        ((ScalableCache*)cache)->trackPattern(fileIndex, patternName[newPattern]);
         metaLock.writerLock();
         pattern = newPattern;
         metaLock.writerUnlock();

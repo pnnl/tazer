@@ -81,14 +81,14 @@
 #include <vector>
 #include <array>
 
-const char* const patternName[] = { "Random", "Linear" };
+const char* const patternName[] = { "UNKNOWN", "BLOCKSTREAMING" };
 
 struct ScalableMetaData {
     private:
         enum StridePattern {
             //JS TODO: update name to BLOCKSTREAMING and UNKNOWN
-            BLOCKSTREAMING = 0,
-            UNKNOWN
+            UNKNOWN = 0,
+            BLOCKSTREAMING
         };
 
         struct BlockEntry {
@@ -127,7 +127,7 @@ struct ScalableMetaData {
         bool backOutOfReservation(uint64_t blockIndex); 
 
         //JS: These are huristics to support cache/allocators
-        bool checkPattern();
+        bool checkPattern(Cache * cache=NULL, uint32_t fileIndex=0);
         uint8_t * oldestBlock(uint64_t &blockIndex);
         uint64_t getLastTimeStamp();
 
