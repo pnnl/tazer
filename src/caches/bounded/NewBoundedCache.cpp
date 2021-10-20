@@ -233,12 +233,15 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
         }
     }
 
+    std::thread::id thread_id = req->threadId;
+    stats.checkThread(thread_id, true);
     //If a prefetched block is found, we evict it
     if (Config::prefetchEvict && minPrefetchTime != (uint32_t)-1 && minPrefetchEntry) {
         _prefetchCollisions++;
         trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 1);
         minPrefetchEntry->status = BLK_EVICT;
         req->trace(_name)<<"evicting prefected entry: "<<blockEntryStr(minPrefetchEntry)<<std::endl;
+        stats.addAmt(1, CacheStats::Metric::evictions, 1, thread_id);
         return minPrefetchEntry;
     }
     if (minTime != (uint32_t)-1 && minEntry) { //Did we find a space
@@ -246,6 +249,7 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
         trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 0);
         minEntry->status = BLK_EVICT;
         req->trace(_name)<<"evicting  entry: "<<blockEntryStr(minEntry)<<std::endl;
+        stats.addAmt(0, CacheStats::Metric::evictions, 1, thread_id);
         return minEntry;
     }
     log(this)<< _name << " All space is reserved..." << std::endl;

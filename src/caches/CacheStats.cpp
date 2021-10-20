@@ -100,6 +100,7 @@ char const *metricTypeName_cs[] = {
 char const *metricName_cs[] = {
     "hits",
     "misses",
+    "evictions",
     "prefetches",
     "stalls",
     "stalled",
