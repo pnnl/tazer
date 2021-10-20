@@ -239,6 +239,7 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
         evictHisto.addData((double) fileIndex, (double) 1);
         minPrefetchEntry->status = BLK_EVICT;
         req->trace()<<"evicting prefected entry: "<<blockEntryStr(minPrefetchEntry)<<std::endl;
+        stats.addAmt(1, CacheStats::Metric::evictions, 1);
         return minPrefetchEntry;
     }
     if (minTime != (uint32_t)-1 && minEntry) { //Did we find a space
@@ -247,6 +248,7 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
         evictHisto.addData((double) fileIndex, (double) 1);
         minEntry->status = BLK_EVICT;
         req->trace()<<"evicting  entry: "<<blockEntryStr(minEntry)<<std::endl;
+        stats.addAmt(0, CacheStats::Metric::evictions, 1);
         return minEntry;
     }
     log(this)<< _name << " All space is reserved..." << std::endl;
@@ -333,7 +335,7 @@ bool NewBoundedCache<Lock>::writeBlock(Request *req) {
                         setBlockData(req->data,  entry->id, req->size);
 
                         req->trace()<<"update entry to avail "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-                        blockSet( entry, fileIndex, index, BLK_AVAIL, req->originating->type(), entry->prefetched, req->reservedMap[this], req); //write the name of the originating cache so we can properly attribute stall time...
+                        blockSet( entry, fileIndex, index, BLK_AVAIL, req->originating->type(), entry->prefetched, -req->reservedMap[this], req); // there is a minus sign in front of req->reservedMap[this] so that we can appropriately decrement the block cnt, write the name of the originating cache so we can properly attribute stall time...
                         
                         if(entry->status == BLK_EVICT){
                              req->trace()<<"new entry/evict "<<" "<<(void*)entry<<std::endl;
@@ -342,7 +344,7 @@ bool NewBoundedCache<Lock>::writeBlock(Request *req) {
                     }
                     else if (entry->status == BLK_AVAIL) {
                         req->trace()<<"update time "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
-                        blockSet( entry, fileIndex, index, BLK_AVAIL, req->originating->type(), entry->prefetched,req->reservedMap[this], req); //update timestamp
+                        blockSet( entry, fileIndex, index, BLK_AVAIL, req->originating->type(), entry->prefetched, -req->reservedMap[this], req);  // there is a minus sign in front of req->reservedMap[this] so that we can appropriately decrement the block cnt, update timestamp
                     }
                     else { //the writer will update the timestamp
                         req->trace()<<"other will update"<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
