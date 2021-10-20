@@ -72,7 +72,10 @@
 // 
 //*EndLicense****************************************************************
 
+#include "Config.h"
 #include "ScalableCache.h"
+#include "StealingAllocator.h"
+#include "Timer.h"
 #include <signal.h>
 #include "xxhash.h"
 #include <fcntl.h>
@@ -83,17 +86,54 @@
 #include <memory>
 #include <deque>
 #include <queue>
+#include <cmath>
+#include <cfloat>
 
 #define DPRINTF(...)
+
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
-Cache(cacheName, type) {
+Cache(cacheName, type),
+evictHisto(100),
+access(0), 
+misses(0),
+startTimeStamp((uint64_t)Timer::getCurrentTime()) {
     stats.start();
     log(this) << _name << std::endl;
     _cacheLock = new ReaderWriterLock();
     _blockSize = blockSize;
-    _allocator = StealingAllocator::addStealingAllocator(blockSize, maxCacheSize, this);
+
+    if(Config::scalableCacheAllocator == 0) {
+        PPRINTF("[JS] AdaptiveAllocator::addAdaptiveAllocator\n");
+        _allocator = AdaptiveAllocator::addAdaptiveAllocator(blockSize, maxCacheSize, this);
+    }
+    else if(Config::scalableCacheAllocator == 1) {
+        PPRINTF("[JS] StealingAllocator::addStealingAllocator\n");
+        _allocator = StealingAllocator::addStealingAllocator(blockSize, maxCacheSize, this);
+    }
+    else if(Config::scalableCacheAllocator == 2) {
+        PPRINTF("[JS] StealingAllocator::addRandomStealingAllocator false\n");
+        _allocator = RandomStealingAllocator::addRandomStealingAllocator(blockSize, maxCacheSize, this, false);
+    }
+    else if(Config::scalableCacheAllocator == 3) {
+        PPRINTF("[JS] StealingAllocator::addRandomStealingAllocator true\n");
+        _allocator = RandomStealingAllocator::addRandomStealingAllocator(blockSize, maxCacheSize, this, true);
+    }
+    else if(Config::scalableCacheAllocator == 4) {
+        PPRINTF("[JS] StealingAllocator::addLargestStealingAllocator\n");
+        _allocator = LargestStealingAllocator::addLargestStealingAllocator(blockSize, maxCacheSize, this);
+    }
+    else if(Config::scalableCacheAllocator == 5) {
+        PPRINTF("[JS] StealingAllocator::addFirstTouchAllocator\n");
+        _allocator = FirstTouchAllocator::addFirstTouchAllocator(blockSize, maxCacheSize);
+    }
+    else {
+        PPRINTF("[JS] SimpleAllocator::addSimpleAllocator\n");
+        _allocator = SimpleAllocator::addSimpleAllocator(blockSize, maxCacheSize);
+    }
+
     srand(time(NULL));
     stats.end(false, CacheStats::Metric::constructor);
 }
@@ -102,6 +142,7 @@ ScalableCache::~ScalableCache() {
     _terminating = true;
     log(this) << "deleting " << _name << " in ScalableCache" << std::endl;
     delete _cacheLock;
+    evictHisto.printBins();
     stats.print(_name);
 }
 
@@ -172,7 +213,7 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
         //JS: Are we allowed to get more blocks
         if(doAlloc) {
             DPRINTF("[JS] ScalableCache::setBlock new block\n");
-            dest = _allocator->allocateBlock();
+            dest = _allocator->allocateBlock(fileIndex);
         }
 
         //JS: We can't due to our pattern so lets LRU ourself
@@ -180,20 +221,14 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
             DPRINTF("[JS] ScalableCache::setBlock Reusing block\n");
             dest = meta->oldestBlock(sourceBlockIndex);
             if(dest)
-                trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, sourceBlockIndex, 0);
+                trackBlockEviction(fileIndex, sourceBlockIndex);
         }
 
         //JS: Try to backout
-        if(!dest && meta->backOutOfReservation(blockIndex))
+        if(!dest && meta->backOutOfReservation(blockIndex)) {
+            DPRINTF("[JS] ScalableCache::setBlock Backing out\n");
+            stats.addAmt(false, CacheStats::Metric::backout, 1);
             break;
-
-        if(!dest) {
-            //JS: Try random steal
-            sourceFileIndex = rand() % _metaMap.size();
-            auto randomMeta = _metaMap[sourceFileIndex];
-            dest = randomMeta->oldestBlock(sourceBlockIndex);
-            if(dest)
-                trackBlock(_name, "[BLOCK_EVICTED]", sourceFileIndex, sourceBlockIndex, 0);
         }
     }
     
@@ -250,11 +285,13 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
     
     DPRINTF("[JS] ScalableCache::readBlock req->size: %lu req->blkIndex: %lu\n", req->size, req->blkIndex);
     trackBlock(_name, (priority != 0 ? " [BLOCK_PREFETCH_REQUEST] " : " [BLOCK_REQUEST] "), fileIndex, index, priority);
-    
+
     if (req->size <= _blockSize) {
         bool reserve;
         //JS: Fill in the data if we have it
         buff = getBlockDataOrReserve(fileIndex, index, fileOffset, reserve);
+        access.fetch_add(1);
+
         // std::cerr << " [JS] readBlock " << buff << " " << reserve << std::endl;
         if(buff) {
             DPRINTF("[JS] ScalableCache::readBlock hit\n");
@@ -272,6 +309,7 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
         }
         else { //JS: Data not currently present
             trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
+            misses.fetch_add(1);
             stats.addAmt(false, CacheStats::Metric::misses, 1);
             stats.end(false, CacheStats::Metric::misses);
 
@@ -322,9 +360,8 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
 }
 
 ScalableMetaData * ScalableCache::oldestFile(uint32_t &oldestFileIndex) {
-    //JS: Switch to writeLock to shut everything else down!
     _cacheLock->readerLock();
-    uint64_t minTime = (uint32_t)-1;
+    uint64_t minTime = (uint64_t)-1;
     oldestFileIndex = (uint32_t) -1;
     for (auto const &x : _metaMap) {
         auto fileIndex = x.first;
@@ -337,69 +374,103 @@ ScalableMetaData * ScalableCache::oldestFile(uint32_t &oldestFileIndex) {
     }
 
     ScalableMetaData * ret = NULL;
-    if(minTime < (uint64_t)-1)
+    if(oldestFileIndex != (uint64_t)-1) {
         ret = _metaMap[oldestFileIndex];
+    }
+    _cacheLock->readerUnlock();
+    return ret;
+}
+
+ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, bool mustSucceed) {
+    _cacheLock->readerLock();
+    DPRINTF("---------- %u of %u ----------\n", allocateForFileIndex, _metaMap.size());
+    //JS: For calcRank
+    auto localMisses = misses.load();
+    uint64_t timestamp = Timer::getCurrentTime();
+
+    //JS: Find unit marginal benefits
+    double sourceFileRank;
+    double minRank = std::numeric_limits<double>::max();
+    uint32_t minFileIndex = (uint32_t) -1;
+
+    //JS: Find lowest rank
+    DPRINTF("+++++++++++Starting Search\n");
+    for (auto const &x : _metaMap) {
+        auto fileIndex = x.first;
+        auto meta = x.second;
+        if(allocateForFileIndex != fileIndex) {
+            auto temp = meta->calcRank(timestamp-startTimeStamp, localMisses);
+            DPRINTF("-------Index: %u %lf\n", fileIndex, temp);
+            if(!std::isnan(temp) && temp > 0 && temp < minRank) {
+                minRank = temp;
+                minFileIndex = fileIndex;
+                DPRINTF("*******NEW MIN: %u : %lf\n", minFileIndex, minRank);
+            }
+        }
+        else {
+            sourceFileRank = meta->calcRank(timestamp-startTimeStamp, localMisses);
+            DPRINTF("-------Source Index: %u %lf\n", fileIndex, sourceFileRank);
+        }
+    }
+    DPRINTF("+++++++++++End Search\n");
+    ScalableMetaData * ret = NULL;
+    sourceFileIndex = (uint32_t) -1;
+    if(minFileIndex != (uint32_t) -1) {
+        if(mustSucceed || std::isnan(sourceFileRank) || sourceFileRank > minRank) {
+            ret = _metaMap[minFileIndex];
+            //JS: Do update rank here
+            DPRINTF("**************SOURCE: %u DEST: %u\n", minFileIndex, allocateForFileIndex);
+            _metaMap[minFileIndex]->updateRank(true);
+            _metaMap[allocateForFileIndex]->updateRank(false);
+            //JS: Set this for the tracking
+            sourceFileIndex = minFileIndex;
+        }
+    }
+    _cacheLock->readerUnlock();
+    return ret;
+}
+
+ScalableMetaData * ScalableCache::randomFile(uint32_t &sourceFileIndex) {
+    _cacheLock->readerLock();
+    ScalableMetaData * ret = NULL;
+    if(!_metaMap.empty()) {
+        sourceFileIndex = rand() % _metaMap.size();
+        ret = _metaMap[sourceFileIndex];
+    }
+    _cacheLock->readerUnlock();
+    return ret;
+}
+
+ScalableMetaData * ScalableCache::largestFile(uint32_t &largestFileIndex) {
+    _cacheLock->readerLock();
+    uint64_t maxBlocks = 0;
+    largestFileIndex = (uint32_t) -1;
+    for (auto const &x : _metaMap) {
+        auto fileIndex = x.first;
+        auto meta = x.second;
+        uint64_t temp = meta->getNumBlocks();
+        if(maxBlocks < temp) {
+            maxBlocks = temp;
+            largestFileIndex = fileIndex;
+        }
+    }
+
+    ScalableMetaData * ret = NULL;
+    if(largestFileIndex != (uint64_t)-1) {
+        ret = _metaMap[largestFileIndex];
+    }
     _cacheLock->readerUnlock();
     return ret;
 }
 
 //JS: Wrote this function for allocator to track an eviction (trackBlock is private)
 void ScalableCache::trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex) {
+    stats.addAmt(false, CacheStats::Metric::evictions, 1);
+    evictHisto.addData((double) fileIndex, (double) 1);
     trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, blockIndex, 0);
 }
 
 void ScalableCache::trackPattern(uint32_t fileIndex, std::string pattern) {
     DPRINTF("SETTING PATTER %s\n", pattern.c_str());
     trackBlock(_name, pattern, fileIndex, -1, -1);
-}
-
-void StealingAllocator::setCache(ScalableCache * cache) {
-    scalableCache = cache;
-}
-
-TazerAllocator * StealingAllocator::addStealingAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache) {
-    StealingAllocator * ret = (StealingAllocator*) addAllocator<StealingAllocator>(std::string("StealingAllocator"), blockSize, maxSize);
-    ret->setCache(cache);
-    return ret;
-}
-
-uint8_t * StealingAllocator::allocateBlock() {
-    //JS: For trackBlock
-    uint64_t sourceBlockIndex;
-    uint32_t sourceFileIndex;
-
-    //JS: Can we allocate new blocks
-    //JS TODO: Check for race
-    if(_availBlocks.fetch_sub(1)) {
-        DPRINTF("[JS] StealingAllocator::allocateBlock new block\n");
-        return new uint8_t[_blockSize];
-    }
-    _availBlocks.fetch_add(1);
-
-    //JS: Try to take from closed files first
-    uint8_t * ret = NULL;
-    allocLock.writerLock();
-    if(priorityVictims.size()) {
-        auto meta = priorityVictims.back();
-        ret = meta->oldestBlock(sourceBlockIndex);
-        DPRINTF("[JS] StealingAllocator::allocateBlock taking from victim %p\n", ret);
-    }
-    allocLock.writerUnlock();
-
-    //JS: Try to steal
-    if(!ret) {
-        auto meta = scalableCache->oldestFile(sourceFileIndex);
-        ret = meta->oldestBlock(sourceBlockIndex);
-        DPRINTF("[JS] StealingAllocator::allocateBlock trying to steal %p\n", ret);
-        if(ret)
-            scalableCache->trackBlockEviction(sourceFileIndex, sourceBlockIndex);
-    }
-    return ret;
-}
-
-void StealingAllocator::closeFile(ScalableMetaData * meta) {
-    allocLock.writerLock();
-    priorityVictims.push_back(meta);
-    DPRINTF("[JS] StealingAllocator::closeFile adding a victim file\n");
-    allocLock.writerUnlock();
 }

@@ -93,6 +93,8 @@ class CacheStats {
     enum Metric {
         hits = 0,
         misses,
+        evictions,
+        backout,
         prefetches,
         stalls,  //time i stall other caches
         stalled, //time im stalled

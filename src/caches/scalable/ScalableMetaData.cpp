@@ -74,9 +74,12 @@
 
 #include "ScalableMetaData.h"
 #include "ScalableCache.h"
+#include <cmath>
+#include <cfloat>
 
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define DPRINTF(...)
+#define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
     bool toReserve = false;
@@ -84,11 +87,13 @@ uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffse
     
     //JS: This is for the first call from readBlock, which sets the read lock until blockset
     if(track) {
-        auto timeStamp = trackAccess(blockIndex, fileOffset);
+        uint64_t timeStamp = trackAccess(blockIndex, fileOffset);
         auto old = blockEntry->blkLock.readerLock();
         toReserve = (old == 0);
         blockEntry->timeStamp.store(timeStamp);
         DPRINTF("ScalableMetaData::getBlockData blockIndex: %lu reserve: %d\n", blockIndex, old);
+        //JS: I think this is fine place to put this
+        updateStats(toReserve, timeStamp);
     }
 
     //JS: Look to see if the data is avail, notice this is after a reader lock
@@ -130,7 +135,7 @@ bool ScalableMetaData::backOutOfReservation(uint64_t blockIndex) {
 uint64_t ScalableMetaData::trackAccess(uint64_t blockIndex, uint64_t readIndex) {
     metaLock.writerLock();
 
-    uint64_t timeStamp = (uint64_t)Timer::getTimestamp();
+    uint64_t timeStamp = (uint64_t)Timer::getCurrentTime();
     std::array<uint64_t, 3> access = {readIndex, blockIndex, timeStamp};
     window.push_front(access);
     
@@ -141,7 +146,6 @@ uint64_t ScalableMetaData::trackAccess(uint64_t blockIndex, uint64_t readIndex) 
     return timeStamp;
 }
 
-//JS TODO: add to trackBlock with -1 for blockIndex and priority
 bool ScalableMetaData::checkPattern(Cache * cache, uint32_t fileIndex) {
     bool ret = true;
     metaLock.readerLock();
@@ -158,6 +162,7 @@ bool ScalableMetaData::checkPattern(Cache * cache, uint32_t fileIndex) {
             }
         }
     }
+
     DPRINTF("oldPattern: %s newPattern: %s\n", patternName[oldPattern], patternName[newPattern]);
     //JS: For now the only case that limits is linear with more than one block
     if(newPattern == BLOCKSTREAMING && numBlocks.load())
@@ -176,25 +181,60 @@ bool ScalableMetaData::checkPattern(Cache * cache, uint32_t fileIndex) {
 }
 
 uint64_t ScalableMetaData::getLastTimeStamp() {
+    uint64_t ret = 0;
     metaLock.readerLock();
-    auto ret = window.front()[2];
+    if(!window.empty())
+        ret = window.front()[2];
     metaLock.readerUnlock();
     return ret;
 }
 
+uint64_t ScalableMetaData::getNumBlocks() {
+    uint64_t ret = 0;
+    metaLock.readerLock();
+    ret = numBlocks.load();
+    metaLock.readerUnlock();
+    return ret;
+}
+
+uint8_t * ScalableMetaData::randomBlock(uint64_t &blockIndex) {
+    uint8_t * ret = NULL;
+    metaLock.writerLock();
+    unsigned int mapSize = currentBlocks.size();
+    for(unsigned int i=0; i<mapSize; i++) {
+        //JS: Get random block
+        blockIndex = rand() % mapSize;
+        auto it = currentBlocks.begin() + blockIndex;
+
+        //JS: Check the block is not being requested
+        if ( (*it)->blkLock.cowardlyTryWriterLock() ) {
+            DPRINTF("block: %lu timestamp: %lu\n", blockIndex, (*it)->timeStamp.load());
+            //JS: Take its memory!!!
+            ret = (*it)->data;
+            (*it)->data.store(NULL);
+            (*it)->blkLock.writerUnlock();
+            numBlocks.fetch_sub(1);
+            //JS: And remove its existence...
+            currentBlocks.erase(it);
+            break;
+        }
+    }
+    metaLock.writerUnlock();
+    return ret;
+}
+
 uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex) {
+    uint8_t * ret = NULL;
     metaLock.writerLock();
 
     if(currentBlocks.size() > 1) {
-    DPRINTF("ScalableMetaData::oldestBlock CurrentBlock.size(): %d\n", currentBlocks.size());
+        DPRINTF("ScalableMetaData::oldestBlock CurrentBlock.size(): %d\n", currentBlocks.size());
         sort(currentBlocks.begin(), currentBlocks.end(), 
             [](BlockEntry* lhs, BlockEntry* rhs) {
                 return lhs->timeStamp.load() < rhs->timeStamp.load();
             });
     }
-    // std::cerr << meta->currentBlocks.front()->timeStamp.load() << " " << meta->currentBlocks.back()->timeStamp.load() << std::endl;
-    
-    uint8_t * ret = NULL;
+
     for(auto it = currentBlocks.begin(); it != currentBlocks.end(); it++) {
         //JS: Check the block is not being requested
         if ((*it)->blkLock.cowardlyTryWriterLock()) {
@@ -214,4 +254,70 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex) {
 
     metaLock.writerUnlock();
     return ret;
+}
+
+//JS: This function only updates the "per partition" stats
+void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
+    metaLock.writerLock();
+    access++;
+    accessPerInterval++;
+    if(miss) {
+        if(lastMissTimeStamp) {
+            double i = (double)(timestamp - lastMissTimeStamp);
+            missInterval.addData(i, 1);
+            DPRINTF("fpGrowth: %lf\n", ((double) 1) / ((double) accessPerInterval) );
+            fpGrowth.addData(i, ((double) 1) / ((double) accessPerInterval) );
+            accessPerInterval = 0;
+            recalc = true;
+        }
+        DPRINTF("SETTING: %lu = %lu\n", lastMissTimeStamp, timestamp);
+        lastMissTimeStamp = timestamp;
+    }
+    metaLock.writerUnlock();
+}
+
+//JS: This can be considered another hueristic for determining eviction
+double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
+    double ret = unitMarginalBenefit;
+    metaLock.writerLock();
+    DPRINTF("* Timestamp: %lu recalc: %u\n", time, recalc);
+    if(lastMissTimeStamp && recalc) {
+        double i = ((double) time) / ((double) misses);
+        double Fp = fpGrowth.getValue(i);
+        double Mp = missInterval.getValue(i);
+        DPRINTF("* Fp: %lf Mp: %lf\n", Fp, Mp);
+        double fp = Fp / Mp;
+        DPRINTF("* access: %lf misses: %lf\n", (double)access, (double)misses);
+        double ap = (double) access / (double) misses;
+        DPRINTF("* i: %lf fp: %lf ap: %lf\n", i, fp, ap);
+        
+        marginalBenefit = fp * ap;
+        ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks); // * blockSize));
+        DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
+        recalc = false;
+    }
+    metaLock.writerUnlock();
+    return ret;
+}
+
+void ScalableMetaData::updateRank(bool dec) {
+    metaLock.writerLock();
+    if(lastMissTimeStamp) {
+        DPRINTF("ScalableMetaData::updateRank Before marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
+        if(!std::isnan(marginalBenefit) && !std::isnan(unitMarginalBenefit)) {
+            if(dec) {
+                marginalBenefit-=unitMarginalBenefit;
+                //JS: This checks if marginalBenefit == 0
+                // The check marginalBenefit == 0 seems to fail
+                if(marginalBenefit - unitMarginalBenefit < 0) {
+                    unitMarginalBenefit = 0;
+                    marginalBenefit = 0;
+                }
+            }
+            else
+                marginalBenefit+=unitMarginalBenefit;
+            DPRINTF("ScalableMetaData::updateRank After marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
+        }
+    }
+    metaLock.writerUnlock();
 }

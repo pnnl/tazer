@@ -91,6 +91,7 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
+#define PPRINTF(...) fprintf(stderr, __VA_ARGS__)
 
 template <class Lock>
 NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : Cache(cacheName,type),
@@ -100,7 +101,8 @@ NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, ui
                                                                                                                           _numBlocks(_cacheSize / _blockSize),
                                                                                                                           _collisions(0),
                                                                                                                           _prefetchCollisions(0),
-                                                                                                                          _outstanding(0) {
+                                                                                                                          _outstanding(0),
+                                                                                                                          evictHisto(100) {
 
     // log(this) /*debug()*/<< "Constructing " << _name << " in NewBoundedCache" << std::endl;
     stats.start();
@@ -128,7 +130,8 @@ NewBoundedCache<Lock>::~NewBoundedCache() {
     //         log(this) /*debug()*/<< i << " " << _numBlocks << " " << _blkIndex[i].activeCnt.load() << " " << _blkIndex[i].status << std::endl;
     //     }
     // }
-
+    PPRINTF("PRINTING EVICTIONS!!!\n");
+    evictHisto.printBins();
     log(this) << "deleting " << _name << " in NewBoundedCache" << std::endl;
     delete _localLock;
 }
@@ -233,6 +236,7 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
     if (Config::prefetchEvict && minPrefetchTime != (uint32_t)-1 && minPrefetchEntry) {
         _prefetchCollisions++;
         trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 1);
+        evictHisto.addData((double) fileIndex, (double) 1);
         minPrefetchEntry->status = BLK_EVICT;
         req->trace()<<"evicting prefected entry: "<<blockEntryStr(minPrefetchEntry)<<std::endl;
         return minPrefetchEntry;
@@ -240,6 +244,7 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
     if (minTime != (uint32_t)-1 && minEntry) { //Did we find a space
         _collisions++;
         trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 0);
+        evictHisto.addData((double) fileIndex, (double) 1);
         minEntry->status = BLK_EVICT;
         req->trace()<<"evicting  entry: "<<blockEntryStr(minEntry)<<std::endl;
         return minEntry;
@@ -307,7 +312,6 @@ bool NewBoundedCache<Lock>::writeBlock(Request *req) {
                 _binLock->writerLock(binIndex,req);
                 
                 BlockEntry* entry = oldestBlock(index, fileIndex, req);
-
                 trackBlock(_name, "[BLOCK_WRITE]", fileIndex, index, 0);
 
                 if (entry){ //a slot for the block is present in the cache       

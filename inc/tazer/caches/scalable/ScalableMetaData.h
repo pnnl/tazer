@@ -76,6 +76,7 @@
 #define SCALABLE_META_DATA_H
 #include "ReaderWriterLock.h"
 #include "Trackable.h"
+#include "Histogram.h"
 #include <atomic>
 #include <deque>
 #include <vector>
@@ -86,7 +87,6 @@ const char* const patternName[] = { "UNKNOWN", "BLOCKSTREAMING" };
 struct ScalableMetaData {
     private:
         enum StridePattern {
-            //JS TODO: update name to BLOCKSTREAMING and UNKNOWN
             UNKNOWN = 0,
             BLOCKSTREAMING
         };
@@ -99,20 +99,45 @@ struct ScalableMetaData {
             BlockEntry(): blockIndex(0), timeStamp(0), data(0) { }
         };
 
+        uint64_t fileSize;
+        uint64_t blockSize;
         uint64_t totalBlocks;
         StridePattern pattern;
         ReaderWriterLock metaLock;
         BlockEntry * blocks;
 
+        //JS: For Nathan
+        bool recalc;
+        uint64_t access;
+        uint64_t accessPerInterval;
+        uint64_t lastMissTimeStamp;
+        double marginalBenefit;
+        double unitMarginalBenefit;
+
         std::atomic<uint64_t> numBlocks;
+        
+        //JS: Also for Nathan (intervalTime, fpGrowth, missInverval)
+        Histogram fpGrowth;
+        Histogram missInterval;
+
         std::deque<std::array<uint64_t, 3>> window;
         std::vector<BlockEntry*> currentBlocks;
 
     public:
         ScalableMetaData(uint64_t bSize, uint64_t fSize):
+            fileSize(fSize),
+            blockSize(bSize),
             totalBlocks(fSize / bSize + ((fSize % bSize) ? 1 : 0)),
             pattern(UNKNOWN),
-            numBlocks(0) {
+            recalc(true),
+            access(0),
+            accessPerInterval(0),
+            lastMissTimeStamp(0),
+            marginalBenefit(0),
+            unitMarginalBenefit(0),
+            numBlocks(0),
+            fpGrowth(100),
+            missInterval(100) {
                 blocks = new BlockEntry[totalBlocks];
                 for(unsigned int i=0; i<totalBlocks; i++) {
                     blocks[i].data.store(NULL);
@@ -129,7 +154,14 @@ struct ScalableMetaData {
         //JS: These are huristics to support cache/allocators
         bool checkPattern(Cache * cache=NULL, uint32_t fileIndex=0);
         uint8_t * oldestBlock(uint64_t &blockIndex);
+        uint8_t * randomBlock(uint64_t &blockIndex);
         uint64_t getLastTimeStamp();
+        uint64_t getNumBlocks();
+
+        //JS: From Nathan
+        void updateStats(bool miss, uint64_t timestamp);
+        double calcRank(uint64_t time, uint64_t misses);
+        void updateRank(bool dec);
 
     private:
         uint64_t trackAccess(uint64_t blockIndex, uint64_t readIndex);

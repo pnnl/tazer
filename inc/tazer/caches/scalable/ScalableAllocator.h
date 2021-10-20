@@ -78,6 +78,7 @@
 #include <vector>
 #include <atomic>
 
+#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 class TazerAllocator : public Trackable<std::string, TazerAllocator *>
 {
@@ -106,18 +107,52 @@ class TazerAllocator : public Trackable<std::string, TazerAllocator *>
         }
 
     public:
-        virtual uint8_t * allocateBlock() = 0;
+        virtual uint8_t * allocateBlock(uint32_t allocateForFileIndex) = 0;
         virtual void closeFile(ScalableMetaData * meta) { }
 };
 
+//JS: This is an example of the simplest allocator I can think of
 class SimpleAllocator : public TazerAllocator
 {
     public:
         SimpleAllocator(uint64_t blockSize, uint64_t maxSize):
             TazerAllocator(blockSize, maxSize) { }
 
-        uint8_t * allocateBlock();
-        static TazerAllocator * addSimpleAllocator(uint64_t blockSize, uint64_t maxSize);
+        uint8_t * allocateBlock(uint32_t allocateForFileIndex) {
+            return new uint8_t[_blockSize];
+        }
+
+        static TazerAllocator * addSimpleAllocator(uint64_t blockSize, uint64_t maxSize) {
+            return addAllocator<SimpleAllocator>(std::string("SimpleAllocator"), blockSize, maxSize);
+        }
+};
+
+//JS: This is an example of the simplest allocator I can think of
+class FirstTouchAllocator : public TazerAllocator
+{
+    private:
+        std::atomic<uint64_t> _numBlocks;
+        uint64_t _maxBlocks;
+    
+    public:
+        FirstTouchAllocator(uint64_t blockSize, uint64_t maxSize):
+            TazerAllocator(blockSize, maxSize),
+            _numBlocks(0),
+            _maxBlocks(maxSize / blockSize) { 
+                PPRINTF("NUMBER OF BLOCKS: %lu\n", _maxBlocks);
+            }
+
+        uint8_t * allocateBlock(uint32_t allocateForFileIndex) {
+            uint64_t temp = _numBlocks.fetch_add(1);
+            if(temp < _maxBlocks)
+                return new uint8_t[_blockSize];
+            _numBlocks.fetch_sub(1);
+            return NULL;
+        }
+
+        static TazerAllocator * addFirstTouchAllocator(uint64_t blockSize, uint64_t maxSize) {
+            return addAllocator<FirstTouchAllocator>(std::string("FirstTouchAllocator"), blockSize, maxSize);
+        }
 };
 
 #endif /* SCALABLE_ALLOCATOR_H */

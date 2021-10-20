@@ -84,6 +84,7 @@
 #include "Timer.h"
 #include "Trackable.h"
 #include "UnixIO.h"
+#include "Histogram.h"
 #include <future>
 #include <memory>
 #include <unordered_set>
@@ -204,6 +205,7 @@ class Cache : public Loggable, public Trackable<std::string, Cache *> {
     bool _shared;
     std::atomic<std::uint64_t> _outstandingWrites;
     bool _terminating;
+
   private:
     
     ThreadPool<std::function<void()>> *_writePool;

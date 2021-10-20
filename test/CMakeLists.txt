@@ -88,3 +88,6 @@ if(CURL_LIB)
 endif()
 
 configure_file(FileStressTest.sh ${CMAKE_BINARY_DIR}/test/FileStressTest.sh @ONLY)
+
+add_executable(HistTest HistTest.cpp )
+target_link_libraries(HistTest testLib)

@@ -134,15 +134,19 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     int level = 0;
     Cache *c = NULL;
 
-//bmutlu
     if (Config::useMemoryCache) {
-        //Cache *c = NewMemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
-        Cache *c = ScalableCache::addScalableCache(SCALABLECACHENAME, CacheType::scalable, Config::memoryCacheBlocksize, 128*Config::memoryCacheBlocksize);
-        std::cerr << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
+        if(Config::useScalableCache) {
+            c = ScalableCache::addScalableCache(SCALABLECACHENAME, CacheType::scalable, Config::memoryCacheBlocksize, Config::scalableCacheNumBlocks * Config::memoryCacheBlocksize);
+            std::cerr << "[TAZER] " << "scalable cache: " << (void *)c << std::endl;
+        }
+        else {
+            c = NewMemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
+            std::cerr << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
+        }
+        
         InputFile::_cache->addCacheLevel(c, ++level);
     }
 
-//end bmutlu
     if (Config::useSharedMemoryCache && Config::enableSharedMem) {
         c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
         std::cerr << "[TAZER] "

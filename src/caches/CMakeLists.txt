@@ -59,7 +59,7 @@ set(CACHE_FILES
     unbounded/FcntlCache.cpp
 
     scalable/ScalableMetaData.cpp
-    scalable/ScalableAllocator.cpp
+    scalable/StealingAllocator.cpp
     scalable/ScalableCache.cpp
 )
 

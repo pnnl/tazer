@@ -97,7 +97,13 @@ class ScalableCache : public Cache {
     virtual void addFile(uint32_t fileIndex, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
     virtual void closeFile(uint32_t fileIndex);
 
+    //JS: Hueristics for replacement
     virtual ScalableMetaData * oldestFile(uint32_t &oldestFileIndex);
+    ScalableMetaData * findVictim(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, bool mustSucceed=false);
+    ScalableMetaData * randomFile(uint32_t &sourceFileIndex);
+    ScalableMetaData * largestFile(uint32_t &largestFileIndex);
+    
+    //JS: For tracking
     void trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex);
     void trackPattern(uint32_t fileIndex, std::string pattern);
   
@@ -106,6 +112,14 @@ class ScalableCache : public Cache {
     std::unordered_map<uint32_t, ScalableMetaData*> _metaMap;
     uint64_t _blockSize;
     TazerAllocator * _allocator;
+    
+    //JS: This is just temp for checking which files had blocks evicted
+    Histogram evictHisto;
+
+    //JS: For Nathan
+    std::atomic<uint64_t> access;
+    std::atomic<uint64_t> misses;
+    uint64_t startTimeStamp;
 
   private:
     uint8_t * getBlockData(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset);
@@ -113,32 +127,4 @@ class ScalableCache : public Cache {
     void setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * data, uint64_t dataSize);
 };
 
-class StealingAllocator : public TazerAllocator
-{
-    private:
-        ReaderWriterLock allocLock;
-        std::vector<ScalableMetaData*> priorityVictims;
-        ScalableCache * scalableCache;
-
-    public:
-        StealingAllocator(uint64_t blockSize, uint64_t maxSize):
-            TazerAllocator(blockSize, maxSize) { }
-
-        uint8_t * allocateBlock();
-        virtual void closeFile(ScalableMetaData * meta);
-        static TazerAllocator * addStealingAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache);
-        void setCache(ScalableCache * cache);
-};
-
 #endif // SCALABLECACHE_H
-
-//JS: MetaData for Ocean
-//Cache Name
-//Action --> string --> trace of action
-// --- Evictions
-// --- Read hits and misses
-//FileIndex
-//BlockIndex
-//Priority
-
-//Track block

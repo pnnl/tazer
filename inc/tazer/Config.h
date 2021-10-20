@@ -143,6 +143,13 @@ static uint64_t memoryCacheSize = getenv("TAZER_PRIVATE_MEM_CACHE_SIZE") ? atol(
 const uint32_t memoryCacheAssociativity = 16UL;
 const uint64_t memoryCacheBlocksize = maxBlockSize;
 
+//Scalable Cache Parameters
+const bool useScalableCache = getenv("TAZER_SCALABLE_CACHE") ? atoi(getenv("TAZER_SCALABLE_CACHE")) : 1;
+const uint32_t scalableCacheNumBlocks = getenv("TAZER_SCALABLE_CACHE_NUM_BLOCKS") ? atoi(getenv("TAZER_SCALABLE_CACHE_NUM_BLOCKS")) : 64;
+//0:addAdaptiveAllocator, 1:addStealingAllocator, 2:addRandomStealingAllocator (Random File, Oldest Block), 3:addRandomStealingAllocator (Random File, Random Block), 4:LargestStealingAllocator, 5:FirstTouchAllocator, 6:addSimpleAllocator
+const uint32_t scalableCacheAllocator = getenv("TAZER_SCALABLE_CACHE_ALLOCATOR") ? atoi(getenv("TAZER_SCALABLE_CACHE_ALLOCATOR")) : 0;
+
+
 //Shared Memory Cache Parameters
 const bool useSharedMemoryCache = getenv("TAZER_SHARED_MEM_CACHE") ? atoi(getenv("TAZER_SHARED_MEM_CACHE")) : 0;
 static uint64_t sharedMemoryCacheSize = getenv("TAZER_SHARED_MEM_CACHE_SIZE") ? atol(getenv("TAZER_SHARED_MEM_CACHE_SIZE")) : 1 * 1024 * 1024 * 1024UL;

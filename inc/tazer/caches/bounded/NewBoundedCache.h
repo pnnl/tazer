@@ -198,6 +198,9 @@ class NewBoundedCache : public Cache {
     // T *_lock;
     Lock *_binLock;
     ReaderWriterLock *_localLock;
+
+    //JS: This is just temp for checking which files had blocks evicted
+    Histogram evictHisto;
 };
 
 #endif /* NewBoundedCache_H */
