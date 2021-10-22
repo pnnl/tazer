@@ -157,7 +157,7 @@ bool ScalableMetaData::checkPattern(Cache * cache, uint32_t fileIndex) {
         for (unsigned int i = 1; i < window.size(); i++) {
             uint64_t stride = window[i-1][1] - window[i][1];
             DPRINTF("%d:%lu - %d:%lu %lu\n", i, window[i-1][1], i-1, window[i][1], stride);
-            if (stride < 0 || stride > 1) {
+            if (stride > 1) {
                 newPattern = UNKNOWN;
             }
         }

@@ -144,9 +144,9 @@ const uint32_t memoryCacheAssociativity = 16UL;
 const uint64_t memoryCacheBlocksize = maxBlockSize;
 
 //Scalable Cache Parameters
-const bool useScalableCache = getenv("TAZER_SCALABLE_CACHE") ? atoi(getenv("TAZER_SCALABLE_CACHE")) : 1;
+const bool useScalableCache = getenv("TAZER_SCALABLE_CACHE") ? atoi(getenv("TAZER_SCALABLE_CACHE")) : 0;
 const uint32_t scalableCacheNumBlocks = getenv("TAZER_SCALABLE_CACHE_NUM_BLOCKS") ? atoi(getenv("TAZER_SCALABLE_CACHE_NUM_BLOCKS")) : 64;
-//0:addAdaptiveAllocator, 1:addStealingAllocator, 2:addRandomStealingAllocator (Random File, Oldest Block), 3:addRandomStealingAllocator (Random File, Random Block), 4:LargestStealingAllocator, 5:FirstTouchAllocator, 6:addSimpleAllocator
+//0:addAdaptiveAllocator, 1:addStealingAllocator (LRU), 2:addRandomStealingAllocator (Random File, Oldest Block), 3:addRandomStealingAllocator (Random File, Random Block), 4:LargestStealingAllocator, 5:FirstTouchAllocator, 6:addSimpleAllocator
 const uint32_t scalableCacheAllocator = getenv("TAZER_SCALABLE_CACHE_ALLOCATOR") ? atoi(getenv("TAZER_SCALABLE_CACHE_ALLOCATOR")) : 0;
 
 

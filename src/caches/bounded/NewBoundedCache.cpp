@@ -130,7 +130,7 @@ NewBoundedCache<Lock>::~NewBoundedCache() {
     //         log(this) /*debug()*/<< i << " " << _numBlocks << " " << _blkIndex[i].activeCnt.load() << " " << _blkIndex[i].status << std::endl;
     //     }
     // }
-    PPRINTF("PRINTING EVICTIONS!!!\n");
+    
     evictHisto.printBins();
     log(this) << "deleting " << _name << " in NewBoundedCache" << std::endl;
     delete _localLock;
