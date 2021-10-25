@@ -272,6 +272,7 @@ CacheStats::ThreadMetric::~ThreadMetric() {
 
 void CacheStats::addThread(std::thread::id id) {
     _lock.writerLock();
+    // std::cout <<"adding cache stats thread id "<<id<<std::endl;
     (*_thread_stats)[id] = new CacheStats::ThreadMetric();
     _lock.writerUnlock();
 }

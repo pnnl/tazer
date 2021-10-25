@@ -146,7 +146,7 @@ fn message_to_string(mut stream: &TcpStream) -> Result<String, Box<dyn Error>> {
 fn main() {
     let args = App::new("TazerServerStarter")
     .arg(
-        Arg::with_name("host").short("h").long("host").takes_value(true).default_value("localhost")
+        Arg::with_name("host").short("h").long("host").takes_value(true).default_value("0.0.0.0")
         .help("server address to run on")
     )
     .arg(

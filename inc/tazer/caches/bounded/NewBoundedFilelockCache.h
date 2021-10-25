@@ -78,7 +78,7 @@
 #include "FcntlReaderWriterLock.h"
 #include "ReaderWriterLock.h"
 
-#define NEWBOUNDEDFILELOCKCACHENAME "boundedfilelock"
+#define BOUNDEDFILELOCKCACHENAME "boundedfilelock"
 #define BFL_FILENAME_LEN 1024
 
 class NewBoundedFilelockCache : public NewBoundedCache<FcntlBoundedReaderWriterLock> {

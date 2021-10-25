@@ -2,7 +2,7 @@
 
 #run this script to run the multithreaded_tests, edit multithreaded_test.sh to change the number of threads
 #TAZER_WORKSPACE_ROOT=$GITHUB_WORKSPACE
-TAZER_WORKSPACE_ROOT=/people/powe445/Projects/tazer_report_thread_stats/tazer
+TAZER_WORKSPACE_ROOT=/people/frie869/Projects/tazer
 
 if [ -z "$TAZER_WORKSPACE_ROOT" ];  then
 TAZER_WORKSPACE_ROOT=`pwd` #assumes it was launched locally from tazer root

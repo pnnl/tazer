@@ -79,7 +79,7 @@
 #include "FileLinkReaderWriterLock.h"
 #include "ReaderWriterLock.h"
 
-#define NewBoundedLinkfileCacheNAME "boundedfilelock"
+#define BOUNDEDFILELINKCACHENAME "boundedfilelock"
 #define BFL_FILENAME_LEN 1024
 
 class NewBoundedLinkfileCache : public NewBoundedCache<FileLinkReaderWriterLock> {

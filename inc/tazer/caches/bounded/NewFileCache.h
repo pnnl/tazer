@@ -72,95 +72,69 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef TIMER_H
-#define TIMER_H
-
+#ifndef NewFileCache_H
+#define NewFileCache_H
+#include "NewBoundedCache.h"
 #include <atomic>
-#include <chrono>
-#include <fstream>
-#include <string>
-#include <thread>
+#include <future>
+#include <map>
 #include <unordered_map>
-#include <vector>
+#include <unordered_set>
 
-#include "ReaderWriterLock.h"
+#define FILECACHENAME "fileCache"
 
-class Timer {
+class NewFileCache : public NewBoundedCache<MultiReaderWriterLock> {
   public:
-    enum MetricType {
-        tazer = 0,
-        local,
-        system,
-        lastMetric
-    };
-
-    enum Metric {
-        in_open = 0,
-        out_open,
-        close,
-        read,
-        write,
-        seek,
-        stat,
-        fsync,
-        readv,
-        writev,
-        in_fopen,
-        out_fopen,
-        fclose,
-        fread,
-        fwrite,
-        ftell,
-        fseek,
-        fgetc,
-        fgets,
-        fputc,
-        fputs,
-        feof,
-        rewind,
-        constructor,
-        destructor,
-        dummy, //use to match calls to start...
-        last
-    };
-
-    Timer();
-    ~Timer();
-
-    void start(std::thread::id id);
-    void end(MetricType type, Metric metric, std::thread::id id);
-    void addAmt(MetricType type, Metric metric, uint64_t amt, std::thread::id id);
-    //void threadStart(std::thread::id id);
-    //void threadEnd(std::thread::id id, MetricType type, Metric metric);
-    //void threadAddAmt(std::thread::id id, MetricType type, Metric metric, uint64_t amt);
-    void addThread(std::thread::id id);
-    bool checkThread(std::thread::id id, bool);
-
-    static uint64_t getCurrentTime();
-    static char *printTime();
-    static int64_t getTimestamp();
+    NewFileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
+    ~NewFileCache();
+    static Cache *addNewFileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
 
   private:
-    class ThreadMetric {
-      public:
-        ThreadMetric();
-        ~ThreadMetric();
-        std::atomic<uint64_t> *current;
-        std::atomic<uint64_t> *depth;
-        std::atomic<uint64_t> *time[Timer::MetricType::lastMetric][Timer::Metric::last];
-        std::atomic<uint64_t> *cnt[Timer::MetricType::lastMetric][Timer::Metric::last];
-        std::atomic<uint64_t> *amt[Timer::MetricType::lastMetric][Timer::Metric::last];
+    struct MemBlockEntry : BlockEntry {
+        std::atomic<uint32_t> activeCnt;
+        void init(NewBoundedCache* c,uint32_t entryId){
+          BlockEntry::init(c,entryId);
+          std::atomic_init(&activeCnt, (uint32_t)0);
+        }
     };
 
-    const double billion = 1000000000;
-    std::unordered_map<std::thread::id, Timer::ThreadMetric*> *_thread_timers;
-    uint64_t _time[Timer::MetricType::lastMetric][Timer::Metric::last];
-    uint64_t _cnt[Timer::MetricType::lastMetric][Timer::Metric::last];
-    uint64_t _amt[Timer::MetricType::lastMetric][Timer::Metric::last];
-    ReaderWriterLock _lock;
+    void readFromFile(int fd, uint64_t size, uint8_t *buff);
+    void writeToFile(int fd, uint64_t size, uint8_t *buff);
 
-    int stdoutcp;
-    std::string myprogname;
+    void preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
+    void pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
+    
+    virtual void blockSet(BlockEntry* blk,  uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch, int activeUpdate,Request* req);
+    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
+
+    virtual uint8_t *getBlockData(unsigned int blockIndex);
+    virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size);
+    virtual BlockEntry* getBlockEntry(uint32_t blockIndex,  Request* req);
+    virtual std::vector<BlockEntry*> readBin(uint32_t binIndex);
+    virtual std::string blockEntryStr(BlockEntry *entry);
+
+    virtual int incBlkCnt(BlockEntry * entry, Request* req);
+    virtual int decBlkCnt(BlockEntry * entry, Request* req);
+    virtual bool anyUsers(BlockEntry * entry, Request* req);
+
+    virtual void cleanUpBlockData(uint8_t *data);
+    
+
+    MemBlockEntry *_blkIndex; //keep the entry meta info in shared memory, but the actual data on disk.
+
+    uint32_t _pid;
+    std::string _cachePath;
+    std::string _indexPath;
+    // std::atomic_uint *_fullFlag;
+    int _blocksfd; //the raw data file
+    // int _blkIndexfd; //
+
+    unixopen_t _open;
+    unixclose_t _close;
+    unixread_t _read;
+    unixwrite_t _write;
+    unixlseek_t _lseek;
+    unixfsync_t _fsync;
 };
 
-#endif /* TIMER_H */
+#endif /* BUSTBUFFERCACHE_H */

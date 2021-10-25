@@ -116,6 +116,8 @@ NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, ui
                                 << "NumBlocks not a multiple of associativity" << std::endl;
     }
     log(this) << _name << " " << _cacheSize << " " << _blockSize << " " << _numBlocks << " " << _associativity << " " << _numBins << std::endl;
+    debug()<< _name << " " << _cacheSize << " " << _blockSize << " " << _numBlocks << " " << _associativity << " " << _numBins << std::endl;
+
     _localLock = new ReaderWriterLock();
     stats.end(false, CacheStats::Metric::constructor, thread_id);
 }

@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
         }
         std::cout << sourceFileName << " " << destFileName << " " << bytesToTransfer << std::endl;
 
-        dFile = open(destFileName.c_str(), O_WRONLY | O_CREAT, 0644); //Open file for writing
+        dFile = open(destFileName.c_str(), O_WRONLY | O_CREAT, 0666); //Open file for writing
         if (dFile != -1) {
             fileSize = getFileSize(sourceFileName);
             if (fileSize > 0) {

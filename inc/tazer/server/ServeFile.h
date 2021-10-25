@@ -154,7 +154,7 @@ class ServeFile : public Loggable, public Trackable<std::string, ServeFile *> {
     static PriorityThreadPool<std::packaged_task<Request *()>> _decompressionPool;
     // ConnectionPool *_conPool;
 
-    ServeFileStats _stats;
+    static ServeFileStats _stats;
 };
 
 #endif /* SERVEFILE_H_ */

@@ -111,11 +111,11 @@ FileCache::FileCache(std::string cacheName, CacheType type, uint64_t cacheSize, 
 
     bool *indexInit;
     if (Config::enableSharedMem) {
-        _blkIndexfd = shm_open(indexPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+        _blkIndexfd = shm_open(indexPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
         if (_blkIndexfd == -1) {
             DPRINTF("Reusing shared memory\n");
             log(this) << _name << "reusing shared memory" << std::endl;
-            _blkIndexfd = shm_open(indexPath.c_str(), O_RDWR, 0644);
+            _blkIndexfd = shm_open(indexPath.c_str(), O_RDWR, 0666);
             if (_blkIndexfd != -1) {
                 ftruncate(_blkIndexfd, sizeof(uint32_t) + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins) + sizeof(bool));
                 void *ptr = mmap(NULL, sizeof(uint32_t) + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins) + sizeof(bool), PROT_READ | PROT_WRITE, MAP_SHARED, _blkIndexfd, 0);
@@ -181,7 +181,7 @@ FileCache::FileCache(std::string cacheName, CacheType type, uint64_t cacheSize, 
         //           << "Creating file cache: " << _filePath << std::endl;
         std::error_code err;
         std::experimental::filesystem::create_directories(filePath, err);
-        _blocksfd = (*_open)(_filePath.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644); //Open file for writing
+        _blocksfd = (*_open)(_filePath.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0666); //Open file for writing
         if (_blocksfd > -1) {
             uint8_t byte = '\0';
             ftruncate(_blocksfd, _numBlocks * _blockSize * sizeof(uint8_t));

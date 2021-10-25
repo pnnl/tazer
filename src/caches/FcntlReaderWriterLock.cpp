@@ -244,10 +244,10 @@ void FcntlReaderWriterLock::writerUnlock3(int fd, uint64_t blk, std::atomic<uint
 //     std::atomic<uint16_t> temp[4096];
 //     Loggable::debug() << _numEntries << " " << 2 * _numEntries * sizeof(std::atomic<uint16_t>) << " " << sizeof(temp) << " " << 2 * sizeof(temp) << std::endl;
 
-//     int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+//     int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
 //     if (fd == -1) {
 //         // DPRINTF("Reusing shared memory\n");
-//         fd = shm_open(filePath.c_str(), O_RDWR, 0644);
+//         fd = shm_open(filePath.c_str(), O_RDWR, 0666);
 //         if (fd != -1) {
 //             if (ftruncate(fd, 2 * _numEntries * sizeof(std::atomic<uint16_t>) + sizeof(ReaderWriterLock)) != -1) {
 //                 void *ptr = mmap(NULL, 2 * _numEntries * sizeof(std::atomic<uint16_t>) + sizeof(ReaderWriterLock), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -312,9 +312,9 @@ OldLock::OldLock(uint32_t entrySize, uint32_t numEntries, std::string lockPath, 
 
         std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck."+_id);
         Loggable::debug()<<shmPath<<std::endl;
-        int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+        int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
         if (shmFd == -1) {
-            shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
+            shmFd = shm_open(shmPath.c_str(), O_RDWR, 0666);
             if (shmFd != -1) {
                 Loggable::debug() << "resusing fcntl shm lock" << std::endl;
                 ftruncate(shmFd, shmLen);
@@ -758,9 +758,9 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
     if (Config::enableSharedMem){
         std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck."+_id);
         Loggable::debug()<<shmPath<<std::endl;
-        int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+        int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
         if (shmFd == -1) {
-            shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
+            shmFd = shm_open(shmPath.c_str(), O_RDWR, 0666);
             if (shmFd != -1) {
                 Loggable::debug() << "resusing fcntl shm lock" << std::endl;
                 ftruncate(shmFd, shmLen);

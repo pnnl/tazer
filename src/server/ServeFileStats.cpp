@@ -131,6 +131,7 @@ ServeFileStats::~ServeFileStats() {
 
 void ServeFileStats::print() {
     if (Config::printStats) {
+        std::cout << std::endl;
         std::cout << "servefile" << std::endl;
         std::stringstream ss;
         std::cout << std::fixed;

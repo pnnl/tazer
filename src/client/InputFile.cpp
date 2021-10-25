@@ -77,10 +77,10 @@
 #include "caches/bounded/NewBoundedFilelockCache.h"
 #include "caches/bounded/NewSharedMemoryCache.h"
 #include "caches/bounded/NewMemoryCache.h"
-#include "caches/bounded/deprecated/BoundedFilelockCache.h"
-#include "caches/bounded/deprecated/SharedMemoryCache.h"
-#include "caches/bounded/deprecated/MemoryCache.h"
-#include "caches/bounded/deprecated/FileCache.h"
+// #include "caches/bounded/deprecated/BoundedFilelockCache.h"
+// #include "caches/bounded/deprecated/SharedMemoryCache.h"
+// #include "caches/bounded/deprecated/MemoryCache.h"
+#include "caches/bounded/NewFileCache.h"
 #include "caches/unbounded/FilelockCache.h"
 #include "caches/unbounded/FcntlCache.h"
 #include "caches/LocalFileCache.h"
@@ -147,14 +147,14 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     }
 
     if (Config::useBurstBufferCache) {
-        c = FileCache::addNewFileCache("burstbuffer", CacheType::burstBuffer, Config::burstBufferCacheSize, Config::burstBufferCacheBlocksize, Config::burstBufferCacheAssociativity, Config::burstBufferCacheFilePath);
+        c = NewFileCache::addNewFileCache("burstbuffer", CacheType::burstBuffer, Config::burstBufferCacheSize, Config::burstBufferCacheBlocksize, Config::burstBufferCacheAssociativity, Config::burstBufferCacheFilePath);
         std::cerr << "[TAZER] "
                   << "bb cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }
 
     if (Config::useFileCache) {
-        c = FileCache::addNewFileCache(FILECACHENAME, CacheType::nodeFile, Config::fileCacheSize, Config::fileCacheBlocksize, Config::fileCacheAssociativity, Config::fileCacheFilePath);
+        c = NewFileCache::addNewFileCache(FILECACHENAME, CacheType::nodeFile, Config::fileCacheSize, Config::fileCacheBlocksize, Config::fileCacheAssociativity, Config::fileCacheFilePath);
         std::cerr << "[TAZER] "
                   << "file cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);

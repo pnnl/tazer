@@ -17,6 +17,7 @@ set(CACHE_HEADERS
     ${BOUNDED_INC_DIR}/NewBoundedCache.h
     ${BOUNDED_INC_DIR}/NewMemoryCache.h
     ${BOUNDED_INC_DIR}/NewSharedMemoryCache.h
+    ${BOUNDED_INC_DIR}/NewFileCache.h
     ${BOUNDED_INC_DIR}/NewBoundedFilelockCache.h
     ${BOUNDED_INC_DIR}/NewBoundedLinkfileCache.h
     ${BOUNDED_INC_DIR}/FileLinkReaderWriterLock.h
@@ -40,6 +41,7 @@ set(CACHE_FILES
 
     bounded/NewBoundedCache.cpp
     bounded/NewMemoryCache.cpp
+    bounded/NewFileCache.cpp
     bounded/NewSharedMemoryCache.cpp
     bounded/NewBoundedFilelockCache.cpp
     bounded/NewBoundedLinkfileCache.cpp

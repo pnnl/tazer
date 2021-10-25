@@ -101,6 +101,7 @@
 #include "UnixIO.h"
 #include "lz4.h"
 #include "lz4hc.h"
+#include "ServeFileStats.h"
 //#include "MetaFileParser.h"
 
 
@@ -108,6 +109,7 @@
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 //#define DPRINTF(...)
 Cache ServeFile::_cache(BASECACHENAME,CacheType::base);
+ServeFileStats ServeFile::_stats;
 
 ThreadPool<std::function<void()>> ServeFile::_pool(Config::numServerCompThreads);
 std::vector<Connection *> ServeFile::_connections;
@@ -216,47 +218,47 @@ bool ServeFile::addConnections() {
 
 void ServeFile::cache_init(void) {
     uint64_t level = 0;
-    Cache *c = NewMemoryCache::addNewMemoryCache(NEWMEMORYCACHENAME, CacheType::privateMemory, Config::serverCacheSize, Config::serverCacheBlocksize, Config::serverCacheAssociativity);
-    std::cerr << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
+    Cache *c = NewMemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::serverCacheSize, Config::serverCacheBlocksize, Config::serverCacheAssociativity);
+    err() << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
     ServeFile::_cache.addCacheLevel(c, ++level);
 
     if (Config::useSharedMemoryCache) {
-        c = NewSharedMemoryCache::addNewSharedMemoryCache(NEWSHAREDMEMORYCACHENAME, CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
-        std::cerr << "[TAZER] " << "shared mem  cache: " << (void *)c << std::endl;
+        c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME, CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
+        err() << "[TAZER] " << "shared mem  cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }
 
     #ifdef USE_CURL
         if(Config::urlFileCacheOn) {
              c = UrlFileCache::addNewUrlFileCache(URLFILECACHENAME, CacheType::local);
-            std::cerr << "[TAZER] " << "Url file cache: " << (void *)c << std::endl;
+            err() << "[TAZER] " << "Url file cache: " << (void *)c << std::endl;
             ServeFile::_cache.addCacheLevel(c, ++level);
         }
         else {
             c = UrlCache::addNewUrlCache(URLCACHENAME, CacheType::urlCache, Config::sharedMemoryCacheBlocksize);
-            std::cerr << "[TAZER] " << "Url cache: " << (void *)c << std::endl;
+            err() << "[TAZER] " << "Url cache: " << (void *)c << std::endl;
             ServeFile::_cache.addCacheLevel(c, ++level);
 
             c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME, CacheType::local);
-            std::cerr << "[TAZER] " << "Local file cache: " << (void *)c << std::endl;
+            err() << "[TAZER] " << "Local file cache: " << (void *)c << std::endl;
             ServeFile::_cache.addCacheLevel(c, ++level);
         }
     #else
         c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME, CacheType::local);
-        std::cerr << "[TAZER] " << "Local file cache: " << (void *)c << std::endl;
+        err() << "[TAZER] " << "Local file cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     #endif
 
     
 
     if (Config::useBoundedFilelockCache) {
-        c = NewBoundedFilelockCache::addNewBoundedFilelockCache(NEWBOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
-        std::cerr << "[TAZER] " << "bounded filelock cache: " << (void *)c << std::endl;
+        c = NewBoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
+        err() << "[TAZER] " << "bounded filelock cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }
     if (Config::useServerNetworkCache) {
         c = NetworkCache::addNewNetworkCache(NETWORKCACHENAME, CacheType::network, ServeFile::_transferPool, ServeFile::_decompressionPool);
-        std::cerr << "[TAZER] " << "net cache: " << (void *)c << std::endl;
+        err() << "[TAZER] " << "net cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
         addConnections();
         ServeFile::_transferPool.initiate();
@@ -350,12 +352,12 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
                 addCompressTask(i);
             }
         }
-        std::cout << "Opened " << _name << " " << output << " size: " << _size << std::endl;
+        // debug()<< "Opened " << _name << " " << output << " size: " << _size << std::endl;
         _open = true;
     }
 
     else {
-        std::cout << "ERROR: file " << _name << " does not exists" << std::endl;
+        err() << "ERROR: file " << _name << " does not exists" << std::endl;
     }
 
     _stats.end(ServeFileStats::Metric::constructor, thread_id);
@@ -480,7 +482,7 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
             if (request->ready) {
                 request->originating->stats.checkThread(thread_id, true);
                 request->originating->stats.addAmt(false, CacheStats::Metric::read, _blkSize, thread_id);
-                // std::cout << "cache: " << _name << " " << blk << std::endl;
+                // Loggable::log() << "cache: " << request->originating->name() << " " << blk << std::endl;
                 return sendData(connection, blk, request);
             }
             else {
@@ -497,10 +499,11 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
                 request->originating->stats.checkThread(thread_id, true);
                 request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, thread_id, 1);
                 if (request->ready) {
-                    // std::cout << "net: " << _name << " " << blk << std::endl;
+                    
                     if (request->waitingCache != CacheType::empty){
                         _cache.getCacheByType(request->waitingCache)->stats.checkThread(thread_id, true);
                         _cache.getCacheByType(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, _blkSize, thread_id);
+                        // Loggable::log()  << "net: originating" << request->originating->name()<<" waiting: "<<_cache.getCacheByType(request->waitingCache)->name() << " " << blk << std::endl;
                     }
                     else{             
                         err(this) << "waiting cache is empty"<<std::endl;
@@ -509,7 +512,7 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
                     return sendData(connection, blk, request);
                 }
                 else {
-                    std::cout << "REQUEST failure" << std::endl;
+                   Loggable::err()  << "REQUEST failure" << std::endl;
                     return false;
                 }
             }

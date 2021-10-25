@@ -125,9 +125,9 @@ Cache::Cache(std::string name,  CacheType type) : Loggable(Config::CacheLog, nam
         _lastLevel = this;
     }
     // std::string shmPath("/" + Config::tazer_id  + _name + "_stats.lck");
-    // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+    // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
     // if (shmFd == -1) {
-    //     shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
+    //     shmFd = shm_open(shmPath.c_str(), O_RDWR, 0666);
     //     if (shmFd != -1) {
     //         std::cout << "resusing fcntl shm lock" << std::endl;
     //         ftruncate(shmFd, sizeof(uint32_t) + 2 * sizeof(uint64_t) + 2 * sizeof(uint8_t) + _ioWinSize * sizeof(uint64_t));

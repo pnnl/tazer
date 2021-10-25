@@ -82,6 +82,7 @@
 #include <thread>
 #include <vector>
 #include <future>
+#include <unordered_map>
 
 template <class T>
 class ThreadPool {
@@ -110,6 +111,8 @@ class ThreadPool {
 
     std::mutex _tMutex;
     std::vector<std::thread> _threads;
+    std::unordered_map<std::thread::id, uint64_t> _idleTime;
+    std::unordered_map<std::thread::id, uint64_t> _activeTime;
 
     std::mutex _qMutex;
     std::deque<T> _q;

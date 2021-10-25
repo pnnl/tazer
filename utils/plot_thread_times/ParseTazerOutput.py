@@ -32,7 +32,7 @@ def getThreads(data, count_cache_threads):
 
 
 
-def getVals(t, data, thread, aggregated):
+def getVals(t, data, thread, aggregated,server):
     input_time = 0.0
     input_accesses = 0.0
     input_amount = 0.0
@@ -40,6 +40,9 @@ def getVals(t, data, thread, aggregated):
     output_accesses = 0.0
     output_amount = 0.0
     destruction_time = 0.0
+    send_time = 0.0
+    send_cnt = 0.0
+    send_amount = 0.0
     in_thread = False
     pattern = re.compile("^\[TAZER\].* thread [0-9]+")
     #print("parsing thread "+str(thread))
@@ -71,6 +74,11 @@ def getVals(t, data, thread, aggregated):
                         output_amount += float(vals[5])
                     elif vals[2] in ["destructor"]:
                         destruction_time += float(vals[3])
+                    elif vals[2] in ["send"]:
+                        send_time += float(vals[3])
+                        send_cnt += float(vals[4])
+                        send_amount += float(vals[5])
+
     else:
         for line in data:
             if pattern.match(line):
@@ -100,9 +108,19 @@ def getVals(t, data, thread, aggregated):
                         output_amount += float(vals[5])
                     elif vals[2] in ["destructor"]:
                         destruction_time += float(vals[3])
+                    elif vals[2] in ["send"]:
+                        send_time += float(vals[3])
+                        send_cnt += float(vals[4])
+                        send_amount += float(vals[5])
     # print(input_time, input_accesses, input_amount, output_time,
     #       output_accesses, output_amount, destruction_time)
-    return input_time, input_accesses, input_amount, output_time, output_accesses, output_amount, destruction_time
+    names = ["input_time", "input_accesses", "input_amount", "output_time",
+             "output_accesses", "output_amount", "destruction_time"]
+    vals= [input_time, input_accesses, input_amount, output_time, output_accesses, output_amount, destruction_time]
+    if "servefile" in t:
+        names += ["send_time","send_cnt","send_amount"]
+        vals += [ send_time, send_cnt, send_amount]
+    return  vals,names
 
 
 def getCacheData(type, name, data, thread, aggregated):
@@ -250,9 +268,8 @@ if __name__ == "__main__":
     else:
         threads = getThreads(data, args.server)
 
-    types = ["sys", "local", "tazer"]
-    names = ["input_time", "input_accesses", "input_amount", "output_time",
-             "output_accesses", "output_amount", "destruction_time"]
+    types = ["sys", "local", "tazer","servefile"]
+    
     vals = []
     labels = []
     labels.append("threads")
@@ -260,20 +277,16 @@ if __name__ == "__main__":
     thread_num = 1
     for thread_id in threads:
         for t in types:
-            vs = getVals(t, data, thread_id, args.aggregated)
+            vs,names = getVals(t, data, thread_id, args.aggregated,args.server)
             vals += vs
             for n in names:
                 labels.append(t+"_"+n+"_"+str(thread_num))
         thread_num += 1
+    # if args.server:
+    #     for thread_id in threads:
+    #         vs = getVals("servefile")
 
-    # hits,hit_time,hit_amount,misses,miss_time,prefetches,stalls,stall_time,stall_amount,ovh_time,reads,read_time,read_amt,destruction_time
-
-    # vs = getCacheData("request", "base", data)
-    # labels += ["cache_accesses", "cache_time", "cache_amount",
-    #            "base_cache_ovh", "base_destruction"]
-    # vals += [vs[0], vs[1], vs[10], vs[8], vs[11]]
-
-    caches = ["base","privatememory","sharedmemory","burstbuffer", "boundedfilelock","network"]
+    caches = ["base","privatememory","sharedmemory","burstbuffer", "boundedfilelock","localfilecache","network"]
     types = ["request", "prefetch"]
     names = ["hits", "hit_time", "hit_amount", "misses", "miss_time", "prefetches",
              "stalls", "stall_time", "stall_amt", "ovh_time", "reads", "read_time", "read_amt", "destruction_time", "construction_time"]
@@ -287,13 +300,6 @@ if __name__ == "__main__":
                 for n in names:
                     labels.append(c+"_"+t+"_"+n+"_"+str(thread_num))
         thread_num += 1
-    # for t in types:
-    #     vs = getCacheData(t, "network", data)
-    #     labels += ["network_accesses", "network_time",
-    #                "network_total_amount", "network_used_amount", "network_ovh_time"]
-    #     vals += vs[0:3]
-    #     vals.append(vs[10])
-    #     vals.append(vs[8])
 
     cons, acceses, amounts, times = getConnectionData(data)
     names = ["_accesses", "_amount", "_time"]

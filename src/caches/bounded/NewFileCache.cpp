@@ -72,7 +72,7 @@
 //
 //*EndLicense****************************************************************
 
-#include "NewSharedMemoryCache.h"
+#include "NewFileCache.h"
 #include "Config.h"
 #include "Connection.h"
 #include "ConnectionPool.h"
@@ -82,9 +82,11 @@
 #include "lz4.h"
 
 #include <chrono>
+#include <cerrno>
 #include <csignal>
 #include <fcntl.h>
 #include <future>
+#include <experimental/filesystem>
 #include <string.h>
 #include <string>
 #include <sys/mman.h>
@@ -95,28 +97,39 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-NewSharedMemoryCache::NewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : NewBoundedCache(cacheName, type, cacheSize, blockSize, associativity) {
+NewFileCache::NewFileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string filePath) : NewBoundedCache(cacheName, type, cacheSize, blockSize, associativity),
+                                                                                                                                                            _open((unixopen_t)dlsym(RTLD_NEXT, "open")),
+                                                                                                                                                            _close((unixclose_t)dlsym(RTLD_NEXT, "close")),
+                                                                                                                                                            _read((unixread_t)dlsym(RTLD_NEXT, "read")),
+                                                                                                                                                            _write((unixwrite_t)dlsym(RTLD_NEXT, "write")),
+                                                                                                                                                            _lseek((unixlseek_t)dlsym(RTLD_NEXT, "lseek")),
+                                                                                                                                                            _fsync((unixfdatasync_t)dlsym(RTLD_NEXT, "fdatasync"))
+                                                                                                                                                            {
     // std::cout<<"[TAZER] " << "Constructing " << _name << " in shared memory cache" << std::endl;
     std::thread::id thread_id = std::this_thread::get_id();
     stats.checkThread(thread_id, true);
     stats.start(false, CacheStats::Metric::constructor, thread_id);
-    std::string filePath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
+    _blocksfd = -1;
+    _cachePath = filePath + "/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".tzr";
+    std::string indexPath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".idx");
+    // bool *indexInit;
 
-    int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
+    int fd = shm_open(indexPath.c_str(), O_CREAT | O_EXCL | O_RDWR,  0666 );
     if (fd == -1) {
         DPRINTF("Reusing shared memory\n");
-        log(this) << "Reusing shared memory" << std::endl;
-        fd = shm_open(filePath.c_str(), O_RDWR, 0666);
+        debug() << "Reusing filecache shared memory" << std::endl;
+        fd = shm_open(indexPath.c_str(), O_RDWR, 0666);
         if (fd != -1) {
-            ftruncate(fd, sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins));
-            void *ptr = mmap(NULL, sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+            ftruncate(fd, sizeof(uint32_t) +  _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins));
+            void *ptr = mmap(NULL, sizeof(uint32_t) + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
             uint32_t *init = (uint32_t *)ptr;
             log(this) << "init: " << *init << std::endl;
+            std::cout<<std::endl;
             while (!*init) {
                 sched_yield();
             }
-            _blocks = (uint8_t *)init + sizeof(uint32_t);
-            _blkIndex = (MemBlockEntry *)((uint8_t *)_blocks + _cacheSize);
+            std::cout<<std::endl;
+            _blkIndex = (MemBlockEntry *)((uint8_t *)init + sizeof(uint32_t));
             auto binLockDataAddr = (uint8_t *)_blkIndex + _numBlocks * sizeof(MemBlockEntry);
             _binLock = new MultiReaderWriterLock(_numBins, binLockDataAddr);
 
@@ -129,38 +142,68 @@ NewSharedMemoryCache::NewSharedMemoryCache(std::string cacheName, CacheType type
     }
     else {
         DPRINTF("Created shared memory\n");
-        log(this) << _name << "created shared memory" << std::endl;
-        ftruncate(fd, sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins));
-        void *ptr = mmap(NULL, sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        debug()  << _name << "created filecache shared memory" << std::endl;
+        ftruncate(fd, sizeof(uint32_t) + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins));
+        void *ptr = mmap(NULL, sizeof(uint32_t) + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         uint32_t *init = (uint32_t *)ptr;
+        std::cout<<std::endl;
         log(this) << "init: " << *init << std::endl;
         *init = 0;
         log(this) << "init: " << *init << std::endl;
-        _blocks = (uint8_t *)init + sizeof(uint32_t);
-        _blkIndex = (MemBlockEntry *)((uint8_t *)_blocks + _cacheSize);
+        _blkIndex = (MemBlockEntry *)((uint8_t *)init + sizeof(uint32_t));
         auto binLockDataAddr = (uint8_t *)_blkIndex + _numBlocks * sizeof(MemBlockEntry);
         _binLock = new MultiReaderWriterLock(_numBins, binLockDataAddr, true);
         _binLock->writerLock(0);
-        memset(_blocks, 0, _cacheSize);
-        // memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
         for (uint32_t i=0;i<_numBlocks;i++){
             _blkIndex[i].init(this,i);
         }
         _binLock->writerUnlock(0);
         *init = 1;
+        std::cout<<std::endl;
         log(this) << "init: " << *init << std::endl;
     }
-    log(this) << (void *)_blkIndex << " " << (void *)_binLock << std::endl;
-    debug()<<"blk start: "<<(void*)_blkIndex<<" blk end: "<<(void*)&_blkIndex[_numBlocks]<<std::endl;
-    // for (uint32_t i=0;i<10; i++){
+
+    // for (uint32_t i=0;i<100; i++){
     //     std::cout <<"[TAZER]" << _name << " " << blockEntryStr((BlockEntry*)&_blkIndex[i]) << std::endl;
     // }
+
+    uint8_t byte = '\0';
+    std::error_code err;
+    std::experimental::filesystem::create_directories(filePath, err);
+    int ret = mkdir((filePath + "/init_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + "/").c_str(), S_IRWXU | S_IRWXG | S_IRWXO); //if -1 means another process has already reserved
+    if (ret == 0) {
+        //first process... create data file...
+        fd = (*_open)((filePath + "/data_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR| S_IWUSR | S_IRGRP| S_IWGRP | S_IROTH | S_IWOTH );
+        if (fd < 0 ){
+            debug()<<"[TAZER ERROR] "<<_name<<" data creation open error "<<strerror(errno)<<std::endl;
+            exit(1);
+        }
+        ftruncate(fd, _numBlocks * _blockSize * sizeof(uint8_t));
+        (*_lseek)(fd, _numBlocks * _blockSize * sizeof(uint8_t), SEEK_SET);
+        (*_write)(fd, &byte, sizeof(uint8_t));
+        (*_fsync)(fd);
+        (*_close)(fd);
+        rename((filePath + "/data_tmp").c_str(),_cachePath.c_str());
+    }
+    else{//reusing data file;
+        int cnt = 0;
+        while (!std::experimental::filesystem::exists(_cachePath)) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            if (cnt++ > 100) {
+                debug() << _name << " ERROR: waiting for data to appear!!!" << strerror(errno) << _cachePath  << std::endl;
+                exit(1);
+            }
+        }
+    }
+    debug() <<"filecache ready"<<std::endl;
+    _blocksfd = (*_open)(_cachePath.c_str(), O_RDWR| O_SYNC);
+    _pid = (uint32_t)::getpid();
 
     _shared = true;
     stats.end(false, CacheStats::Metric::constructor, thread_id);
 }
 
-NewSharedMemoryCache::~NewSharedMemoryCache() {
+NewFileCache::~NewFileCache() {
     //std::cout<<"[TAZER] " << "deleting " << _name << " in shared memory cache, collisions: " << _collisions << std::endl;
     //std::cout<<"[TAZER] " << "numBlks: " << _numBlocks << " numBins: " << _numBins << " cacheSize: " << _cacheSize << std::endl;
     std::thread::id thread_id = std::this_thread::get_id();
@@ -172,8 +215,9 @@ NewSharedMemoryCache::~NewSharedMemoryCache() {
     uint32_t numEmpty = 0;
     for (uint32_t i = 0; i < _numBlocks; i++) {
         if (_blkIndex[i].activeCnt > 0) {
-            std::cout << "[TAZER] " << _name << " " << i << " " << _numBlocks << " " << _blkIndex[i].activeCnt << " " << _blkIndex[i].fileIndex - 1 << " " << _blkIndex[i].blockIndex - 1 << " "
-                      << "prefetched" << _blkIndex[i].prefetched << std::endl;
+            // std::cout << "[TAZER] " << _name << " " << i << " " << _numBlocks << " " << _blkIndex[i].activeCnt << " " << _blkIndex[i].fileIndex - 1 << " " << _blkIndex[i].blockIndex - 1 << " "
+            //           << "prefetched" << _blkIndex[i].prefetched << std::endl;
+            std::cout <<"[TAZER]" << _name << " " << blockEntryStr((BlockEntry*)&_blkIndex[i]) << std::endl;
         }
         if(_blkIndex[i].status == BLK_EMPTY){
             numEmpty+=1;
@@ -187,19 +231,99 @@ NewSharedMemoryCache::~NewSharedMemoryCache() {
     delete _binLock;
 }
 
-void NewSharedMemoryCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size) {
-    memcpy(&_blocks[blockIndex * _blockSize], data, size);
-}
-uint8_t *NewSharedMemoryCache::getBlockData(unsigned int blockIndex) {
-    uint8_t *temp = (uint8_t *)&_blocks[blockIndex * _blockSize];
-    return temp;
+
+
+void NewFileCache::writeToFile(int fd, uint64_t size, uint8_t *buff) {
+    uint8_t *local = buff;
+    while (size) {
+        int bytes = (*_write)(fd, local, size);
+        if (bytes >= 0) {
+            local += bytes;
+            size -= bytes;
+        }
+        else {
+            debug() << "[TAZER ERROR] Failed a write " << fd <<" "<<(void*)buff<< " " <<" "<< size <<" "<<strerror(errno)<< std::endl;
+            exit(1);
+        }
+    }
 }
 
-void NewSharedMemoryCache::cleanUpBlockData(uint8_t *data) {
-    // debug()<<_name<<" (not)delete data"<<std::endl;
+void NewFileCache::readFromFile(int fd, uint64_t size, uint8_t *buff) {
+    uint8_t *local = buff;
+    while (size) {
+        // debug() << "reading " << size << " more" << std::endl;
+        int bytes = (*_read)(fd, local, size);
+        if (bytes >= 0) {
+            local += bytes;
+            size -= bytes;
+        }
+        else {
+            debug() << "[TAZER ERROR] Failed a read " << fd <<" "<<(void*)buff<< " " <<" "<< size <<" "<<strerror(errno)<< std::endl;
+            exit(1);
+        }
+    }
 }
 
-void NewSharedMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate, Request* req) {
+void NewFileCache::pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset) {
+    uint8_t *local = buff;
+    while (size) {
+        int bytes = pwrite(fd, local, size, offset);
+        if (bytes >= 0) {
+            local += bytes;
+            size -= bytes;
+            offset += bytes;
+        }
+        else {
+            debug() << "[TAZER ERROR] Failed a pwrite " << fd <<" "<<(void*)buff<< " " <<offset<<" "<< size <<" "<<strerror(errno)<< std::endl;
+            exit(1);
+        }
+    }
+}
+
+void NewFileCache::preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset) {
+    uint8_t *local = buff;
+    
+    while (size) {
+        int bytes = pread(fd, local, size, offset);
+        if (bytes >= 0) {
+            local += bytes;
+            size -= bytes;
+            offset += bytes;
+        }
+        else {
+            debug() << "[TAZER ERROR] Failed a pread " << fd <<" "<<(void*)buff<< " " <<offset<<" "<< size <<" "<<strerror(errno)<< std::endl;
+            exit(1);
+        }
+    }
+}
+
+void NewFileCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size) {
+    
+
+    if (size > _blockSize){
+        debug()<<"[ERROR]: trying to write larger blocksize than possible "<<blockIndex<<" "<<size<<std::endl;
+    }
+    int fd = _blocksfd;
+    pwriteToFile(fd, size, data, blockIndex * _blockSize);
+    auto ret = (*_fsync)(fd); //flush changes
+    if (ret != 0 ){
+        debug()<<"[TAZER ERROR] "<<_name<<" fsync error"<<" "<<strerror(errno)<<std::endl;
+        exit(0);
+    }
+}
+uint8_t *NewFileCache::getBlockData(unsigned int blockIndex) {
+    uint8_t *buff = NULL;
+    buff = new uint8_t[_blockSize]; //we could make a pre allocated buff for this...
+    int fd = _blocksfd;
+    preadFromFile(fd, _blockSize, buff, blockIndex * _blockSize);
+    return buff;
+}
+
+void NewFileCache::cleanUpBlockData(uint8_t *data) {
+    delete[] data;
+}
+
+void NewFileCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate, Request* req) {
     req->trace(_name)<<"setting block: "<<blockEntryStr(blk)<<std::endl;
     blk->fileIndex = fileIndex;
     blk->blockIndex = blockIndex;
@@ -218,7 +342,7 @@ void NewSharedMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_
     req->trace(_name)<<"blockset: "<<blockEntryStr(blk)<<std::endl;
 }
 
-typename NewBoundedCache<MultiReaderWriterLock>::BlockEntry* NewSharedMemoryCache::getBlockEntry(uint32_t blockIndex, Request* req){
+typename NewBoundedCache<MultiReaderWriterLock>::BlockEntry* NewFileCache::getBlockEntry(uint32_t blockIndex, Request* req){
     return (BlockEntry*)&_blkIndex[blockIndex];
 }
 
@@ -230,7 +354,7 @@ typename NewBoundedCache<MultiReaderWriterLock>::BlockEntry* NewSharedMemoryCach
 // there is a potential race between when a block is available and when we capture the originating cache
 // having origCache be atomic ensures we always get a valid ID (even though it may not always be 100% acurate)
 // we are willing to accept some small error in attribution of stats
-bool NewSharedMemoryCache::blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs, uint32_t cnt, CacheType *origCache) {
+bool NewFileCache::blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs, uint32_t cnt, CacheType *origCache) {
     bool avail = _blkIndex[index].status == BLK_AVAIL;
     if (origCache && avail) {
         *origCache = CacheType::empty;
@@ -246,7 +370,7 @@ bool NewSharedMemoryCache::blockAvailable(unsigned int index, unsigned int fileI
 }
 
 
-std::vector<NewBoundedCache<MultiReaderWriterLock>::BlockEntry*> NewSharedMemoryCache::readBin(uint32_t binIndex) {
+std::vector<NewBoundedCache<MultiReaderWriterLock>::BlockEntry*> NewFileCache::readBin(uint32_t binIndex) {
     std::vector<BlockEntry*> entries;
     int startIndex = binIndex * _associativity;
     for (uint32_t i = 0; i < _associativity; i++) {
@@ -255,27 +379,29 @@ std::vector<NewBoundedCache<MultiReaderWriterLock>::BlockEntry*> NewSharedMemory
     return entries;
 }
 
-std::string  NewSharedMemoryCache::blockEntryStr(BlockEntry *entry){
+std::string  NewFileCache::blockEntryStr(BlockEntry *entry){
     return entry->str() + " ac: "+ std::to_string(((MemBlockEntry*)entry)->activeCnt);
 }
 
-int NewSharedMemoryCache::incBlkCnt(BlockEntry * entry, Request* req) {
+int NewFileCache::incBlkCnt(BlockEntry * entry, Request* req) {
     req->trace(_name)<<"incrementing"<<std::endl;
+    // debug()<<"incrementing "<<blockEntryStr(entry)<<std::endl;
     return ((MemBlockEntry*)entry)->activeCnt.fetch_add(1);
 }
-int NewSharedMemoryCache::decBlkCnt(BlockEntry * entry, Request* req) {
+int NewFileCache::decBlkCnt(BlockEntry * entry, Request* req) {
     req->trace(_name)<<"decrementing"<<std::endl;
+    // debug()<<"decrementing "<<blockEntryStr(entry)<<std::endl;
     return ((MemBlockEntry*)entry)->activeCnt.fetch_sub(1);
 }
 
-bool NewSharedMemoryCache::anyUsers(BlockEntry * entry, Request* req) {
+bool NewFileCache::anyUsers(BlockEntry * entry, Request* req) {
     return ((MemBlockEntry*)entry)->activeCnt;
 }
 
-Cache *NewSharedMemoryCache::addNewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) {
+Cache *NewFileCache::addNewFileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath) {
     return Trackable<std::string, Cache *>::AddTrackable(
         cacheName, [&]() -> Cache * {
-            Cache *temp = new NewSharedMemoryCache(cacheName, type, cacheSize, blockSize, associativity);
+            Cache *temp = new NewFileCache(cacheName, type, cacheSize, blockSize, associativity,cachePath);
             return temp;
         });
 }

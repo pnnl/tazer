@@ -5,6 +5,7 @@ import re
 import sys
 import matplotlib
 import os
+import argparse
 
 matplotlib.rcParams.update({'font.size': 22})  
 
@@ -45,13 +46,7 @@ network_request_hits,network_request_hit_time,network_request_hit_amount,network
 network_request_stalls,network_request_stall_time,network_request_ovh_time,network_request_read_time,network_request_read_amt,network_request_destruction_time
 """
  
-def updateMachine(jobid,num_threads,machines,slot,vals,labels,host,exp_name):
-    # for i in range(0,len(vals)):
-    #     if "memory_request_hit_time" in labels[i] :
-    #         print (labels[i],vals[i])
-    #print("enter updateMachine with num threads="+str(num_threads))
-
-    
+def updateMachine(jobid,num_threads,machines,slot,vals,labels,host,exp_name,server):    
     if host not in machines:
         machines[host]={}
     if slot not in machines[host]:
@@ -67,7 +62,7 @@ def updateMachine(jobid,num_threads,machines,slot,vals,labels,host,exp_name):
                                 "mem_in":[],"mem_stall":[],"mem_ovh":[],"mem_destruct":[],"mem_construct":[],
                                 "io_total":[],"exp_time":[],"start_time":[],"cpu_time":[],"tazer_amt":[],"network_amt":[],"bw":[],"ovh":[],"stall":[]}   
             
-        machines[host][slot][thread]["total"].append(int(vals[labels.index("FinishedTime")])-int(vals[labels.index("StartTime")]))
+        machines[host][slot][thread]["total"].append(float(vals[labels.index("FinishedTime")])-float(vals[labels.index("StartTime")]))
         machines[host][slot][thread]["jobids"].append(jobid)
         machines[host][slot][thread]["tazer_in"].append(float(vals[labels.index("tazer_input_time_"+thread)]))
         machines[host][slot][thread]["tazer_out"].append(float(vals[labels.index("tazer_output_time_"+thread)]))
@@ -88,7 +83,7 @@ def updateMachine(jobid,num_threads,machines,slot,vals,labels,host,exp_name):
         machines[host][slot][thread]["net_construct"].append(float(vals[labels.index("network_request_construction_time_"+thread)]))
         machines[host][slot][thread]["net_destruct"].append(float(vals[labels.index("network_request_destruction_time_"+thread)])+float(vals[labels.index("tazer_destruction_time_"+thread)])) #tazer distruction time is mostly closeing the connections....
         machines[host][slot][thread]["net_stall"].append(float(vals[labels.index("network_request_stall_time_"+thread)]))
-        machines[host][slot][thread]["net_out"].append(float(vals[labels.index("tazer_output_time_"+thread)]))
+        machines[host][slot][thread]["net_out"].append(float(vals[labels.index("tazer_output_time_"+thread)]) + float(vals[labels.index("servefile_send_time_"+thread)]))
 
         machines[host][slot][thread]["mem_in"].append(float(vals[labels.index("privatememory_request_hit_time_"+thread)])+float(vals[labels.index("sharedmemory_request_hit_time_"+thread)]))
         machines[host][slot][thread]["mem_ovh"].append(float(vals[labels.index("privatememory_request_ovh_time_"+thread)])+float(vals[labels.index("sharedmemory_request_ovh_time_"+thread)]))
@@ -96,30 +91,43 @@ def updateMachine(jobid,num_threads,machines,slot,vals,labels,host,exp_name):
         machines[host][slot][thread]["mem_destruct"].append(float(vals[labels.index("privatememory_request_destruction_time_"+thread)])+float(vals[labels.index("sharedmemory_request_destruction_time_"+thread)]))
         machines[host][slot][thread]["mem_stall"].append(float(vals[labels.index("privatememory_request_stall_time_"+thread)])+float(vals[labels.index("sharedmemory_request_stall_time_"+thread)]))
 
-        machines[host][slot][thread]["disk_in"].append(float(vals[labels.index("local_input_time_"+thread)])+float(vals[labels.index("boundedfilelock_request_hit_time_"+thread)]))
-        machines[host][slot][thread]["disk_ovh"].append(float(vals[labels.index("boundedfilelock_request_ovh_time_"+thread)]))
-        machines[host][slot][thread]["disk_construct"].append(float(vals[labels.index("boundedfilelock_request_construction_time_"+thread)]))
-        machines[host][slot][thread]["disk_destruct"].append(float(vals[labels.index("boundedfilelock_request_destruction_time_"+thread)]))
-        machines[host][slot][thread]["disk_stall"].append(float(vals[labels.index("boundedfilelock_request_stall_time_"+thread)]))
+        machines[host][slot][thread]["disk_in"].append(float(vals[labels.index("local_input_time_"+thread)])+float(vals[labels.index("boundedfilelock_request_hit_time_"+thread)])+float(vals[labels.index("localfilecache_request_hit_time_"+thread)]))
+        machines[host][slot][thread]["disk_ovh"].append(float(vals[labels.index("boundedfilelock_request_ovh_time_"+thread)])+float(vals[labels.index("localfilecache_request_ovh_time_"+thread)]))
+        machines[host][slot][thread]["disk_construct"].append(float(vals[labels.index("boundedfilelock_request_construction_time_"+thread)])+float(vals[labels.index("localfilecache_request_construction_time_"+thread)]))
+        machines[host][slot][thread]["disk_destruct"].append(float(vals[labels.index("boundedfilelock_request_destruction_time_"+thread)])+float(vals[labels.index("localfilecache_request_destruction_time_"+thread)]))
+        machines[host][slot][thread]["disk_stall"].append(float(vals[labels.index("boundedfilelock_request_stall_time_"+thread)])+float(vals[labels.index("localfilecache_request_stall_time_"+thread)]))
         machines[host][slot][thread]["disk_out"].append(float(vals[labels.index("local_output_time_"+thread)]))
 
 
         machines[host][slot][thread]["bb_in"].append(float(vals[labels.index("burstbuffer_request_hit_time_"+thread)]))
         machines[host][slot][thread]["bb_ovh"].append(float(vals[labels.index("burstbuffer_request_ovh_time_"+thread)]))
+        machines[host][slot][thread]["bb_construct"].append(float(vals[labels.index("burstbuffer_request_construction_time_"+thread)]))
         machines[host][slot][thread]["bb_destruct"].append(float(vals[labels.index("burstbuffer_request_destruction_time_"+thread)]))
         machines[host][slot][thread]["bb_stall"].append(float(vals[labels.index("burstbuffer_request_stall_time_"+thread)]))
 
 
         machines[host][slot][thread]["ovh"].append(float(vals[labels.index("base_request_ovh_time_"+thread)]))
         machines[host][slot][thread]["exp_time"].append(float(vals[labels.index("StopExp")])-float(vals[labels.index("StartExp")]))
-        machines[host][slot][thread]["start_time"].append(int(vals[labels.index("StartTime")]))
+        machines[host][slot][thread]["start_time"].append(float(vals[labels.index("StartTime")]))
 
         # dest=(machines[host][slot][thread]["net_destruct"][-1]+machines[host][slot][thread]["bb_destruct"][-1]+machines[host][slot][thread]["disk_destruct"][-1]+machines[host][slot][thread]["mem_destruct"][-1])
         # machines[host][slot][thread]["net_destruct"][-1]=float(vals[labels.index("tazer_destruction_time")])-dest
 
         destruct_time=machines[host][slot][thread]["mem_destruct"][-1]+machines[host][slot][thread]["disk_destruct"][-1]+machines[host][slot][thread]["bb_destruct"][-1]+machines[host][slot][thread]["net_destruct"][-1]
-        
-        total_io = (machines[host][slot][thread]["tazer_in"][-1]+machines[host][slot][thread]["tazer_out"][-1]+destruct_time
+        constuct_time=machines[host][slot][thread]["mem_construct"][-1]+machines[host][slot][thread]["disk_construct"][-1]+machines[host][slot][thread]["bb_construct"][-1]+machines[host][slot][thread]["net_construct"][-1]
+
+        if machines[host][slot][thread]["tazer_in"][-1] > 0:
+            machines[host][slot][thread]["tazer_in"][-1] -= constuct_time
+
+        temp_net = (machines[host][slot][thread]["net_in"][-1]+machines[host][slot][thread]["net_ovh"][-1]+ machines[host][slot][thread]["net_destruct"][-1]+machines[host][slot][thread]["net_construct"][-1] + machines[host][slot][thread]["net_stall"][-1]) + machines[host][slot][thread]["net_out"][-1]
+        temp_mem = (machines[host][slot][thread]["mem_in"][-1]+machines[host][slot][thread]["mem_ovh"][-1]+ machines[host][slot][thread]["mem_destruct"][-1]+machines[host][slot][thread]["mem_construct"][-1]+ machines[host][slot][thread]["mem_stall"][-1])
+        temp_disk = (machines[host][slot][thread]["disk_in"][-1]+machines[host][slot][thread]["disk_ovh"][-1] + machines[host][slot][thread]["disk_destruct"][-1]+machines[host][slot][thread]["disk_construct"][-1]+ machines[host][slot][thread]["disk_stall"][-1]) + machines[host][slot][thread]["disk_out"][-1]
+        temp_bb = (machines[host][slot][thread]["bb_in"][-1]+machines[host][slot][thread]["bb_ovh"][-1]+ machines[host][slot][thread]["bb_destruct"][-1]+machines[host][slot][thread]["bb_construct"][-1]+ machines[host][slot][thread]["bb_stall"][-1])
+
+        if server:
+            total_io = temp_net + temp_mem + temp_disk+ temp_bb
+        else:
+            total_io = (machines[host][slot][thread]["tazer_in"][-1]+machines[host][slot][thread]["tazer_out"][-1]+destruct_time + constuct_time
                     +machines[host][slot][thread]["local_in"][-1]+machines[host][slot][thread]["local_out"][-1]
                     +machines[host][slot][thread]["sys_in"][-1]+machines[host][slot][thread]["sys_out"][-1])
         machines[host][slot][thread]["io_total"].append(total_io)
@@ -130,20 +138,17 @@ def updateMachine(jobid,num_threads,machines,slot,vals,labels,host,exp_name):
         extra = (machines[host][slot][thread]["total"][-1]-machines[host][slot][thread]["setup"][-1])-machines[host][slot][thread]["exp_time"][-1] #extra time most likely due to loading libraries which we cant explicitly capture...
         #machines[host][slot][thread]["sys_in"][-1]+=extra
 
-        temp_net = (machines[host][slot][thread]["net_in"][-1]+machines[host][slot][thread]["net_ovh"][-1]+ machines[host][slot][thread]["net_destruct"][-1]+ machines[host][slot][thread]["net_stall"][-1])/60.0 
-        temp_mem = (machines[host][slot][thread]["mem_in"][-1]+machines[host][slot][thread]["mem_ovh"][-1]+ machines[host][slot][thread]["mem_destruct"][-1]+ machines[host][slot][thread]["mem_stall"][-1])/60.0
-        temp_disk = (machines[host][slot][thread]["disk_in"][-1]+machines[host][slot][thread]["disk_ovh"][-1] + machines[host][slot][thread]["disk_destruct"][-1]+ machines[host][slot][thread]["disk_stall"][-1])/60.0
-        temp_bb = (machines[host][slot][thread]["bb_in"][-1]+machines[host][slot][thread]["bb_ovh"][-1]+ machines[host][slot][thread]["bb_destruct"][-1]+ machines[host][slot][thread]["bb_stall"][-1])/60.0
+        
 
-        if total_io/60.0 - (temp_net+temp_mem+temp_disk+temp_bb) > 1:
-            print(jobid,total_io/60.0 - (temp_net+temp_mem+temp_disk+temp_bb), total_io/60.0,(machines[host][slot][thread]["tazer_in"][-1]+machines[host][slot][thread]["tazer_out"][-1])/60.0,
-            (machines[host][slot][thread]["local_in"][-1]+machines[host][slot][thread]["local_out"][-1])/60.0,
-            (machines[host][slot][thread]["sys_in"][-1]+machines[host][slot][thread]["sys_out"][-1])/60.0,
-            temp_net,temp_mem,temp_disk,temp_bb,temp_net+temp_mem+temp_disk+temp_bb,machines[host][slot][thread]["ovh"][-1]/60.0)
+        if total_io - (temp_net+temp_mem+temp_disk+temp_bb) > 1:
+            print(jobid,total_io - (temp_net+temp_mem+temp_disk+temp_bb), total_io,(machines[host][slot][thread]["tazer_in"][-1]+machines[host][slot][thread]["tazer_out"][-1]),
+            (machines[host][slot][thread]["local_in"][-1]+machines[host][slot][thread]["local_out"][-1]),
+            (machines[host][slot][thread]["sys_in"][-1]+machines[host][slot][thread]["sys_out"][-1]),
+            temp_net,temp_mem,temp_disk,temp_bb,temp_net+temp_mem+temp_disk+temp_bb,machines[host][slot][thread]["ovh"][-1])
 
         global global_cnt
         global_cnt+=1
-        # print("cnt: ",global_cnt)
+        print(machines[host][slot][thread])
 
     
     
@@ -178,28 +183,28 @@ def plotMachine(machines,s_i,mint):
         for slot in sorted(machines[mach]):
             for thread in sorted(machines[mach][slot]):
                 cnts.append(len(machines[mach][slot][thread]["total"]))
-                totals.append((sum(machines[mach][slot][thread]["total"]))/60.0)
-                stimes.append(0*(min(machines[mach][slot][thread]["start_time"])-mint)/60.0)
-                t_ins.append(((sum(machines[mach][slot][thread]["net_in"])+sum(machines[mach][slot][thread]["net_ovh"])+sum(machines[mach][slot][thread]["net_destruct"])+sum(machines[mach][slot][thread]["net_construct"])+sum(machines[mach][slot][thread]["net_stall"]))/60.0))
-                t_outs.append((sum(machines[mach][slot][thread]["net_out"])/60.0))#/float(len(machines[mach])))
-                l_ins.append(((sum(machines[mach][slot][thread]["disk_in"])+sum(machines[mach][slot][thread]["disk_ovh"])+sum(machines[mach][slot][thread]["disk_destruct"])+sum(machines[mach][slot][thread]["disk_construct"])+sum(machines[mach][slot][thread]["disk_stall"]))/60.0))#/float(len(machines[mach])))
-                l_outs.append((sum(machines[mach][slot][thread]["disk_out"])/60.0))#/float(len(machines[mach])))
-                s_ins.append((sum(machines[mach][slot][thread]["sys_in"])/60.0))#/float(len(machines[mach])))
-                s_outs.append((sum(machines[mach][slot][thread]["sys_out"])/60.0))#/float(len(machines[mach])))
-                mem_ins.append(((sum(machines[mach][slot][thread]["mem_in"])+sum(machines[mach][slot][thread]["mem_ovh"])+sum(machines[mach][slot][thread]["mem_destruct"])+sum(machines[mach][slot][thread]["mem_construct"])+sum(machines[mach][slot][thread]["mem_stall"]))/60.0))
-                bb_ins.append(((sum(machines[mach][slot][thread]["bb_in"])+sum(machines[mach][slot][thread]["bb_ovh"])+sum(machines[mach][slot][thread]["bb_destruct"])+sum(machines[mach][slot][thread]["bb_construct"])+sum(machines[mach][slot][thread]["bb_stall"]))/60.0))
+                totals.append((sum(machines[mach][slot][thread]["total"])))
+                stimes.append(0*(min(machines[mach][slot][thread]["start_time"])-mint))
+                t_ins.append(((sum(machines[mach][slot][thread]["net_in"])+sum(machines[mach][slot][thread]["net_ovh"])+sum(machines[mach][slot][thread]["net_destruct"])+sum(machines[mach][slot][thread]["net_construct"])+sum(machines[mach][slot][thread]["net_stall"]))))
+                t_outs.append((sum(machines[mach][slot][thread]["net_out"])))#/float(len(machines[mach])))
+                l_ins.append(((sum(machines[mach][slot][thread]["disk_in"])+sum(machines[mach][slot][thread]["disk_ovh"])+sum(machines[mach][slot][thread]["disk_destruct"])+sum(machines[mach][slot][thread]["disk_construct"])+sum(machines[mach][slot][thread]["disk_stall"]))))#/float(len(machines[mach])))
+                l_outs.append((sum(machines[mach][slot][thread]["disk_out"])))#/float(len(machines[mach])))
+                s_ins.append((sum(machines[mach][slot][thread]["sys_in"])))#/float(len(machines[mach])))
+                s_outs.append((sum(machines[mach][slot][thread]["sys_out"])))#/float(len(machines[mach])))
+                mem_ins.append(((sum(machines[mach][slot][thread]["mem_in"])+sum(machines[mach][slot][thread]["mem_ovh"])+sum(machines[mach][slot][thread]["mem_destruct"])+sum(machines[mach][slot][thread]["mem_construct"])+sum(machines[mach][slot][thread]["mem_stall"]))))
+                bb_ins.append(((sum(machines[mach][slot][thread]["bb_in"])+sum(machines[mach][slot][thread]["bb_ovh"])+sum(machines[mach][slot][thread]["bb_destruct"])+sum(machines[mach][slot][thread]["bb_construct"])+sum(machines[mach][slot][thread]["bb_stall"]))))
 
-                s_ups.append((sum(machines[mach][slot][thread]["setup"])/60.0))#/float(len(machines[mach])))
-                cpus.append((sum(machines[mach][slot][thread]["cpu_time"])/60.0))
+                s_ups.append((sum(machines[mach][slot][thread]["setup"])))#/float(len(machines[mach])))
+                cpus.append((sum(machines[mach][slot][thread]["cpu_time"])))
                 t_amt.append((sum(machines[mach][slot][thread]["tazer_amt"])))
                 n_amt.append((sum(machines[mach][slot][thread]["network_amt"])))
-                ovh.append((sum(machines[mach][slot][thread]["ovh"])/60.0))
+                ovh.append((sum(machines[mach][slot][thread]["ovh"])))
                 times.append(t_ins[-1]+t_outs[-1]+l_ins[-1]+l_outs[-1]+s_ins[-1]+s_outs[-1]+s_ups[-1]+cpus[-1]+ovh[-1])
-                io_tots.append(sum(machines[mach][slot][thread]["io_total"])/60.0)
+                io_tots.append(sum(machines[mach][slot][thread]["io_total"]))
                 exps += machines[mach][slot][thread]["cpu_time"]
                 tots += machines[mach][slot][thread]["total"]
                 bws+=machines[mach][slot][thread]["bw"]
-                names.append(str(mach)+"_"+str(slot)+"_"+str(thread))
+                names.append(str(mach)+"_"+str(thread))
                 jobids.append(machines[mach][slot][thread]["jobids"])
                 if len(machines[mach][slot][thread]["total"]) == 4:
                     print(mach,slot,thread,machines[mach][slot][thread]["jobids"])
@@ -210,12 +215,14 @@ def plotMachine(machines,s_i,mint):
     sjobids= np.array(jobids)[ssind]
 
     print(np.sum(tots),np.sum(io_tots),np.sum(exps),np.sum(cpus),"bws: ",np.mean(bws),np.max(bws),np.min(bws))
+    print(tots,io_tots,exps,cpus)
+
     global tot_sum
     tot_sum+=np.sum(tots)
     global io_sum
     io_sum+=np.sum(io_tots)
     global nio_sum
-    nio_sum+=np.sum(t_ins)*60.0
+    nio_sum+=np.sum(t_ins)
     global cpu_sum
     cpu_sum+=np.sum(exps)
     global t_amt_sum
@@ -295,8 +302,8 @@ def plotMachine(machines,s_i,mint):
 
         for i in reversed(range(1,len(bars))):
             bottoms-=bars[i][0][sind]
-            plt.bar(ind,bars[i][0][sind]*60.0,bottom=bottoms*60.0,color=bars[i][1],edgecolor=ec,width=1,label=bars[i][2])
-        plt.bar(ind,np.array(totals)[sind]*60.0,color="w",edgecolor="k",width=1,alpha=0.5)
+            plt.bar(ind,bars[i][0][sind],bottom=bottoms,color=bars[i][1],edgecolor=ec,width=1,label=bars[i][2])
+        plt.bar(ind,np.array(totals)[sind],color="w",edgecolor="k",width=1,alpha=0.5)
     else: 
         plt.bar(ind,bars[0][0][sind],bottom=np.array(stimes)[sind],color=bars[0][1],edgecolor=ec,width=1)
         bottoms = np.array(stimes)[sind]
@@ -311,7 +318,7 @@ nio_sum=0
 cpu_sum=0
 t_amt_sum=0
 n_amt_sum=0
-def plotData(path,title,fname,leg_loc): 
+def plotData(path,title,fname,leg_loc,server): 
     global tot_sum
     tot_sum=0
     global io_sum
@@ -336,29 +343,15 @@ def plotData(path,title,fname,leg_loc):
             data[temp[0]][0]+=names
             data[temp[0]][1]+=vals
 
-    bluesky={}
-    ivy={}
-    amd={}
-    haswell_1={}
-    haswell_2={}
+    machines={}
     ioCnt=0
     nioCnt=0
     maxt=0
     mint=99999999999999999
     temp=0
 
-    # the_jobs={}
-    # baseid="99501_"
-    # for n in range(0,25):
-    #     for c in range(1,25):
-    #         for r in ["0","1"]:
-    #             j=baseid+str(n)+"_"+str(c)+"_"+r
-    #             the_jobs[j]=0
-    
     accesses=[]
     for jobid in data:
-        # print (jobid.strip,)
-        # the_jobs[jobid.strip()]=1
         labels=data[jobid][0]
         vals=data[jobid][1]
         num_threads=int(vals[labels.index("threads")])
@@ -372,39 +365,26 @@ def plotData(path,title,fname,leg_loc):
             maxt = int(vals[labels.index("FinishedTime")])
         if temp < int(vals[labels.index("FinishedTime")])-int(vals[labels.index("StartTime")]):
             temp = int(vals[labels.index("FinishedTime")])-int(vals[labels.index("StartTime")])
-        
-        if "local" in host:
-            updateMachine(jobid,num_threads,bluesky,slot,vals,labels,host,title)
-        elif re.search( '.*node51.*', host, re.M|re.I):
-            updateMachine(jobid,num_threads,haswell_1,slot,vals,labels,host,title)
-        elif re.search( '.*node52.*', host, re.M|re.I):
-            updateMachine(jobid,num_threads,haswell_2,slot,vals,labels,host,title)
-        elif re.search( '.*node(0[1-9]|1[0-9]|2[0-9]|3[0-2]|49|50).*', host, re.M|re.I):
-            updateMachine(jobid,num_threads,ivy,slot,vals,labels,host,title)
-        elif re.search( '.*node(3[3-9]|4[0-8]).*', host, re.M|re.I):
-            updateMachine(jobid,num_threads,amd,slot,vals,labels,host,title)
-        else:
-            print(host)
-
-    # print (the_jobs)
-    # for j in the_jobs.keys():
-    #     if the_jobs[j]==0:
-    #         print("missing job!",j)
+        updateMachine(jobid,num_threads,machines,slot,vals,labels,host,title,server)
    
 
-    print (len(bluesky),len(ivy),len(amd),len(haswell_1),len(haswell_2))
+    # print (len(bluesky),len(ivy),len(amd),len(haswell_1),len(haswell_2),len(seapearl))
+    print (len(machines))
     cores=[]
-    for mach in [bluesky,ivy,amd,haswell_1,haswell_2]:
-        cores.append(0);
-        for node in mach:
-            cores[-1] += len(mach[node])
+    # hosts =  [bluesky,ivy,amd,haswell_1,haswell_2,seapearl]
+    # for mach in machines:
+    #     cores.append(0);
+    for node in machines:
+        cores.append(0)
+        print(node)
+        cores[-1] += len(machines[node])
     print(cores,sum(cores))
     s_i=0
     #fig=plt.figure()
     fig=plt.figure(figsize=(17,7))
-    for mach in [bluesky,ivy,amd,haswell_1,haswell_2]:
-        if len(mach) > 0:
-            s_i=plotMachine(mach,s_i,mint)
+    # for mach in hosts:
+    #     if len(mach) > 0:
+    s_i=plotMachine(machines,s_i,mint)
             
     if io_sum == 0:
         print("io_sum = 0")
@@ -441,21 +421,25 @@ def plotData(path,title,fname,leg_loc):
     plt.show()
     return tot_sum,io_sum,cpu_sum
     
+if __name__ == "__main__":
+    global_cnt = 0
+    res=[]
+    dpath = "./logs/data.txt"
+    output_path = "thread_times"
 
-global_cnt = 0
-res=[]
-dpath = "./logs/data.txt"
-output_path = "thread_times"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-s", "--server", help="count all threads, use for parsing server output", action='store_true', default=False)
+    parser.add_argument("-i", "--input", help="input file to be parsed", type=str, default="./logs/data.txt")
+    parser.add_argument("-o", "--output", help="name of outputfile",  type=str, default= "thread_times")
+    args = parser.parse_args(sys.argv[1:])
 
-if len(sys.argv) > 1:
-    dpath = sys.argv[1]
+    
+    dpath = args.input
+    output_path = args.output
 
-if len(sys.argv) > 2:
-    output_path = sys.argv[2]
+    res.append(plotData(dpath,"tazer",output_path,"best",args.server))
+    print ("globalcnt:",global_cnt)
 
-res.append(plotData(dpath,"tazer",output_path,"best"))
-print ("globalcnt:",global_cnt)
-
-print (res)
+    print (res)
 
 

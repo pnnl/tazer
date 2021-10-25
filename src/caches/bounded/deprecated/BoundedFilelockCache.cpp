@@ -116,7 +116,7 @@ BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, CacheType type
     if (ret == 0) {
         // _shmLock->writerLock();
         debug()<<"Creating bounded file lock cache"<<std::endl;
-        int fd = (*_open)((_cachePath + "/lock_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+        int fd = (*_open)((_cachePath + "/lock_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0666);
         if (fd == -1 ){
             debug()<<"[TAZER ERROR] "<<_name<<" lock creation open error "<<strerror(errno)<<std::endl;
             exit(1);
@@ -162,7 +162,7 @@ BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, CacheType type
             debug() << _name << " ERROR: lock rename went wrong!!!" << strerror(errno) << std::endl;
             exit(1);
         }
-        fd = (*_open)((_cachePath + "/data_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+        fd = (*_open)((_cachePath + "/data_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0666);
          if (fd < 0 ){
             debug()<<"[TAZER ERROR] "<<_name<<" data creation open error "<<strerror(errno)<<std::endl;
         }
@@ -228,9 +228,9 @@ BoundedFilelockCache::BoundedFilelockCache(std::string cacheName, CacheType type
 
     // does implementing a lock around disk ops improve i/o performance?
     // std::string shmPath("/" + Config::tazer_id  + "_fcntlbnded_shm.lck");
-    // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+    // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
     // if (shmFd == -1) {
-    //     shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
+    //     shmFd = shm_open(shmPath.c_str(), O_RDWR, 0666);
     //     if (shmFd != -1) {
     //         debug() << "resusing fcntl shm lock" << std::endl;
     //         ftruncate(shmFd, sizeof(uint32_t) + sizeof(ReaderWriterLock));

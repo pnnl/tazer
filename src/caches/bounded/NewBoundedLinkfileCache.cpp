@@ -112,10 +112,10 @@ NewBoundedLinkfileCache::NewBoundedLinkfileCache(std::string cacheName, CacheTyp
     stats.start(false, CacheStats::Metric::constructor, thread_id);
     std::error_code err;
     std::string shmPath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
-    // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+    // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
     // if(shmFd == -1){
     //     debug() <<_name<< " Reusing shared memory" << std::endl;
-    //     int shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
+    //     int shmFd = shm_open(shmPath.c_str(), O_RDWR, 0666);
     //     if (shmFd != -1) {
     //         ftruncate(shmFd, sizeof(uint32_t) +  _numBlocks * sizeof(FileBlockEntry));
     //         void *ptr = mmap(NULL, sizeof(uint32_t) + _numBlocks * sizeof(FileBlockEntry), PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
@@ -158,7 +158,7 @@ NewBoundedLinkfileCache::NewBoundedLinkfileCache(std::string cacheName, CacheTyp
         
 
         debug()<<"Creating bounded file lock cache"<<std::endl;
-        int fd = (*_open)((_cachePath + "/entries_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+        int fd = (*_open)((_cachePath + "/entries_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0666);
         if (fd == -1 ){
             debug()<<"[TAZER ERROR] "<<_name<<" lock creation open error "<<strerror(errno)<<std::endl;
             exit(1);
@@ -205,7 +205,7 @@ NewBoundedLinkfileCache::NewBoundedLinkfileCache(std::string cacheName, CacheTyp
             debug() << _name << " ERROR: lock rename went wrong!!!" << strerror(errno) << std::endl;
             exit(1);
         }
-        fd = (*_open)((_cachePath + "/data_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+        fd = (*_open)((_cachePath + "/data_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0666);
          if (fd < 0 ){
             debug()<<"[TAZER ERROR] "<<_name<<" data creation open error "<<strerror(errno)<<std::endl;
         }
@@ -276,9 +276,9 @@ NewBoundedLinkfileCache::NewBoundedLinkfileCache(std::string cacheName, CacheTyp
 
     // does implementing a lock around disk ops improve i/o performance?
     // std::string shmPath("/" + Config::tazer_id  + "_fcntlbnded_shm.lck");
-    // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+    // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
     // if (shmFd == -1) {
-    //     shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
+    //     shmFd = shm_open(shmPath.c_str(), O_RDWR, 0666);
     //     if (shmFd != -1) {
     //         debug() << "resusing fcntl shm lock" << std::endl;
     //         ftruncate(shmFd, sizeof(uint32_t) + sizeof(ReaderWriterLock));

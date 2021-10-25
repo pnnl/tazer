@@ -113,7 +113,7 @@ const unsigned int numPrefetchThreads = 1;
 const unsigned int defaultBufferSize = 1024;
 const unsigned int maxConRetry = 10;
 const unsigned int messageRetry = (unsigned int)100; //Simulates infinite retry...
-const unsigned int socketsPerConnection = 1;
+const unsigned int socketsPerConnection =  getenv("TAZER_SOCKETS_PER_CONN") ? atoi(getenv("TAZER_SOCKETS_PER_CONN")) : 1;
 const unsigned int socketStep = 1024;
 const unsigned int socketRetry = 1;
 

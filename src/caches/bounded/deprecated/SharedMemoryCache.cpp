@@ -102,11 +102,11 @@ SharedMemoryCache::SharedMemoryCache(std::string cacheName, CacheType type, uint
     stats.start(false, CacheStats::Metric::constructor, thread_id);
     std::string filePath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
 
-    int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+    int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
     if (fd == -1) {
         DPRINTF("Reusing shared memory\n");
         log(this) << "Reusing shared memory" << std::endl;
-        fd = shm_open(filePath.c_str(), O_RDWR, 0644);
+        fd = shm_open(filePath.c_str(), O_RDWR, 0666);
         if (fd != -1) {
             ftruncate(fd, sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins));
             void *ptr = mmap(NULL, sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);

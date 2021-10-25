@@ -78,6 +78,7 @@
 #include "CacheTypes.h"
 #include "Loggable.h"
 
+#include <sstream>
 #include <string.h>
 #include <unordered_map>
 #include <thread>

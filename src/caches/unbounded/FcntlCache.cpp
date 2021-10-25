@@ -402,10 +402,10 @@ void FcntlCache::addFile(unsigned int index, std::string filename, uint64_t bloc
         _lock->writerUnlock();
 
         std::string filePath = Config::sharedMemName + "_" + std::to_string(index);
-        int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+        int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
         if (fd == -1) {
             DPRINTF("Reusing shared memory\n");
-            fd = shm_open(filePath.c_str(), O_RDWR, 0644);
+            fd = shm_open(filePath.c_str(), O_RDWR, 0666);
             if (fd != -1) {
                 ftruncate(fd, numBlocks * sizeof(std::atomic<uint8_t>));
                 void *ptr = mmap(NULL, numBlocks * sizeof(std::atomic<uint8_t>), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -435,7 +435,7 @@ void FcntlCache::addFile(unsigned int index, std::string filename, uint64_t bloc
         if (ret == 0) {
             std::cout << "making lock and data file" << std::endl;
             _lock->writerLock();
-            int fd = (*_open)((tmp + "/lock_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+            int fd = (*_open)((tmp + "/lock_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0666);
             ftruncate(fd, numBlocks * sizeof(uint8_t));
             uint8_t byte = 0;
             (*_lseek)(fd, numBlocks * sizeof(uint8_t), SEEK_SET);
@@ -450,7 +450,7 @@ void FcntlCache::addFile(unsigned int index, std::string filename, uint64_t bloc
                 std::cout << "[TAZER] " << _name << " ERROR: lock rename went wrong!!!" << strerror(errno) << std::endl;
                 exit(1);
             }
-            fd = (*_open)((tmp + "/data_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+            fd = (*_open)((tmp + "/data_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0666);
             ftruncate(fd, numBlocks * _blockSize * sizeof(uint8_t));
             (*_lseek)(fd, numBlocks * _blockSize * sizeof(uint8_t), SEEK_SET);
             (*_write)(fd, &byte, sizeof(uint8_t));

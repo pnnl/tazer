@@ -169,7 +169,7 @@ void FilelockCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_
     _lock->readerLock();
     std::string blkPath = _cachePath + "/" + _fileMap[fileIndex].name + "/" + std::to_string(blockIndex) + ".blk";
     _lock->readerUnlock();
-    int fd = (*_open)(blkPath.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644); //Open file for writing
+    int fd = (*_open)(blkPath.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0666); //Open file for writing
     writeToFile(fd, size, data);
     (*_fsync)(fd); //flush changes
     (*_close)(fd);
@@ -340,11 +340,11 @@ void FilelockCache::addFile(unsigned int index, std::string filename, uint64_t b
 
         if (Config::enableSharedMem){
             std::string filePath = Config::sharedMemName + "_" + std::to_string(index);
-            int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+            int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
             if (fd == -1) {
                 //DPRINTF("Reusing shared memory\n");
                 std::cout << "Reusing shared memory" << std::endl;
-                fd = shm_open(filePath.c_str(), O_RDWR, 0644);
+                fd = shm_open(filePath.c_str(), O_RDWR, 0666);
                 if (fd != -1) {
                     ftruncate(fd, numBlocks * sizeof(std::atomic<uint8_t>));
                     void *ptr = mmap(NULL, numBlocks * sizeof(std::atomic<uint8_t>), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);

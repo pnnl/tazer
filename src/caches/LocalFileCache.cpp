@@ -194,7 +194,7 @@ void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::s
         req->time = Timer::getCurrentTime() - req->time;
         updateRequestTime(req->time);
     }
-    else {
+    else if(_nextLevel != NULL){
         stats.addAmt(prefetch, CacheStats::Metric::misses, 1, thread_id);
         
         req->time = Timer::getCurrentTime() - req->time;
@@ -204,6 +204,9 @@ void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::s
         _nextLevel->readBlock(req, reads, priority);
         stats.end(prefetch, CacheStats::Metric::misses, thread_id);
         stats.start(prefetch, CacheStats::Metric::ovh, thread_id); //ovh
+    }
+    else{
+        err() <<_name << " "<<name<<" not present and no next cache!!!!"<<std::endl;
     }
     stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
     stats.end(prefetch, CacheStats::Metric::read, thread_id);
@@ -218,7 +221,7 @@ Cache *LocalFileCache::addNewLocalFileCache(std::string cacheName, CacheType typ
 }
 
 void LocalFileCache::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
-    debug()<<_name<<" adding file: "<<filename<<std::endl;
+    // debug()<<_name<<" adding file: "<<filename<<std::endl;
     // //log(this) /*std::cout*/<<"[TAZER] " << "adding file: " << filename << " " << (void *)this << " " << (void *)_nextLevel << std::endl;
     // //log(this) /*std::cout*/ << "[TAZER] " << _name << " " << filename << " " << fileSize << " " << blockSize << std::endl;
     _lock->writerLock();
@@ -231,7 +234,7 @@ void LocalFileCache::addFile(uint32_t index, std::string filename, uint64_t bloc
         std::ifstream *file = new std::ifstream();
         file->open(filename, std::fstream::binary);
         if (!file->is_open()) {
-            log(this) << "WARNING: " << filename << " did not open" << std::endl;
+            // debug() << "WARNING: " << filename << " did not open" << std::endl;
             _fstreamMap.emplace(index, std::make_pair((std::ifstream *)NULL, (ReaderWriterLock *)NULL));
             delete file;
         }

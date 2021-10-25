@@ -119,15 +119,7 @@ void __attribute__((constructor)) tazerInit(void) {
         timer = new Timer();
 
         std::thread::id thread_id = std::this_thread::get_id();
-        statsLock.readerLock();
-        bool threadFound = timer->checkThread(thread_id);
-        statsLock.readerUnlock();
-
-        if(threadFound == false) {
-            statsLock.writerLock();
-            timer->addThread(thread_id);
-            statsLock.writerUnlock();
-        }
+        timer->checkThread(thread_id,true);
 
         timer->start(thread_id);
         Loggable::mtx_cout = new std::mutex();
@@ -203,16 +195,7 @@ void __attribute__((constructor)) tazerInit(void) {
 
 void __attribute__((destructor)) tazerCleanup(void) {
     std::thread::id thread_id = std::this_thread::get_id();
-    statsLock.readerLock();
-    bool threadFound = timer->checkThread(thread_id);
-    statsLock.readerUnlock();
-
-    if(threadFound == false) {
-        statsLock.writerLock();
-        timer->addThread(thread_id);
-        statsLock.writerUnlock();
-    }
-
+    timer->checkThread(thread_id,true);
     timer->start(thread_id);
     init = false; //set to false because we cant ensure our static members have not already been deleted.
 

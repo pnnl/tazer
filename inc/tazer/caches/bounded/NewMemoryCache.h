@@ -76,7 +76,7 @@
 #define NewMemoryCache_H
 #include "NewBoundedCache.h"
 
-#define NEWMEMORYCACHENAME "privatememory"
+#define MEMORYCACHENAME "privatememory"
 
 class NewMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
   public:

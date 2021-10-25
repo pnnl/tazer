@@ -75,7 +75,8 @@
 #ifndef READERWRITERLOCK_H
 #define READERWRITERLOCK_H
 
-#include "Request.h"
+// #include "Request.h"
+class Request;
 #include <atomic>
 #include <thread>
 

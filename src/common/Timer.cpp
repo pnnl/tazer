@@ -190,9 +190,11 @@ void Timer::start(std::thread::id id) {
         _current = getCurrentTime();
     _depth++;
 
+    _lock.readerLock();
     if (!(*_thread_timers)[id]->depth->load(std::memory_order_relaxed))
         (*_thread_timers)[id]->current->store(getCurrentTime(), std::memory_order_relaxed);
     (*_thread_timers)[id]->depth->fetch_add(1, std::memory_order_relaxed);
+    _lock.readerUnlock();
 }
 
 void Timer::end(MetricType type, Metric metric, std::thread::id id) {
@@ -202,17 +204,21 @@ void Timer::end(MetricType type, Metric metric, std::thread::id id) {
     }
     _depth--;
 
+    _lock.readerLock();
     if ((*_thread_timers)[id]->depth->load(std::memory_order_relaxed) == 1) {
         uint64_t x = getCurrentTime() - (*_thread_timers)[id]->current->load(std::memory_order_relaxed);
         (*_thread_timers)[id]->time[type][metric]->fetch_add(x, std::memory_order_relaxed);
         (*_thread_timers)[id]->cnt[type][metric]->fetch_add(1, std::memory_order_relaxed);
     }
     (*_thread_timers)[id]->depth->fetch_sub(1, std::memory_order_relaxed);
+    _lock.readerUnlock();
 }
 
 void Timer::addAmt(MetricType type, Metric metric, uint64_t amt, std::thread::id id) {
     _amt[type][metric] += amt;
+    _lock.readerLock();
     (*_thread_timers)[id]->amt[type][metric]->fetch_add(amt, std::memory_order_relaxed);
+    _lock.readerUnlock();
 }
 
 // void Timer::threadStart(std::thread::id id) {
@@ -236,14 +242,21 @@ void Timer::addAmt(MetricType type, Metric metric, uint64_t amt, std::thread::id
 
 void Timer::addThread(std::thread::id id) {
     //(*_thread_timers)[id] = *(new Timer::ThreadMetric());
+    _lock.writerLock();
     (*_thread_timers)[id] = new Timer::ThreadMetric();
+    _lock.writerUnlock();
+    // std::cout <<"adding timer thread id "<<id<<std::endl;
 }
 
-bool Timer::checkThread(std::thread::id id) {
-    if(_thread_timers->find(id) == _thread_timers->end())
-        return false;
-    else
-        return true;
+bool Timer::checkThread(std::thread::id id, bool addIfNotFound) {
+    _lock.readerLock();
+    bool ret = (_thread_timers->find(id) != _thread_timers->end());
+    _lock.readerUnlock();
+    
+    if (!ret && addIfNotFound)
+        addThread(id);
+
+    return ret;
 }
 
 Timer::ThreadMetric::ThreadMetric() {

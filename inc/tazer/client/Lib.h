@@ -113,7 +113,6 @@ static Timer* timer;
 std::once_flag log_flag;
 bool init = false;
 ReaderWriterLock vLock;
-ReaderWriterLock statsLock;
 
 std::unordered_set<std::string>* track_files = NULL; //this is a pointer cause we access in ((attribute)) constructor and initialization isnt guaranteed
 static std::unordered_set<int> track_fd;
@@ -309,15 +308,8 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
     }
 
     std::thread::id thread_id = std::this_thread::get_id();
-    statsLock.readerLock();
-    bool threadFound = timer->checkThread(thread_id);
-    statsLock.readerUnlock();
+    timer->checkThread(thread_id,true);
 
-    if(threadFound == false) {
-        statsLock.writerLock();
-        timer->addThread(thread_id);
-        statsLock.writerUnlock();
-    }
 
     timer->start(thread_id);
 

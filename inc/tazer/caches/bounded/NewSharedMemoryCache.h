@@ -76,7 +76,7 @@
 #define NewSharedMemoryCache_H
 #include "NewBoundedCache.h"
 
-#define NEWSHAREDMEMORYCACHENAME "sharedmemory"
+#define SHAREDMEMORYCACHENAME "sharedmemory"
 
 class NewSharedMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
   public:
