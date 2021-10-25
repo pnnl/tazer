@@ -74,10 +74,10 @@
 
 #include "InputFile.h"
 #include "caches/Cache.h"
-#include "caches/bounded/NewBoundedFilelockCache.h"
-#include "caches/bounded/NewSharedMemoryCache.h"
-#include "caches/bounded/NewMemoryCache.h"
-#include "caches/bounded/NewFileCache.h"
+#include "caches/bounded/BoundedFilelockCache.h"
+#include "caches/bounded/SharedMemoryCache.h"
+#include "caches/bounded/MemoryCache.h"
+#include "caches/bounded/FileCache.h"
 #include "caches/unbounded/FilelockCache.h"
 #include "caches/unbounded/FcntlCache.h"
 #include "caches/LocalFileCache.h"
@@ -130,35 +130,35 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     Cache *c = NULL;
 
     if (Config::useMemoryCache) {
-        Cache *c = NewMemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
+        Cache *c = MemoryCache::addMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
         std::cerr << "[TAZER] "
                   << "mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }
 
     if (Config::useSharedMemoryCache && Config::enableSharedMem) {
-        c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
+        c = SharedMemoryCache::addSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
         std::cerr << "[TAZER] "
                   << "shared mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }
 
     if (Config::useBurstBufferCache) {
-        c = NewFileCache::addNewFileCache("burstbuffer", CacheType::burstBuffer, Config::burstBufferCacheSize, Config::burstBufferCacheBlocksize, Config::burstBufferCacheAssociativity, Config::burstBufferCacheFilePath);
+        c = FileCache::addFileCache("burstbuffer", CacheType::burstBuffer, Config::burstBufferCacheSize, Config::burstBufferCacheBlocksize, Config::burstBufferCacheAssociativity, Config::burstBufferCacheFilePath);
         std::cerr << "[TAZER] "
                   << "bb cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }
 
     if (Config::useFileCache) {
-        c = NewFileCache::addNewFileCache(FILECACHENAME, CacheType::nodeFile, Config::fileCacheSize, Config::fileCacheBlocksize, Config::fileCacheAssociativity, Config::fileCacheFilePath);
+        c = FileCache::addFileCache(FILECACHENAME, CacheType::nodeFile, Config::fileCacheSize, Config::fileCacheBlocksize, Config::fileCacheAssociativity, Config::fileCacheFilePath);
         std::cerr << "[TAZER] "
                   << "file cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }
 
     if (Config::useBoundedFilelockCache) {
-        c = NewBoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
+        c = BoundedFilelockCache::addBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
         std::cerr << "[TAZER] "
                   << "bounded filelock cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);

@@ -72,35 +72,36 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef NewMemoryCache_H
-#define NewMemoryCache_H
-#include "NewBoundedCache.h"
+#ifndef SharedMemoryCache_H
+#define SharedMemoryCache_H
+#include "BoundedCache.h"
 
-#define MEMORYCACHENAME "privatememory"
+#define SHAREDMEMORYCACHENAME "sharedmemory"
 
-class NewMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
+class SharedMemoryCache : public BoundedCache<MultiReaderWriterLock> {
   public:
-    NewMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
-    ~NewMemoryCache();
+    SharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
+    ~SharedMemoryCache();
 
-    static Cache *addNewMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
+    static Cache *addSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
+    
 
   protected:
     struct MemBlockEntry : BlockEntry {
         std::atomic<uint32_t> activeCnt;
-        void init(NewBoundedCache* c,uint32_t entryId){
+        void init(BoundedCache* c,uint32_t entryId){
           BlockEntry::init(c,entryId);
           std::atomic_init(&activeCnt, (uint32_t)0);
         }
     };
-
+    
     virtual void blockSet(BlockEntry* blk,  uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch, int activeUpdate,Request* req);
     virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
    
     virtual void cleanUpBlockData(uint8_t *data);
     virtual uint8_t *getBlockData(unsigned int blockIndex);
     virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size);
-    virtual BlockEntry* getBlockEntry(uint32_t blockIndex,  Request* req);
+    virtual BlockEntry* getBlockEntry(uint32_t blockIndex, Request* req);
     virtual std::vector<BlockEntry*> readBin(uint32_t binIndex);
     virtual std::string blockEntryStr(BlockEntry *entry);
 
@@ -113,4 +114,4 @@ class NewMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
     uint8_t *_blocks;
 };
 
-#endif /* NewMemoryCache_H */
+#endif /* SharedMemoryCache_H */

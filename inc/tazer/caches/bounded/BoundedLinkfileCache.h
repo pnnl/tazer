@@ -72,68 +72,79 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef BoundedFilelockCache_H
-#define BoundedFilelockCache_H
+#ifndef BoundedLinkfileCache_H
+#define BoundedLinkfileCache_H
 #include "BoundedCache.h"
 #include "FcntlReaderWriterLock.h"
+#include "FileLinkReaderWriterLock.h"
 #include "ReaderWriterLock.h"
 
-#define BOUNDEDFILELOCKCACHENAME "boundedfilelock"
+#define BOUNDEDFILELINKCACHENAME "boundedfilelock"
 #define BFL_FILENAME_LEN 1024
 
-class BoundedFilelockCache : public BoundedCache<FcntlBoundedReaderWriterLock> {
+class BoundedLinkfileCache : public BoundedCache<FileLinkReaderWriterLock> {
   public:
-    BoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
-    virtual ~BoundedFilelockCache();
+    BoundedLinkfileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
+    virtual ~BoundedLinkfileCache();
 
     virtual bool writeBlock(Request *req);
-    static Cache *addNewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
+    static Cache *addBoundedLinkfileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
 
   private:
     struct FileBlockEntry : BlockEntry {
-        uint16_t active;
+        uint16_t activeCnt;
+        uint32_t pid;
         char fileName[BFL_FILENAME_LEN];
         FileBlockEntry(){
-          memset(fileName,0,sizeof(uint16_t) + BFL_FILENAME_LEN);
+          activeCnt = 0;
+          pid = 0;
+          memset(fileName,0,BFL_FILENAME_LEN);
         }
-        FileBlockEntry(BoundedCache* c){
-          BlockEntry::init(c);
-          memset(fileName,0,sizeof(uint16_t) + BFL_FILENAME_LEN);
+        FileBlockEntry(BoundedCache* c, uint32_t entryId){
+          BlockEntry::init(c, entryId);
+          activeCnt = 0;
+          pid = 0;
+          memset(fileName,0, BFL_FILENAME_LEN);
         }
         FileBlockEntry(FileBlockEntry* old){
           *(BlockEntry*)this = *(BlockEntry*)old;
+          activeCnt = old->activeCnt;
+          pid = old->pid;
           memcpy(fileName,old->fileName,BFL_FILENAME_LEN);
         }
-        void init(BoundedCache* c){
-          BlockEntry::init(c);
+        void init(BoundedCache* c,uint32_t entryId){
+          BlockEntry::init(c, entryId);
+          activeCnt = 0;
+          pid = 0;
+          memset(fileName,0, BFL_FILENAME_LEN);
         }
     };
-
-    virtual uint8_t *getBlockData(unsigned int blockIndex);
-    virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size);
-    virtual void blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch);
-    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
-
-    virtual std::shared_ptr<BlockEntry> getCompareBlkEntry(uint32_t index, uint32_t fileIndex);
-    virtual bool sameBlk(BlockEntry *blk1, BlockEntry *blk2);
 
     void readFromFile(int fd, uint64_t size, uint8_t *buff);
     void writeToFile(int fd, uint64_t size, uint8_t *buff);
 
     void preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
     void pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
+    
+    void readFileBlockEntry(FileBlockEntry *entry, Request* req);
+    void writeFileBlockEntry(FileBlockEntry *entry);
 
-    void readFileBlockEntry(uint32_t blockIndex, FileBlockEntry *entry);
-    void writeFileBlockEntry(uint32_t blockIndex, FileBlockEntry *entry);
-    virtual std::string blockEntryStr(uint32_t blockIndex);
-    virtual void readBlockEntry(uint32_t blockIndex, BlockEntry *entry);
-    virtual void writeBlockEntry(uint32_t blockIndex, BlockEntry *entry);
+    virtual std::shared_ptr<BlockEntry> getCompareBlkEntry(uint32_t index, uint32_t fileIndex);
+    virtual bool sameBlk(BlockEntry *blk1, BlockEntry *blk2);
+    
 
-    void readBin(uint32_t binIndex, BlockEntry *entries);
-    virtual std::vector<std::shared_ptr<BlockEntry>> readBin(uint32_t binIndex);
-    virtual int incBlkCnt(uint32_t blk, Request* req);
-    virtual int decBlkCnt(uint32_t blk, Request* req);
-    virtual bool anyUsers(uint32_t blk, Request* req);
+    virtual void blockSet(BlockEntry* blk,  uint32_t fileIndex, uint32_t blockIndex, uint8_t byte, CacheType type, int32_t prefetch, int activeUpdate,Request* req);
+    virtual bool blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs = false, uint32_t cnt = 0, CacheType *origCache = NULL);
+   
+    virtual uint8_t *getBlockData(unsigned int blockIndex);
+    virtual void setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size);
+    virtual BlockEntry* getBlockEntry(uint32_t blockIndex,  Request* req);
+    virtual std::vector<BlockEntry*> readBin(uint32_t binIndex);
+    virtual std::string blockEntryStr(BlockEntry *entry);
+
+    virtual int incBlkCnt(BlockEntry * entry, Request* req);
+    virtual int decBlkCnt(BlockEntry * entry, Request* req);
+    virtual bool anyUsers(BlockEntry * entry, Request* req);
 
     virtual void cleanUpBlockData(uint8_t *data);
 
@@ -146,16 +157,24 @@ class BoundedFilelockCache : public BoundedCache<FcntlBoundedReaderWriterLock> {
     unixxstat_t _stat;
 
     ReaderWriterLock *_shmLock;
-    FcntlBoundedReaderWriterLock *_blkLock;
+    FileLinkReaderWriterLock *_blkLock;
 
     int _binFd;
     int _blkFd;
 
+    uint32_t _pid;
+
     std::string _cachePath;
     std::string _lockPath;
+    std::string _entriesPath;
+
+    FileBlockEntry *_cacheEntries; // essentially a shared memory shadow cache for the node... 
+                               // although care has to be taken cause this doesnt necessarily 
+                               // reflect the stated of the file cache, a.k.a only gauaranteed acurate when bin is locked
+
 
     ThreadPool<std::function<void()>> *_writePool;
     std::atomic<std::uint64_t> _myOutstandingWrites;
 };
 
-#endif /* BoundedFilelockCache_H */
+#endif /* BoundedLinkfileCache_H */

@@ -72,7 +72,7 @@
 //
 //*EndLicense****************************************************************
 
-#include "NewFileCache.h"
+#include "FileCache.h"
 #include "Config.h"
 #include "Connection.h"
 #include "ConnectionPool.h"
@@ -97,7 +97,7 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-NewFileCache::NewFileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string filePath) : NewBoundedCache(cacheName, type, cacheSize, blockSize, associativity),
+FileCache::FileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string filePath) : BoundedCache(cacheName, type, cacheSize, blockSize, associativity),
                                                                                                                                                             _open((unixopen_t)dlsym(RTLD_NEXT, "open")),
                                                                                                                                                             _close((unixclose_t)dlsym(RTLD_NEXT, "close")),
                                                                                                                                                             _read((unixread_t)dlsym(RTLD_NEXT, "read")),
@@ -201,7 +201,7 @@ NewFileCache::NewFileCache(std::string cacheName, CacheType type, uint64_t cache
     stats.end(false, CacheStats::Metric::constructor);
 }
 
-NewFileCache::~NewFileCache() {
+FileCache::~FileCache() {
     //std::cout<<"[TAZER] " << "deleting " << _name << " in shared memory cache, collisions: " << _collisions << std::endl;
     //std::cout<<"[TAZER] " << "numBlks: " << _numBlocks << " numBins: " << _numBins << " cacheSize: " << _cacheSize << std::endl;
     stats.start(false, CacheStats::Metric::destructor);
@@ -229,7 +229,7 @@ NewFileCache::~NewFileCache() {
 
 
 
-void NewFileCache::writeToFile(int fd, uint64_t size, uint8_t *buff) {
+void FileCache::writeToFile(int fd, uint64_t size, uint8_t *buff) {
     uint8_t *local = buff;
     while (size) {
         int bytes = (*_write)(fd, local, size);
@@ -244,7 +244,7 @@ void NewFileCache::writeToFile(int fd, uint64_t size, uint8_t *buff) {
     }
 }
 
-void NewFileCache::readFromFile(int fd, uint64_t size, uint8_t *buff) {
+void FileCache::readFromFile(int fd, uint64_t size, uint8_t *buff) {
     uint8_t *local = buff;
     while (size) {
         // debug() << "reading " << size << " more" << std::endl;
@@ -260,7 +260,7 @@ void NewFileCache::readFromFile(int fd, uint64_t size, uint8_t *buff) {
     }
 }
 
-void NewFileCache::pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset) {
+void FileCache::pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset) {
     uint8_t *local = buff;
     while (size) {
         int bytes = pwrite(fd, local, size, offset);
@@ -276,7 +276,7 @@ void NewFileCache::pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t o
     }
 }
 
-void NewFileCache::preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset) {
+void FileCache::preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset) {
     uint8_t *local = buff;
     
     while (size) {
@@ -293,7 +293,7 @@ void NewFileCache::preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t 
     }
 }
 
-void NewFileCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size) {
+void FileCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size) {
     
 
     if (size > _blockSize){
@@ -307,7 +307,7 @@ void NewFileCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t
         exit(0);
     }
 }
-uint8_t *NewFileCache::getBlockData(unsigned int blockIndex) {
+uint8_t *FileCache::getBlockData(unsigned int blockIndex) {
     uint8_t *buff = NULL;
     buff = new uint8_t[_blockSize]; //we could make a pre allocated buff for this...
     int fd = _blocksfd;
@@ -315,11 +315,11 @@ uint8_t *NewFileCache::getBlockData(unsigned int blockIndex) {
     return buff;
 }
 
-void NewFileCache::cleanUpBlockData(uint8_t *data) {
+void FileCache::cleanUpBlockData(uint8_t *data) {
     delete[] data;
 }
 
-void NewFileCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate, Request* req) {
+void FileCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate, Request* req) {
     req->trace(_name)<<"setting block: "<<blockEntryStr(blk)<<std::endl;
     blk->fileIndex = fileIndex;
     blk->blockIndex = blockIndex;
@@ -338,7 +338,7 @@ void NewFileCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockI
     req->trace(_name)<<"blockset: "<<blockEntryStr(blk)<<std::endl;
 }
 
-typename NewBoundedCache<MultiReaderWriterLock>::BlockEntry* NewFileCache::getBlockEntry(uint32_t blockIndex, Request* req){
+typename BoundedCache<MultiReaderWriterLock>::BlockEntry* FileCache::getBlockEntry(uint32_t blockIndex, Request* req){
     return (BlockEntry*)&_blkIndex[blockIndex];
 }
 
@@ -350,7 +350,7 @@ typename NewBoundedCache<MultiReaderWriterLock>::BlockEntry* NewFileCache::getBl
 // there is a potential race between when a block is available and when we capture the originating cache
 // having origCache be atomic ensures we always get a valid ID (even though it may not always be 100% acurate)
 // we are willing to accept some small error in attribution of stats
-bool NewFileCache::blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs, uint32_t cnt, CacheType *origCache) {
+bool FileCache::blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs, uint32_t cnt, CacheType *origCache) {
     bool avail = _blkIndex[index].status == BLK_AVAIL;
     if (origCache && avail) {
         *origCache = CacheType::empty;
@@ -366,7 +366,7 @@ bool NewFileCache::blockAvailable(unsigned int index, unsigned int fileIndex, bo
 }
 
 
-std::vector<NewBoundedCache<MultiReaderWriterLock>::BlockEntry*> NewFileCache::readBin(uint32_t binIndex) {
+std::vector<BoundedCache<MultiReaderWriterLock>::BlockEntry*> FileCache::readBin(uint32_t binIndex) {
     std::vector<BlockEntry*> entries;
     int startIndex = binIndex * _associativity;
     for (uint32_t i = 0; i < _associativity; i++) {
@@ -375,29 +375,29 @@ std::vector<NewBoundedCache<MultiReaderWriterLock>::BlockEntry*> NewFileCache::r
     return entries;
 }
 
-std::string  NewFileCache::blockEntryStr(BlockEntry *entry){
+std::string  FileCache::blockEntryStr(BlockEntry *entry){
     return entry->str() + " ac: "+ std::to_string(((MemBlockEntry*)entry)->activeCnt);
 }
 
-int NewFileCache::incBlkCnt(BlockEntry * entry, Request* req) {
+int FileCache::incBlkCnt(BlockEntry * entry, Request* req) {
     req->trace(_name)<<"incrementing"<<std::endl;
     // debug()<<"incrementing "<<blockEntryStr(entry)<<std::endl;
     return ((MemBlockEntry*)entry)->activeCnt.fetch_add(1);
 }
-int NewFileCache::decBlkCnt(BlockEntry * entry, Request* req) {
+int FileCache::decBlkCnt(BlockEntry * entry, Request* req) {
     req->trace(_name)<<"decrementing"<<std::endl;
     // debug()<<"decrementing "<<blockEntryStr(entry)<<std::endl;
     return ((MemBlockEntry*)entry)->activeCnt.fetch_sub(1);
 }
 
-bool NewFileCache::anyUsers(BlockEntry * entry, Request* req) {
+bool FileCache::anyUsers(BlockEntry * entry, Request* req) {
     return ((MemBlockEntry*)entry)->activeCnt;
 }
 
-Cache *NewFileCache::addNewFileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath) {
+Cache *FileCache::addFileCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath) {
     return Trackable<std::string, Cache *>::AddTrackable(
         cacheName, [&]() -> Cache * {
-            Cache *temp = new NewFileCache(cacheName, type, cacheSize, blockSize, associativity,cachePath);
+            Cache *temp = new FileCache(cacheName, type, cacheSize, blockSize, associativity,cachePath);
             return temp;
         });
 }

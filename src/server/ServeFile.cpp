@@ -84,9 +84,9 @@
 #include <unistd.h>
 
 #include "caches/Cache.h"
-#include "caches/bounded/NewBoundedFilelockCache.h"
-#include "caches/bounded/NewMemoryCache.h"
-#include "caches/bounded/NewSharedMemoryCache.h"
+#include "caches/bounded/BoundedFilelockCache.h"
+#include "caches/bounded/MemoryCache.h"
+#include "caches/bounded/SharedMemoryCache.h"
 #include "caches/unbounded/UrlCache.h"
 #include "caches/LocalFileCache.h"
 #include "caches/NetworkCache.h"
@@ -218,12 +218,12 @@ bool ServeFile::addConnections() {
 
 void ServeFile::cache_init(void) {
     uint64_t level = 0;
-    Cache *c = NewMemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::serverCacheSize, Config::serverCacheBlocksize, Config::serverCacheAssociativity);
+    Cache *c = MemoryCache::addMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::serverCacheSize, Config::serverCacheBlocksize, Config::serverCacheAssociativity);
     err() << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
     ServeFile::_cache.addCacheLevel(c, ++level);
 
     if (Config::useSharedMemoryCache) {
-        c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME, CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
+        c = SharedMemoryCache::addSharedMemoryCache(SHAREDMEMORYCACHENAME, CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
         err() << "[TAZER] " << "shared mem  cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }
@@ -252,7 +252,7 @@ void ServeFile::cache_init(void) {
     
 
     if (Config::useBoundedFilelockCache) {
-        c = NewBoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
+        c = BoundedFilelockCache::addBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
         err() << "[TAZER] " << "bounded filelock cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }

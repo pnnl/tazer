@@ -72,7 +72,7 @@
 //
 //*EndLicense****************************************************************
 
-#include "NewSharedMemoryCache.h"
+#include "SharedMemoryCache.h"
 #include "Config.h"
 #include "Connection.h"
 #include "ConnectionPool.h"
@@ -95,7 +95,7 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-NewSharedMemoryCache::NewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : NewBoundedCache(cacheName, type, cacheSize, blockSize, associativity) {
+SharedMemoryCache::SharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : BoundedCache(cacheName, type, cacheSize, blockSize, associativity) {
     // std::cout<<"[TAZER] " << "Constructing " << _name << " in shared memory cache" << std::endl;
     stats.start(false, CacheStats::Metric::constructor);
     std::string filePath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
@@ -158,7 +158,7 @@ NewSharedMemoryCache::NewSharedMemoryCache(std::string cacheName, CacheType type
     stats.end(false, CacheStats::Metric::constructor);
 }
 
-NewSharedMemoryCache::~NewSharedMemoryCache() {
+SharedMemoryCache::~SharedMemoryCache() {
     //std::cout<<"[TAZER] " << "deleting " << _name << " in shared memory cache, collisions: " << _collisions << std::endl;
     //std::cout<<"[TAZER] " << "numBlks: " << _numBlocks << " numBins: " << _numBins << " cacheSize: " << _cacheSize << std::endl;
     stats.start(false, CacheStats::Metric::destructor);
@@ -183,19 +183,19 @@ NewSharedMemoryCache::~NewSharedMemoryCache() {
     delete _binLock;
 }
 
-void NewSharedMemoryCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size) {
+void SharedMemoryCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size) {
     memcpy(&_blocks[blockIndex * _blockSize], data, size);
 }
-uint8_t *NewSharedMemoryCache::getBlockData(unsigned int blockIndex) {
+uint8_t *SharedMemoryCache::getBlockData(unsigned int blockIndex) {
     uint8_t *temp = (uint8_t *)&_blocks[blockIndex * _blockSize];
     return temp;
 }
 
-void NewSharedMemoryCache::cleanUpBlockData(uint8_t *data) {
+void SharedMemoryCache::cleanUpBlockData(uint8_t *data) {
     // debug()<<_name<<" (not)delete data"<<std::endl;
 }
 
-void NewSharedMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate, Request* req) {
+void SharedMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate, Request* req) {
     req->trace(_name)<<"setting block: "<<blockEntryStr(blk)<<std::endl;
     blk->fileIndex = fileIndex;
     blk->blockIndex = blockIndex;
@@ -214,7 +214,7 @@ void NewSharedMemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_
     req->trace(_name)<<"blockset: "<<blockEntryStr(blk)<<std::endl;
 }
 
-typename NewBoundedCache<MultiReaderWriterLock>::BlockEntry* NewSharedMemoryCache::getBlockEntry(uint32_t blockIndex, Request* req){
+typename BoundedCache<MultiReaderWriterLock>::BlockEntry* SharedMemoryCache::getBlockEntry(uint32_t blockIndex, Request* req){
     return (BlockEntry*)&_blkIndex[blockIndex];
 }
 
@@ -226,7 +226,7 @@ typename NewBoundedCache<MultiReaderWriterLock>::BlockEntry* NewSharedMemoryCach
 // there is a potential race between when a block is available and when we capture the originating cache
 // having origCache be atomic ensures we always get a valid ID (even though it may not always be 100% acurate)
 // we are willing to accept some small error in attribution of stats
-bool NewSharedMemoryCache::blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs, uint32_t cnt, CacheType *origCache) {
+bool SharedMemoryCache::blockAvailable(unsigned int index, unsigned int fileIndex, bool checkFs, uint32_t cnt, CacheType *origCache) {
     bool avail = _blkIndex[index].status == BLK_AVAIL;
     if (origCache && avail) {
         *origCache = CacheType::empty;
@@ -242,7 +242,7 @@ bool NewSharedMemoryCache::blockAvailable(unsigned int index, unsigned int fileI
 }
 
 
-std::vector<NewBoundedCache<MultiReaderWriterLock>::BlockEntry*> NewSharedMemoryCache::readBin(uint32_t binIndex) {
+std::vector<BoundedCache<MultiReaderWriterLock>::BlockEntry*> SharedMemoryCache::readBin(uint32_t binIndex) {
     std::vector<BlockEntry*> entries;
     int startIndex = binIndex * _associativity;
     for (uint32_t i = 0; i < _associativity; i++) {
@@ -251,27 +251,27 @@ std::vector<NewBoundedCache<MultiReaderWriterLock>::BlockEntry*> NewSharedMemory
     return entries;
 }
 
-std::string  NewSharedMemoryCache::blockEntryStr(BlockEntry *entry){
+std::string  SharedMemoryCache::blockEntryStr(BlockEntry *entry){
     return entry->str() + " ac: "+ std::to_string(((MemBlockEntry*)entry)->activeCnt);
 }
 
-int NewSharedMemoryCache::incBlkCnt(BlockEntry * entry, Request* req) {
+int SharedMemoryCache::incBlkCnt(BlockEntry * entry, Request* req) {
     req->trace(_name)<<"incrementing"<<std::endl;
     return ((MemBlockEntry*)entry)->activeCnt.fetch_add(1);
 }
-int NewSharedMemoryCache::decBlkCnt(BlockEntry * entry, Request* req) {
+int SharedMemoryCache::decBlkCnt(BlockEntry * entry, Request* req) {
     req->trace(_name)<<"decrementing"<<std::endl;
     return ((MemBlockEntry*)entry)->activeCnt.fetch_sub(1);
 }
 
-bool NewSharedMemoryCache::anyUsers(BlockEntry * entry, Request* req) {
+bool SharedMemoryCache::anyUsers(BlockEntry * entry, Request* req) {
     return ((MemBlockEntry*)entry)->activeCnt;
 }
 
-Cache *NewSharedMemoryCache::addNewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) {
+Cache *SharedMemoryCache::addSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) {
     return Trackable<std::string, Cache *>::AddTrackable(
         cacheName, [&]() -> Cache * {
-            Cache *temp = new NewSharedMemoryCache(cacheName, type, cacheSize, blockSize, associativity);
+            Cache *temp = new SharedMemoryCache(cacheName, type, cacheSize, blockSize, associativity);
             return temp;
         });
 }

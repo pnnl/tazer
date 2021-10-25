@@ -72,7 +72,7 @@
 // 
 //*EndLicense****************************************************************
 
-#include "NewBoundedCache.h"
+#include "BoundedCache.h"
 #include "Config.h"
 #include "FcntlReaderWriterLock.h"
 #include "FileLinkReaderWriterLock.h"
@@ -93,7 +93,7 @@
 #define DPRINTF(...)
 
 template <class Lock>
-NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : Cache(cacheName,type),
+BoundedCache<Lock>::BoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : Cache(cacheName,type),
                                                                                                                           _cacheSize(cacheSize),
                                                                                                                           _blockSize(blockSize),
                                                                                                                           _associativity(associativity),
@@ -102,7 +102,7 @@ NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, ui
                                                                                                                           _prefetchCollisions(0),
                                                                                                                           _outstanding(0) {
 
-    // log(this) /*debug()*/<< "Constructing " << _name << " in NewBoundedCache" << std::endl;
+    // log(this) /*debug()*/<< "Constructing " << _name << " in BoundedCache" << std::endl;
     stats.start(false, CacheStats::Metric::constructor);
     log(this) << _name << " " << _cacheSize << " " << _blockSize << " " << _numBlocks << std::endl;
     if (_associativity == 0 || _associativity > _numBlocks) { //make fully associative
@@ -121,7 +121,7 @@ NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, ui
 }
 
 template <class Lock>
-NewBoundedCache<Lock>::~NewBoundedCache() {
+BoundedCache<Lock>::~BoundedCache() {
     _terminating = true;
     log(this) << _name << " cache collisions: " << _collisions.load() << " prefetch collisions: " << _prefetchCollisions.load() << std::endl;
     // for (uint32_t i = 0; i < _numBlocks; i++) {
@@ -131,13 +131,13 @@ NewBoundedCache<Lock>::~NewBoundedCache() {
     //     }
     // }
 
-    log(this) << "deleting " << _name << " in NewBoundedCache" << std::endl;
+    log(this) << "deleting " << _name << " in BoundedCache" << std::endl;
     delete _localLock;
 }
 
 
 template <class Lock>
-std::shared_ptr<typename NewBoundedCache<Lock>::BlockEntry> NewBoundedCache<Lock>::getCompareBlkEntry(uint32_t index, uint32_t fileIndex) {
+std::shared_ptr<typename BoundedCache<Lock>::BlockEntry> BoundedCache<Lock>::getCompareBlkEntry(uint32_t index, uint32_t fileIndex) {
     std::shared_ptr<BlockEntry> entry = std::make_shared<BlockEntry>();
     entry->blockIndex= index;
     entry->fileIndex = fileIndex;
@@ -145,12 +145,12 @@ std::shared_ptr<typename NewBoundedCache<Lock>::BlockEntry> NewBoundedCache<Lock
 }
 
 template <class Lock>
-bool NewBoundedCache<Lock>::sameBlk(BlockEntry *blk1, BlockEntry *blk2) {
+bool BoundedCache<Lock>::sameBlk(BlockEntry *blk1, BlockEntry *blk2) {
     return blk1->fileIndex == blk2->fileIndex && blk1->blockIndex == blk2->blockIndex;
 }
 
 template <class Lock>
-uint32_t NewBoundedCache<Lock>::getBinIndex(uint32_t index, uint32_t fileIndex) {
+uint32_t BoundedCache<Lock>::getBinIndex(uint32_t index, uint32_t fileIndex) {
     _localLock->readerLock();
     uint64_t temp = _fileMap[fileIndex].hash + index;
     _localLock->readerUnlock();
@@ -158,7 +158,7 @@ uint32_t NewBoundedCache<Lock>::getBinIndex(uint32_t index, uint32_t fileIndex) 
 }
 
 template <class Lock>
-uint32_t NewBoundedCache<Lock>::getBinOffset(uint32_t index, uint32_t fileIndex) {
+uint32_t BoundedCache<Lock>::getBinOffset(uint32_t index, uint32_t fileIndex) {
     _localLock->readerLock();
     uint64_t temp = _fileMap[fileIndex].hash + index;
     _localLock->readerUnlock();
@@ -166,7 +166,7 @@ uint32_t NewBoundedCache<Lock>::getBinOffset(uint32_t index, uint32_t fileIndex)
 }
 
 template <class Lock>
-typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::getBlock(uint32_t index, uint32_t fileIndex, Request* req){
+typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::getBlock(uint32_t index, uint32_t fileIndex, Request* req){
     req->trace(_name)<<"searching for block: "<<index<<" "<<fileIndex<<std::endl;
     uint32_t binIndex = getBinIndex(index, fileIndex);
     auto blkEntries = readBin(binIndex);
@@ -185,7 +185,7 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::getBlock(uint
 }
 
 template <class Lock>
-typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(uint32_t index, uint32_t fileIndex, Request* req) {
+typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_t index, uint32_t fileIndex, Request* req) {
     req->trace(_name)<<"searching for oldest block: "<<index<<" "<<fileIndex<<std::endl;
     BlockEntry* blkEntry = NULL;
     uint32_t minTime = -1; //this is max uint32_t
@@ -252,12 +252,12 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
 }
 
 template <class Lock>
-void NewBoundedCache<Lock>::cleanUpBlockData(uint8_t *data) {
+void BoundedCache<Lock>::cleanUpBlockData(uint8_t *data) {
     // debug()<<_name<<" (not) delete data"<<std::endl;
 }
 
 template <class Lock>
-bool NewBoundedCache<Lock>::writeBlock(Request *req) {
+bool BoundedCache<Lock>::writeBlock(Request *req) {
     if (_type == CacheType::globalFileLock){
         req->printTrace=false;
         req->globalTrigger=false;
@@ -401,7 +401,7 @@ bool NewBoundedCache<Lock>::writeBlock(Request *req) {
 }
 
 template <class Lock>
-void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
+void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
     std::thread::id thread_id = req->threadId;
     stats.start((priority != 0), CacheStats::Metric::read, thread_id); //read
     stats.start((priority != 0), CacheStats::Metric::ovh, thread_id); //ovh
@@ -589,11 +589,11 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
 
 //TODO: merge/reimplement from old cache structure...
 template <class Lock>
-void NewBoundedCache<Lock>::cleanReservation() {
+void BoundedCache<Lock>::cleanReservation() {
 }
 
 template <class Lock>
-void NewBoundedCache<Lock>::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
+void BoundedCache<Lock>::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
     // log(this) /*debug()*/<< "adding file: " << filename << " " << (void *)this << " " << (void *)_nextLevel << std::endl;
     // log(this) /*debug()*/ <<  _name << " " << filename << " " << fileSize << " " << blockSize << std::endl;
     trackBlock(_name, "[ADD_FILE]", index, blockSize, fileSize);
@@ -614,13 +614,13 @@ void NewBoundedCache<Lock>::addFile(uint32_t index, std::string filename, uint64
     }
 }
 
-// template class NewBoundedCache<ReaderWriterLock>;
-template class NewBoundedCache<MultiReaderWriterLock>;
-template class NewBoundedCache<FcntlBoundedReaderWriterLock>;
-template class NewBoundedCache<FileLinkReaderWriterLock>;
+// template class BoundedCache<ReaderWriterLock>;
+template class BoundedCache<MultiReaderWriterLock>;
+template class BoundedCache<FcntlBoundedReaderWriterLock>;
+template class BoundedCache<FileLinkReaderWriterLock>;
 
 template <class Lock>
-void NewBoundedCache<Lock>::trackBlock(std::string cacheName, std::string action, uint32_t fileIndex, uint32_t  blockIndex, uint64_t priority) {
+void BoundedCache<Lock>::trackBlock(std::string cacheName, std::string action, uint32_t fileIndex, uint32_t  blockIndex, uint64_t priority) {
     if (Config::TrackBlockStats) {
         auto fut = std::async(std::launch::async, [cacheName, action, fileIndex,  blockIndex, priority] {
             unixopen_t unixopen = (unixopen_t)dlsym(RTLD_NEXT, "open");

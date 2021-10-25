@@ -100,27 +100,25 @@
 MemoryCache::MemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : BoundedCache(cacheName, type, cacheSize, blockSize, associativity) {
     std::cout << "[TAZER] "
               << "Constructing " << _name << " in memory cache" << std::endl;
-    std::thread::id thread_id = std::this_thread::get_id();
-    stats.checkThread(thread_id, true);
-    stats.start(false, CacheStats::Metric::constructor, thread_id);
+    stats.start(false, CacheStats::Metric::constructor);
     _binLock = new MultiReaderWriterLock(_numBins);
     _binLock->writerLock(0);
     _blocks = new uint8_t[_cacheSize];
     _blkIndex = new MemBlockEntry[_numBlocks];
     memset(_blocks, 0, _cacheSize);
     // memset(_blkIndex, 0, _numBlocks * sizeof(MemBlockEntry));
+    debug() <<"numBins :"<< _numBins <<" cacheSize: "<<_cacheSize<<" _numBlocks: "<<_numBlocks<<" "<<std::endl;
     for (uint32_t i=0;i<_numBlocks;i++){
-        _blkIndex[i].init(this);
+        _blkIndex[i].init(this,i);
+        // debug()<<_blkIndex[i].str()<<std::endl;
     }
     // log(this) << (void *)_blkIndex << " " << (void *)((uint8_t *)_blkIndex + (_numBlocks * sizeof(BlockEntry))) << std::endl;
     _binLock->writerUnlock(0);
-    stats.end(false, CacheStats::Metric::constructor, thread_id);
+    stats.end(false, CacheStats::Metric::constructor);
 }
 
 MemoryCache::~MemoryCache() {
-    std::thread::id thread_id = std::this_thread::get_id();
-    stats.checkThread(thread_id, true);
-    stats.start(false, CacheStats::Metric::destructor, thread_id);
+    stats.start(false, CacheStats::Metric::destructor);
     // log(this) << "deleting " << _name << " in memory cache, collisions: " << _collisions << std::endl;
     // std::cout<<"[TAZER] " << "numBlks: " << _numBlocks << " numBins: " << _numBins << " cacheSize: " << _cacheSize << std::endl;
     uint32_t numEmpty = 0;
@@ -139,33 +137,19 @@ MemoryCache::~MemoryCache() {
     delete[] _blocks;
     delete[] _blkIndex;
     delete _binLock;
-    stats.end(false, CacheStats::Metric::destructor, thread_id);
+    stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
     std::cout << std::endl;
 }
 
 void MemoryCache::setBlockData(uint8_t *data, unsigned int blockIndex, uint64_t size) {
-    // uint64_t dstart = Timer::getCurrentTime();
     memcpy(&_blocks[blockIndex * _blockSize], data, size);
-    // auto elapsed = Timer::getCurrentTime() - dstart;
-    // _dataTime += elapsed;
-    // _dataAmt += _blockSize;
-    // updateIoRate(elapsed,_blockSize);
 }
 
 uint8_t *MemoryCache::getBlockData(unsigned int blockIndex) {
-    // auto dstart = Timer::getCurrentTime();
-
-    // auto start = Timer::getCurrentTime();
     uint8_t *temp = (uint8_t *)&_blocks[blockIndex * _blockSize];
-
-    // auto elapsed = Timer::getCurrentTime()-start;
-    // updateIoRate(elapsed,_blockSize);
-    // _dataTime += Timer::getCurrentTime() - dstart;
-    // _dataAmt += _blockSize;
     return temp;
 }
-
 
 void MemoryCache::cleanUpBlockData(uint8_t *data) {
     // debug()<<_name<<" (not)delete data"<<std::endl;
@@ -173,15 +157,26 @@ void MemoryCache::cleanUpBlockData(uint8_t *data) {
 
 //Must lock first!
 //This uses the actual index (it does not do a search)
-void MemoryCache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched) {
-    _blkIndex[index].fileIndex = fileIndex + 1;
-    _blkIndex[index].blockIndex = blockIndex + 1;
-    _blkIndex[index].timeStamp = Timer::getCurrentTime();
+void MemoryCache::blockSet(BlockEntry* blk, uint32_t fileIndex, uint32_t blockIndex, uint8_t status, CacheType type, int32_t prefetched, int activeUpdate, Request* req) {
+    blk->fileIndex = fileIndex;
+    blk->blockIndex = blockIndex;
+    blk->timeStamp = Timer::getCurrentTime();
     if (prefetched >= 0) {
-        _blkIndex[index].prefetched = prefetched;
+        blk->prefetched = prefetched;
     }
-    _blkIndex[index].origCache.store(type);
-    _blkIndex[index].status = status;
+    blk->origCache.store(type);
+    blk->status = status;
+    if (activeUpdate >0 ){
+        incBlkCnt(blk,NULL);
+    }
+    else if (activeUpdate < 0){
+        decBlkCnt(blk,NULL);
+    }
+
+}
+
+typename BoundedCache<MultiReaderWriterLock>::BlockEntry* MemoryCache::getBlockEntry(uint32_t blockIndex, Request* req){
+    return (BlockEntry*)&_blkIndex[blockIndex];
 }
 
 // blockAvailable calls are not protected by locks
@@ -206,42 +201,31 @@ bool MemoryCache::blockAvailable(unsigned int index, unsigned int fileIndex, boo
     return avail;
 }
 
-void MemoryCache::readBlockEntry(uint32_t blockIndex, BlockEntry *entry) {
-    *entry = *(BlockEntry *)&_blkIndex[blockIndex];
-}
-void MemoryCache::writeBlockEntry(uint32_t blockIndex, BlockEntry *entry) {
-    *(BlockEntry *)&_blkIndex[blockIndex] = *entry;
-}
-
-void MemoryCache::readBin(uint32_t binIndex, BlockEntry *entries) {
+std::vector<BoundedCache<MultiReaderWriterLock>::BlockEntry*> MemoryCache::readBin(uint32_t binIndex) {
+    std::vector<BlockEntry*> entries;
     int startIndex = binIndex * _associativity;
     for (uint32_t i = 0; i < _associativity; i++) {
-        readBlockEntry(i + startIndex, &entries[i]);
-    }
-}
-
-std::vector<std::shared_ptr<BoundedCache<MultiReaderWriterLock>::BlockEntry>> MemoryCache::readBin(uint32_t binIndex) {
-    std::vector<std::shared_ptr<BlockEntry>> entries;
-    int startIndex = binIndex * _associativity;
-    for (uint32_t i = 0; i < _associativity; i++) {
-        entries.emplace_back(new MemBlockEntry());
-        *entries[i].get() = *(BlockEntry *)&_blkIndex[i + startIndex];
+        entries.push_back((BlockEntry *)&_blkIndex[i + startIndex]);
     }
     return entries;
 }
 
-int MemoryCache::incBlkCnt(uint32_t blk, Request* req) {
-    return _blkIndex[blk].activeCnt.fetch_add(1);
-}
-int MemoryCache::decBlkCnt(uint32_t blk, Request* req) {
-    return _blkIndex[blk].activeCnt.fetch_sub(1);
+std::string MemoryCache::blockEntryStr(BlockEntry *entry){
+    return entry->str() + " ac: "+ std::to_string(((MemBlockEntry*)entry)->activeCnt);
 }
 
-bool MemoryCache::anyUsers(uint32_t blk, Request* req) {
-    return _blkIndex[blk].activeCnt;
+int MemoryCache::incBlkCnt(BlockEntry * entry, Request* req) {
+    return ((MemBlockEntry*)entry)->activeCnt.fetch_add(1);
+}
+int MemoryCache::decBlkCnt(BlockEntry * entry, Request* req) {
+    return ((MemBlockEntry*)entry)->activeCnt.fetch_sub(1);
 }
 
-Cache *MemoryCache::addNewMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) {
+bool MemoryCache::anyUsers(BlockEntry * entry, Request* req) {
+    return ((MemBlockEntry*)entry)->activeCnt;
+}
+
+Cache *MemoryCache::addMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) {
     return Trackable<std::string, Cache *>::AddTrackable(
         cacheName, [&]() -> Cache * {
             Cache *temp = new MemoryCache(cacheName,type, cacheSize, blockSize, associativity);

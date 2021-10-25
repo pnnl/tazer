@@ -74,9 +74,9 @@
 
 #include "LocalFile.h"
 #include "caches/Cache.h"
-#include "caches/bounded/NewBoundedFilelockCache.h"
-#include "caches/bounded/NewSharedMemoryCache.h"
-#include "caches/bounded/NewMemoryCache.h"
+#include "caches/bounded/BoundedFilelockCache.h"
+#include "caches/bounded/SharedMemoryCache.h"
+#include "caches/bounded/MemoryCache.h"
 #include "caches/unbounded/FilelockCache.h"
 #include "caches/unbounded/FcntlCache.h"
 #include "caches/unbounded/UrlCache.h"
@@ -120,13 +120,13 @@ void LocalFile::cache_init() {
     Cache *c = NULL;
 
     if (Config::useMemoryCache) {
-        c = NewMemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
+        c = MemoryCache::addMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
         std::cerr << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
         LocalFile::_cache->addCacheLevel(c, ++level);
     }
 
     if (Config::useSharedMemoryCache) {
-        c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
+        c = SharedMemoryCache::addSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
         std::cerr << "[TAZER] " << "shared mem cache: " << (void *)c << std::endl;
         LocalFile::_cache->addCacheLevel(c, ++level);
     }

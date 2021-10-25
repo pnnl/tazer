@@ -72,8 +72,8 @@
 // 
 //*EndLicense****************************************************************
 
-#ifndef NewBoundedCache_H
-#define NewBoundedCache_H
+#ifndef BoundedCache_H
+#define BoundedCache_H
 #include "Cache.h"
 #include "Loggable.h"
 #include "ReaderWriterLock.h"
@@ -93,10 +93,10 @@
 
 // struct dummy {};
 template <class Lock>
-class NewBoundedCache : public Cache {
+class BoundedCache : public Cache {
   public:
-    NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
-    virtual ~NewBoundedCache();
+    BoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
+    virtual ~BoundedCache();
 
     virtual bool writeBlock(Request *req);
     virtual void readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority);
@@ -122,7 +122,7 @@ class NewBoundedCache : public Cache {
         // there is a potential race between when a block is available and when we capture the originating cache
         // having origCache be atomic ensures we always get a valid ID (even though it may not always be 100% acurate)
         // we are willing to accept some small error in attribution of stats
-        void init(NewBoundedCache* c,uint32_t entryId){
+        void init(BoundedCache* c,uint32_t entryId){
           // memset(this,0,sizeof(BlockEntry));
           id=entryId;
           fileIndex =0;
@@ -204,4 +204,4 @@ class NewBoundedCache : public Cache {
     void trackBlock(std::string cacheName, std::string action, uint32_t fileIndex, uint32_t blockIndex, uint64_t priority);
 };
 
-#endif /* NewBoundedCache_H */
+#endif /* BoundedCache_H */
