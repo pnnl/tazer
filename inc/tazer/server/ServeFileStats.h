@@ -99,12 +99,11 @@ class ServeFileStats {
 
     void print();
 
-    void start(Metric metric, std::thread::id id);
-    void end(Metric metric, std::thread::id id);
-    void addTime(Metric metric, uint64_t time, std::thread::id id, uint64_t cnt = 0);
-    void addAmt(Metric metric, uint64_t mnt, std::thread::id id);
-    void addThread(std::thread::id id);
-    bool checkThread(std::thread::id id, bool addIfNotFound);
+    void start(Metric metric);
+    void end(Metric metric);
+    void addTime(Metric metric, uint64_t time, uint64_t cnt = 0);
+    void addAmt(Metric metric, uint64_t mnt);
+    
 
     static uint64_t getCurrentTime();
     static char *printTime();
@@ -122,6 +121,7 @@ class ServeFileStats {
         std::atomic<uint64_t> *amt[ServeFileStats::Metric::last];
     };
 
+    void addThread(std::thread::id id);
     const double billion = 1000000000;
     std::atomic<uint64_t> *_time[ServeFileStats::Metric::last];
     std::atomic<uint64_t> *_cnt[ServeFileStats::Metric::last];

@@ -103,9 +103,7 @@ NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, ui
                                                                                                                           _outstanding(0) {
 
     // log(this) /*debug()*/<< "Constructing " << _name << " in NewBoundedCache" << std::endl;
-    std::thread::id thread_id = std::this_thread::get_id();
-    stats.checkThread(thread_id, true);
-    stats.start(false, CacheStats::Metric::constructor, thread_id);
+    stats.start(false, CacheStats::Metric::constructor);
     log(this) << _name << " " << _cacheSize << " " << _blockSize << " " << _numBlocks << std::endl;
     if (_associativity == 0 || _associativity > _numBlocks) { //make fully associative
         _associativity = _numBlocks;
@@ -119,7 +117,7 @@ NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, ui
     debug()<< _name << " " << _cacheSize << " " << _blockSize << " " << _numBlocks << " " << _associativity << " " << _numBins << std::endl;
 
     _localLock = new ReaderWriterLock();
-    stats.end(false, CacheStats::Metric::constructor, thread_id);
+    stats.end(false, CacheStats::Metric::constructor);
 }
 
 template <class Lock>
@@ -137,11 +135,6 @@ NewBoundedCache<Lock>::~NewBoundedCache() {
     delete _localLock;
 }
 
-// template <class Lock>
-// void NewBoundedCache<Lock>::getCompareBlkEntry(uint32_t index, uint32_t fileIndex, BlockEntry *entry) {
-//     entry->blockIndex = index;
-//     entry->fileIndex = fileIndex;
-// }
 
 template <class Lock>
 std::shared_ptr<typename NewBoundedCache<Lock>::BlockEntry> NewBoundedCache<Lock>::getCompareBlkEntry(uint32_t index, uint32_t fileIndex) {
@@ -236,7 +229,6 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
     }
 
     std::thread::id thread_id = req->threadId;
-    stats.checkThread(thread_id, true);
     //If a prefetched block is found, we evict it
     if (Config::prefetchEvict && minPrefetchTime != (uint32_t)-1 && minPrefetchEntry) {
         _prefetchCollisions++;
@@ -411,7 +403,6 @@ bool NewBoundedCache<Lock>::writeBlock(Request *req) {
 template <class Lock>
 void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
     std::thread::id thread_id = req->threadId;
-    stats.checkThread(thread_id, true);
     stats.start((priority != 0), CacheStats::Metric::read, thread_id); //read
     stats.start((priority != 0), CacheStats::Metric::ovh, thread_id); //ovh
 

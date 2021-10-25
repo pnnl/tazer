@@ -237,7 +237,7 @@ const std::string sharedMemName("/" + tazer_id + "ioCache");
 
 
 
-
+const bool ThreadStats = getenv("TAZER_THREAD_STATS") ? atoi(getenv("TAZER_THREAD_STATS")) : 0;
 const bool TrackBlockStats = false;
 const bool TrackReads = false;
 const unsigned int FdsPerLocalFile = 10;

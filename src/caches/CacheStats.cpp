@@ -74,6 +74,7 @@
 
 #include "CacheStats.h"
 #include "Config.h"
+#include "Loggable.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -139,6 +140,7 @@ CacheStats::~CacheStats() {
         delete itor->second;
     }
     delete _thread_stats;
+    
 }
 
 void CacheStats::print(std::string cacheName) {
@@ -155,22 +157,24 @@ void CacheStats::print(std::string cacheName) {
         }
         std::cout << std::endl;
 
-        std::unordered_map<std::thread::id, CacheStats::ThreadMetric*>::iterator itor;
-        //uint64_t thread_count = 0;
-        for(itor = _thread_stats->begin(); itor != _thread_stats->end(); itor++) {
-            //thread_count++;
-            std::cout << "[TAZER] " << cacheName << " thread " << (*itor).first << std::endl;
-            for (int i = 0; i < lastMetric; i++) {
-                for (int j = 0; j < last; j++) {
-                    std::cout << "[TAZER] " << cacheName << " " << metricTypeName_cs[i] << " " << metricName_cs[j] << " " << itor->second->time[i][j]->load() / billion 
-                     << " " << itor->second->cnt[i][j]->load() << " " << itor->second->amt[i][j]->load() << std::endl;
+        if (Config::ThreadStats){
+            std::unordered_map<std::thread::id, CacheStats::ThreadMetric*>::iterator itor;
+            //uint64_t thread_count = 0;
+            for(itor = _thread_stats->begin(); itor != _thread_stats->end(); itor++) {
+                //thread_count++;
+                std::cout << "[TAZER] " << cacheName << " thread " << (*itor).first << std::endl;
+                for (int i = 0; i < lastMetric; i++) {
+                    for (int j = 0; j < last; j++) {
+                        std::cout << "[TAZER] " << cacheName << " " << metricTypeName_cs[i] << " " << metricName_cs[j] << " " << itor->second->time[i][j]->load() / billion 
+                        << " " << itor->second->cnt[i][j]->load() << " " << itor->second->amt[i][j]->load() << std::endl;
+                    }
+                    std::cout << "[TAZER] " << cacheName << " "
+                            << "BW: " << (itor->second->amt[i][0]->load() / 1000000.0) /
+                            ((itor->second->time[i][0]->load() + itor->second->time[i][3]->load() + itor->second->time[i][4]->load()) / billion)
+                            << " effective BW: " << (itor->second->amt[i][7]->load() / 1000000.0) / (itor->second->time[i][7]->load() / billion) << std::endl;
                 }
-                std::cout << "[TAZER] " << cacheName << " "
-                        << "BW: " << (itor->second->amt[i][0]->load() / 1000000.0) /
-                        ((itor->second->time[i][0]->load() + itor->second->time[i][3]->load() + itor->second->time[i][4]->load()) / billion)
-                         << " effective BW: " << (itor->second->amt[i][7]->load() / 1000000.0) / (itor->second->time[i][7]->load() / billion) << std::endl;
+                std::cout << std::endl;
             }
-            std::cout << std::endl;
         }
     }
 
@@ -202,11 +206,23 @@ void CacheStats::start(bool prefetch, Metric metric, std::thread::id id) {
 
     //these thread timers seem to segfault sometimes when reader lock is not used in threadStart and threadEnd
     //possibly because more than one thread can sometimes be working on the same thread id? atomics dont seem to be stopping this issue
-    _lock.readerLock();
-    uint64_t depth = (*_thread_stats)[id]->depth->load();
-    (*_thread_stats)[id]->current[depth]->store(getCurrentTime());
-    (*_thread_stats)[id]->depth->fetch_add(1);
-    _lock.readerUnlock();
+    if (Config::ThreadStats){
+        // if (id == std::thread::id()){
+        //     id = std::this_thread::get_id();
+        //     Loggable::debug()<<"Warning thread not supplied"<<std::endl;
+        // }
+
+        _lock.readerLock();
+        if (_thread_stats->find(id) == _thread_stats->end()){
+            _lock.readerUnlock();
+            addThread(id);
+            _lock.readerLock();
+        }
+        uint64_t depth = (*_thread_stats)[id]->depth->load();
+        (*_thread_stats)[id]->current[depth]->store(getCurrentTime());
+        (*_thread_stats)[id]->depth->fetch_add(1);
+        _lock.readerUnlock();
+    }
 }
 
 void CacheStats::end(bool prefetch, Metric metric, std::thread::id id) {
@@ -215,13 +231,25 @@ void CacheStats::end(bool prefetch, Metric metric, std::thread::id id) {
     _time[t][metric].fetch_add(getCurrentTime() - _current_cs[_depth_cs]);
     _cnt[t][metric].fetch_add(1);
 
-    _lock.readerLock();
-    (*_thread_stats)[id]->depth->fetch_sub(1);
-    uint64_t depth = (*_thread_stats)[id]->depth->load();
-    uint64_t current = (*_thread_stats)[id]->current[depth]->load();
-    (*_thread_stats)[id]->time[t][metric]->fetch_add(getCurrentTime() - current);
-    (*_thread_stats)[id]->cnt[t][metric]->fetch_add(1);
-    _lock.readerUnlock();
+
+    if (Config::ThreadStats){
+        // if (id == std::thread::id()){
+        //     id = std::this_thread::get_id();
+        //     Loggable::debug()<<"Warning thread not supplied"<<std::endl;
+        // }
+        _lock.readerLock();
+        if (_thread_stats->find(id) == _thread_stats->end()){
+            _lock.readerUnlock();
+            addThread(id);
+            _lock.readerLock();
+        }
+        (*_thread_stats)[id]->depth->fetch_sub(1);
+        uint64_t depth = (*_thread_stats)[id]->depth->load();
+        uint64_t current = (*_thread_stats)[id]->current[depth]->load();
+        (*_thread_stats)[id]->time[t][metric]->fetch_add(getCurrentTime() - current);
+        (*_thread_stats)[id]->cnt[t][metric]->fetch_add(1);
+        _lock.readerUnlock();
+    }
 }
 
 void CacheStats::addTime(bool prefetch, Metric metric, uint64_t time, std::thread::id id, uint64_t cnt) {
@@ -229,19 +257,41 @@ void CacheStats::addTime(bool prefetch, Metric metric, uint64_t time, std::threa
     _time[t][metric].fetch_add(time);
     _cnt[t][metric].fetch_add(cnt);
 
-    _lock.readerLock();
-    (*_thread_stats)[id]->time[t][metric]->fetch_add(time);
-    (*_thread_stats)[id]->cnt[t][metric]->fetch_add(cnt);
-    _lock.readerUnlock();
+    if (Config::ThreadStats){
+        // if (id == std::thread::id()){
+        //     id = std::this_thread::get_id();
+        //     Loggable::debug()<<"Warning thread not supplied"<<std::endl;
+        // }
+        _lock.readerLock();
+        if (_thread_stats->find(id) == _thread_stats->end()){
+            _lock.readerUnlock();
+            addThread(id);
+            _lock.readerLock();
+        }
+        (*_thread_stats)[id]->time[t][metric]->fetch_add(time);
+        (*_thread_stats)[id]->cnt[t][metric]->fetch_add(cnt);
+        _lock.readerUnlock();
+    }
 }
 
 void CacheStats::addAmt(bool prefetch, Metric metric, uint64_t amt, std::thread::id id) {
     CacheStats::MetricType t = prefetch ? CacheStats::MetricType::prefetch : CacheStats::MetricType::request;
     _amt[t][metric].fetch_add(amt);
 
-    _lock.readerLock();
-    (*_thread_stats)[id]->amt[t][metric]->fetch_add(amt);
-    _lock.readerUnlock();
+    if (Config::ThreadStats){
+        // if (id == std::thread::id()){
+        //     id = std::this_thread::get_id();
+        //     Loggable::debug()<<"Warning thread not supplied"<<std::endl;
+        // }
+        _lock.readerLock();
+        if (_thread_stats->find(id) == _thread_stats->end()){
+            _lock.readerUnlock();
+            addThread(id);
+            _lock.readerLock();
+        }
+        (*_thread_stats)[id]->amt[t][metric]->fetch_add(amt);
+        _lock.readerUnlock();
+    }
 }
 
 CacheStats::ThreadMetric::ThreadMetric() {
@@ -277,14 +327,14 @@ void CacheStats::addThread(std::thread::id id) {
     _lock.writerUnlock();
 }
 
-bool CacheStats::checkThread(std::thread::id id, bool addIfNotFound) {
-    _lock.readerLock();
-    bool ret = (_thread_stats->find(id) != _thread_stats->end());
-    _lock.readerUnlock();
+// bool CacheStats::checkThread(std::thread::id id, bool addIfNotFound) {
+//     _lock.readerLock();
+//     bool ret = (_thread_stats->find(id) != _thread_stats->end());
+//     _lock.readerUnlock();
 
-    if (!ret && addIfNotFound)
-        addThread(id);
+//     if (!ret && addIfNotFound)
+//         addThread(id);
 
-    return ret;
-}
+//     return ret;
+// }
 

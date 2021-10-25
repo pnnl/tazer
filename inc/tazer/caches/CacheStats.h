@@ -114,16 +114,16 @@ class CacheStats {
 
     void print(std::string cacheName);
 
-    void start(bool prefetch, Metric metric, std::thread::id id);
-    void end(bool prefetch, Metric metric, std::thread::id id);
-    void addTime(bool prefetch, Metric metric, uint64_t time, std::thread::id id, uint64_t cnt = 0);
-    void addAmt(bool prefetch, Metric metric, uint64_t mnt, std::thread::id id);
+    void start(bool prefetch, Metric metric, std::thread::id id=std::this_thread::get_id());
+    void end(bool prefetch, Metric metric, std::thread::id id=std::this_thread::get_id());
+    void addTime(bool prefetch, Metric metric, uint64_t time, std::thread::id id=std::this_thread::get_id(), uint64_t cnt = 0);
+    void addAmt(bool prefetch, Metric metric, uint64_t mnt, std::thread::id id=std::this_thread::get_id());
     // void threadStart(std::thread::id id);
     // void threadEnd(std::thread::id id, bool prefetch, Metric metric);
     // void threadAddTime(std::thread::id id, bool prefetch, Metric metric, uint64_t time, uint64_t cnt = 0);
     // void threadAddAmt(std::thread::id id, bool prefetch, Metric metric, uint64_t mnt);
-    void addThread(std::thread::id id);
-    bool checkThread(std::thread::id id, bool addIfNotFound);
+  
+    
 
     static uint64_t getCurrentTime();
     static char *printTime();
@@ -141,6 +141,8 @@ class CacheStats {
         std::atomic<uint64_t> *amt[CacheStats::MetricType::lastMetric][CacheStats::Metric::last];
     };
 
+    void addThread(std::thread::id id);
+    // bool checkThread(std::thread::id id, bool addIfNotFound);
     const double billion = 1000000000;
     std::atomic<uint64_t> _time[CacheStats::MetricType::lastMetric][CacheStats::Metric::last];
     std::atomic<uint64_t> _cnt[CacheStats::MetricType::lastMetric][CacheStats::Metric::last];

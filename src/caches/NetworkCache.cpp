@@ -100,23 +100,20 @@
 NetworkCache::NetworkCache(std::string cacheName, CacheType type, PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> &txPool, PriorityThreadPool<std::packaged_task<Request *()>> &decompPool) : Cache(cacheName,type),
                                                                                                                                                                                                       _transferPool(txPool),
                                                                                                                                                                                                       _decompPool(decompPool) {
-    std::thread::id thread_id = std::this_thread::get_id();
-    stats.checkThread(thread_id, true);
-    stats.start(false, CacheStats::Metric::constructor, thread_id);
+   
+    stats.start(false, CacheStats::Metric::constructor);
 
     _lock = new ReaderWriterLock();
     
-    stats.end(false, CacheStats::Metric::constructor, thread_id);
+    stats.end(false, CacheStats::Metric::constructor);
     // //log(this) /*std::cout*/<<"[TAZER] " << "Constructing " << _name << " in network cache" << std::endl;
 }
 
 NetworkCache::~NetworkCache() {
     ////log(this) /*std::cout*/<<"[TAZER] " << "deleting " << _name << " in network cache" << std::endl;
-    std::thread::id thread_id = std::this_thread::get_id();
-    stats.checkThread(thread_id, true);
-    stats.start(false, CacheStats::Metric::destructor, thread_id);
+    stats.start(false, CacheStats::Metric::destructor);
     delete _lock;
-    stats.end(false, CacheStats::Metric::destructor, thread_id);
+    stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
     // std::cout << std::endl;
 }
@@ -164,7 +161,6 @@ Request *NetworkCache::decompress(Request *req, char *compBuf, uint32_t compBufS
 
 // std::future<Request*> NetworkCache::requestBlk(Connection *server, uint32_t blkStart, uint32_t blkEnd, uint32_t fileIndex, uint32_t priority) {
 std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req, uint32_t priority, bool &success) {
-    stats.checkThread(req->threadId, true);
     auto fileIndex = req->fileIndex;
     auto blkStart = req->blkIndex;
     auto blkEnd = blkStart;
@@ -262,7 +258,7 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
 
 void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
     std::thread::id thread_id = req->threadId;
-    stats.checkThread(thread_id, true);
+    // stats.checkThread(thread_id, true);
     stats.start((priority != 0), CacheStats::Metric::read, thread_id); //read
     stats.start((priority != 0), CacheStats::Metric::ovh, thread_id); //ovh
     stats.start((priority != 0), CacheStats::Metric::hits, thread_id); //hits

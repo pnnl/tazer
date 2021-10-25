@@ -118,10 +118,7 @@ void __attribute__((constructor)) tazerInit(void) {
     std::call_once(log_flag, []() {
         timer = new Timer();
 
-        std::thread::id thread_id = std::this_thread::get_id();
-        timer->checkThread(thread_id,true);
-
-        timer->start(thread_id);
+        timer->start();
         Loggable::mtx_cout = new std::mutex();
         InputFile::_time_of_last_read = new std::chrono::time_point<std::chrono::high_resolution_clock>();
         InputFile::_cache = new Cache(BASECACHENAME, CacheType::base);
@@ -187,16 +184,14 @@ void __attribute__((constructor)) tazerInit(void) {
             unsetenv("LD_PRELOAD"); 
         }    
     
-        timer->end(Timer::MetricType::tazer, Timer::Metric::constructor, thread_id);
+        timer->end(Timer::MetricType::tazer, Timer::Metric::constructor);
         *InputFile::_time_of_last_read = std::chrono::high_resolution_clock::now();
     });
     init = true;
 }
 
 void __attribute__((destructor)) tazerCleanup(void) {
-    std::thread::id thread_id = std::this_thread::get_id();
-    timer->checkThread(thread_id,true);
-    timer->start(thread_id);
+    timer->start();
     init = false; //set to false because we cant ensure our static members have not already been deleted.
 
     curlEnd(Config::curlOnStartup);
@@ -215,18 +210,18 @@ void __attribute__((destructor)) tazerCleanup(void) {
         delete track_files;
     }
 
-    timer->end(Timer::MetricType::tazer, Timer::Metric::destructor, thread_id);
+    timer->end(Timer::MetricType::tazer, Timer::Metric::destructor);
     delete InputFile::_cache; //desturctor time tracked by each cache...
     delete InputFile::_decompressionPool;
     delete InputFile::_transferPool;
     delete OutputFile::_decompressionPool;
     delete OutputFile::_transferPool;
     delete LocalFile::_cache; //desturctor time tracked by each cache...
-    timer->start(thread_id);
+    timer->start();
     FileCacheRegister::closeFileCacheRegister();
     ConnectionPool::removeAllConnectionPools();
     Connection::closeAllConnections();
-    timer->end(Timer::MetricType::tazer, Timer::Metric::destructor, thread_id);
+    timer->end(Timer::MetricType::tazer, Timer::Metric::destructor);
 
     delete timer;
 }
@@ -287,7 +282,7 @@ int close(int fd) {
 
 ssize_t tazerRead(TazerFile *file, unsigned int fp, int fd, void *buf, size_t count) {
     ssize_t ret = file->read(buf, count, fp);
-    timer->addAmt(Timer::MetricType::tazer, Timer::Metric::read, ret, std::this_thread::get_id());
+    timer->addAmt(Timer::MetricType::tazer, Timer::Metric::read, ret);
     return ret;
 }
 
@@ -300,7 +295,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 
 ssize_t tazerWrite(TazerFile *file, unsigned int fp, int fd, const void *buf, size_t count) {
     auto ret = file->write(buf, count, fp);
-    timer->addAmt(Timer::MetricType::tazer, Timer::Metric::write, ret, std::this_thread::get_id());
+    timer->addAmt(Timer::MetricType::tazer, Timer::Metric::write, ret);
     return ret;
 }
 

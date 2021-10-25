@@ -140,14 +140,16 @@ void ServeFileStats::print() {
         }
         std::cout << std::endl;
 
-        std::unordered_map<std::thread::id, ServeFileStats::ThreadMetric*>::iterator itor;
-        for(itor = _thread_stats->begin(); itor != _thread_stats->end(); itor++) {
-            std::cout << "[TAZER] " << "servefile" << " thread " << (*itor).first << std::endl;
-            for (int i = 0; i < last; i++) {
-                std::cout << "[TAZER] " << "servefile" << " " << metricName_ss[i] << " " << itor->second->time[i]->load() / billion 
-                     << " " << itor->second->cnt[i]->load() << " " << itor->second->amt[i]->load() << std::endl;
+        if (Config::ThreadStats){
+            std::unordered_map<std::thread::id, ServeFileStats::ThreadMetric*>::iterator itor;
+            for(itor = _thread_stats->begin(); itor != _thread_stats->end(); itor++) {
+                std::cout << "[TAZER] " << "servefile" << " thread " << (*itor).first << std::endl;
+                for (int i = 0; i < last; i++) {
+                    std::cout << "[TAZER] " << "servefile" << " " << metricName_ss[i] << " " << itor->second->time[i]->load() / billion 
+                        << " " << itor->second->cnt[i]->load() << " " << itor->second->amt[i]->load() << std::endl;
+                }
+                std::cout << std::endl;
             }
-            std::cout << std::endl;
         }
     }
 
@@ -173,38 +175,77 @@ int64_t ServeFileStats::getTimestamp() {
     return (int64_t)std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 }
 
-void ServeFileStats::start(Metric metric, std::thread::id id) {
+void ServeFileStats::start(Metric metric) {
     _current_ss[_depth_ss] = getCurrentTime();
     _depth_ss++;
 
-    uint64_t depth = (*_thread_stats)[id]->depth->load();
-    (*_thread_stats)[id]->current[depth]->store(getCurrentTime());
-    (*_thread_stats)[id]->depth->fetch_add(1);
+    if (Config::ThreadStats){
+        auto id = std::this_thread::get_id();
+        _lock.readerLock();
+        if (_thread_stats->find(id) == _thread_stats->end()){
+            _lock.readerUnlock();
+            addThread(id);
+            _lock.readerLock();
+        }
+        uint64_t depth = (*_thread_stats)[id]->depth->load();
+        (*_thread_stats)[id]->current[depth]->store(getCurrentTime());
+        (*_thread_stats)[id]->depth->fetch_add(1);
+        _lock.readerUnlock();
+    }
 }
 
-void ServeFileStats::end(Metric metric, std::thread::id id) {
+void ServeFileStats::end(Metric metric) {
     _depth_ss--;
     _time[metric]->fetch_add(getCurrentTime() - _current_ss[_depth_ss]);
     _cnt[metric]->fetch_add(1);
-
-    (*_thread_stats)[id]->depth->fetch_sub(1);
-    uint64_t depth = (*_thread_stats)[id]->depth->load();
-    uint64_t current = (*_thread_stats)[id]->current[depth]->load();
-    (*_thread_stats)[id]->time[metric]->fetch_add(getCurrentTime() - current);
-    (*_thread_stats)[id]->cnt[metric]->fetch_add(1);
+    if (Config::ThreadStats){
+        auto id = std::this_thread::get_id();
+        _lock.readerLock();
+        if (_thread_stats->find(id) == _thread_stats->end()){
+            _lock.readerUnlock();
+            addThread(id);
+            _lock.readerLock();
+        }
+        (*_thread_stats)[id]->depth->fetch_sub(1);
+        uint64_t depth = (*_thread_stats)[id]->depth->load();
+        uint64_t current = (*_thread_stats)[id]->current[depth]->load();
+        (*_thread_stats)[id]->time[metric]->fetch_add(getCurrentTime() - current);
+        (*_thread_stats)[id]->cnt[metric]->fetch_add(1);
+        _lock.readerUnlock();
+    }
 }
 
-void ServeFileStats::addTime(Metric metric, uint64_t time, std::thread::id id, uint64_t cnt) {
+void ServeFileStats::addTime(Metric metric, uint64_t time, uint64_t cnt) {
     _time[metric]->fetch_add(time);
     _cnt[metric]->fetch_add(cnt);
 
-    (*_thread_stats)[id]->time[metric]->fetch_add(time);
-    (*_thread_stats)[id]->cnt[metric]->fetch_add(cnt);
+    if (Config::ThreadStats){
+        auto id = std::this_thread::get_id();
+        _lock.readerLock();
+        if (_thread_stats->find(id) == _thread_stats->end()){
+            _lock.readerUnlock();
+            addThread(id);
+            _lock.readerLock();
+        }
+        (*_thread_stats)[id]->time[metric]->fetch_add(time);
+        (*_thread_stats)[id]->cnt[metric]->fetch_add(cnt);
+        _lock.readerUnlock();
+    }
 }
 
-void ServeFileStats::addAmt(Metric metric, uint64_t amt, std::thread::id id) {
+void ServeFileStats::addAmt(Metric metric, uint64_t amt) {
     _amt[metric]->fetch_add(amt);
-    (*_thread_stats)[id]->amt[metric]->fetch_add(amt);
+    if (Config::ThreadStats){
+        auto id = std::this_thread::get_id();
+        _lock.readerLock();
+        if (_thread_stats->find(id) == _thread_stats->end()){
+            _lock.readerUnlock();
+            addThread(id);
+            _lock.readerLock();
+        }
+        (*_thread_stats)[id]->amt[metric]->fetch_add(amt);
+        _lock.readerUnlock();
+    }
 }
 
 ServeFileStats::ThreadMetric::ThreadMetric() {
@@ -236,13 +277,4 @@ void ServeFileStats::addThread(std::thread::id id) {
     _lock.writerUnlock();
 }
 
-bool ServeFileStats::checkThread(std::thread::id id, bool addIfNotFound) {
-    _lock.readerLock();
-    bool ret = (_thread_stats->find(id) != _thread_stats->end());
-    _lock.readerUnlock();
 
-    if (!ret && addIfNotFound)
-        addThread(id);
-
-    return ret;
-}

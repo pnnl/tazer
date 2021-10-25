@@ -107,9 +107,8 @@ NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheTyp
                                                                                                                                                            _stat((unixxstat_t)dlsym(RTLD_NEXT, "stat")),
                                                                                                                                                            _cachePath(cachePath),
                                                                                                                                                            _myOutstandingWrites(0) {
-    std::thread::id thread_id = std::this_thread::get_id();
-    stats.checkThread(thread_id, true);
-    stats.start(false, CacheStats::Metric::constructor, thread_id);
+    
+    stats.start(false, CacheStats::Metric::constructor);
     std::error_code err;
     std::string shmPath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
     // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
@@ -303,14 +302,12 @@ NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheTyp
     //     _shmLock = new ((uint8_t *)init + sizeof(uint32_t)) ReaderWriterLock();
     //     *init = 1;
     // }
-    stats.end(false, CacheStats::Metric::constructor, thread_id);
+    stats.end(false, CacheStats::Metric::constructor);
 }
 
 NewBoundedFilelockCache::~NewBoundedFilelockCache() {
     _terminating = true;
-    std::thread::id thread_id = std::this_thread::get_id();
-    stats.checkThread(thread_id, true);
-    stats.start(false, CacheStats::Metric::destructor, thread_id);
+    stats.start(false, CacheStats::Metric::destructor);
     while (_outstandingWrites.load()) {
         std::this_thread::yield();
     }
@@ -326,7 +323,7 @@ NewBoundedFilelockCache::~NewBoundedFilelockCache() {
     // delete _blkLock;
     // std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
     // shm_unlink(shmPath.c_str());
-    stats.end(false, CacheStats::Metric::destructor, thread_id);
+    stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
     debug() << std::endl;
 }

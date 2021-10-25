@@ -97,25 +97,21 @@
 #define DPRINTF(...)
 
 LocalFileCache::LocalFileCache(std::string cacheName, CacheType type) : Cache(cacheName,type) {
-    std::thread::id thread_id = std::this_thread::get_id();
-    stats.checkThread(thread_id, true);
-    stats.start(false,CacheStats::Metric::constructor, thread_id);
+    stats.start(false,CacheStats::Metric::constructor);
 
     _lock = new ReaderWriterLock();
 
-    stats.end(false,CacheStats::Metric::constructor, thread_id);
+    stats.end(false,CacheStats::Metric::constructor);
     // //log(this) /*std::cout*/<<"[TAZER] " << "Constructing " << _name << " in network cache" << std::endl;
 }
 
 LocalFileCache::~LocalFileCache() {
     ////log(this) /*std::cout*/<<"[TAZER] " << "deleting " << _name << " in network cache" << std::endl;
-    std::thread::id thread_id = std::this_thread::get_id();
-    stats.checkThread(thread_id, true);
-    stats.start(false,CacheStats::Metric::destructor, thread_id);
+    stats.start(false,CacheStats::Metric::destructor);
 
     delete _lock;
 
-    stats.end(false,CacheStats::Metric::destructor, thread_id);
+    stats.end(false,CacheStats::Metric::destructor);
     stats.print(_name);
 }
 
@@ -152,7 +148,6 @@ bool LocalFileCache::writeBlock(Request *req) {
 
 void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
     std::thread::id thread_id = req->threadId;
-    stats.checkThread(thread_id, true);
     stats.start((priority != 0), CacheStats::Metric::read, thread_id); //read
     stats.start((priority != 0), CacheStats::Metric::ovh, thread_id); //ovh
     

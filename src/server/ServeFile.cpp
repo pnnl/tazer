@@ -280,9 +280,7 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
                                                                                                                                    _open(false),
                                                                                                                                    _outstandingWrites(0),
                                                                                                                                    _url(supportedUrlType(name)) {
-    std::thread::id thread_id = std::this_thread::get_id();
-    _stats.checkThread(thread_id, true);
-    _stats.start(ServeFileStats::Metric::constructor, thread_id);
+    _stats.start(ServeFileStats::Metric::constructor);
     
     _pool.initiate();
     ConnectionPool * pool = NULL;
@@ -360,13 +358,12 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
         err() << "ERROR: file " << _name << " does not exists" << std::endl;
     }
 
-    _stats.end(ServeFileStats::Metric::constructor, thread_id);
+    _stats.end(ServeFileStats::Metric::constructor);
 }
 
 ServeFile::~ServeFile() {
-    std::thread::id thread_id = std::this_thread::get_id();
-    _stats.checkThread(thread_id, true);
-    _stats.start(ServeFileStats::Metric::destructor, thread_id);
+    
+    _stats.start(ServeFileStats::Metric::destructor);
 
     //Make sure outstanding prefetches are done first!!!
     _prefetchLock.writerLock();
@@ -397,7 +394,7 @@ ServeFile::~ServeFile() {
     }
     log(this) << _name << " closed" << std::endl;
 
-    _stats.end(ServeFileStats::Metric::destructor, thread_id);
+    _stats.end(ServeFileStats::Metric::destructor);
 }
 
 void ServeFile::addCompressTask(uint32_t blk) {
@@ -441,9 +438,7 @@ uint64_t ServeFile::compress(uint64_t blk, uint8_t *blkData, uint8_t *&msgData) 
 }
 
 bool ServeFile::sendData(Connection *connection, uint64_t blk, Request *request) {
-    std::thread::id thread_id = std::this_thread::get_id();
-    _stats.checkThread(thread_id, true);
-    _stats.start(ServeFileStats::Metric::send, thread_id);
+    _stats.start(ServeFileStats::Metric::send);
 
     uint8_t *msgData;
     uint64_t msgSize = request->size;
@@ -465,14 +460,13 @@ bool ServeFile::sendData(Connection *connection, uint64_t blk, Request *request)
     ServeFile::_cache.bufferWrite(request);
     log(this) << "sending: " << blk << " size: " << msgSize << " " << ret << std::endl;
 
-    _stats.end(ServeFileStats::Metric::send, thread_id);
-    _stats.addAmt(ServeFileStats::Metric::send, msgSize, thread_id);
+    _stats.end(ServeFileStats::Metric::send);
+    _stats.addAmt(ServeFileStats::Metric::send, msgSize);
     return ret;
 }
 
 bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
     if (!_output && blk < _numBlks) {
-        std::thread::id thread_id = std::this_thread::get_id();
         log(this) << "Transfer blk " << blk << " of " << _numBlks << std::endl;
         while (1) {
             //See if it is in the cache or someone is in the process of loading it
@@ -480,8 +474,7 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
 
             auto request = _cache.requestBlock(blk, _blkSize, _regFileIndex, reads, 0);
             if (request->ready) {
-                request->originating->stats.checkThread(thread_id, true);
-                request->originating->stats.addAmt(false, CacheStats::Metric::read, _blkSize, thread_id);
+                request->originating->stats.addAmt(false, CacheStats::Metric::read, _blkSize);
                 // Loggable::log() << "cache: " << request->originating->name() << " " << blk << std::endl;
                 return sendData(connection, blk, request);
             }
@@ -490,25 +483,22 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
                 auto stallTime = Timer::getCurrentTime();
                 auto request = pending.get().get();
                 if (request->waitingCache != CacheType::empty){
-                    _cache.getCacheByType(request->waitingCache)->stats.checkThread(thread_id, true);
-                    _cache.getCacheByType(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls, Timer::getCurrentTime() - stallTime, thread_id, 1);
+                    _cache.getCacheByType(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls, Timer::getCurrentTime() - stallTime,request->threadId, 1);
                 }
                 else{
                     err(this) << "waiting cache is empty"<<std::endl;
                 }
-                request->originating->stats.checkThread(thread_id, true);
-                request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, thread_id, 1);
+                request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime,request->threadId, 1);
                 if (request->ready) {
                     
                     if (request->waitingCache != CacheType::empty){
-                        _cache.getCacheByType(request->waitingCache)->stats.checkThread(thread_id, true);
-                        _cache.getCacheByType(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, _blkSize, thread_id);
+                        _cache.getCacheByType(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, _blkSize,request->threadId);
                         // Loggable::log()  << "net: originating" << request->originating->name()<<" waiting: "<<_cache.getCacheByType(request->waitingCache)->name() << " " << blk << std::endl;
                     }
                     else{             
                         err(this) << "waiting cache is empty"<<std::endl;
                     }
-                    request->originating->stats.addAmt(false, CacheStats::Metric::stalled, _blkSize, thread_id);
+                    request->originating->stats.addAmt(false, CacheStats::Metric::stalled, _blkSize);
                     return sendData(connection, blk, request);
                 }
                 else {

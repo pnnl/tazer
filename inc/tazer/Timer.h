@@ -127,20 +127,16 @@ class Timer {
     Timer();
     ~Timer();
 
-    void start(std::thread::id id);
-    void end(MetricType type, Metric metric, std::thread::id id);
-    void addAmt(MetricType type, Metric metric, uint64_t amt, std::thread::id id);
-    //void threadStart(std::thread::id id);
-    //void threadEnd(std::thread::id id, MetricType type, Metric metric);
-    //void threadAddAmt(std::thread::id id, MetricType type, Metric metric, uint64_t amt);
-    void addThread(std::thread::id id);
-    bool checkThread(std::thread::id id, bool);
+    void start();
+    void end(MetricType type, Metric metric);
+    void addAmt(MetricType type, Metric metric, uint64_t amt);
 
     static uint64_t getCurrentTime();
     static char *printTime();
     static int64_t getTimestamp();
 
   private:
+    void addThread(std::thread::id id);
     class ThreadMetric {
       public:
         ThreadMetric();

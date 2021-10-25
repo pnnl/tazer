@@ -106,9 +106,7 @@ NewFileCache::NewFileCache(std::string cacheName, CacheType type, uint64_t cache
                                                                                                                                                             _fsync((unixfdatasync_t)dlsym(RTLD_NEXT, "fdatasync"))
                                                                                                                                                             {
     // std::cout<<"[TAZER] " << "Constructing " << _name << " in shared memory cache" << std::endl;
-    std::thread::id thread_id = std::this_thread::get_id();
-    stats.checkThread(thread_id, true);
-    stats.start(false, CacheStats::Metric::constructor, thread_id);
+    stats.start(false, CacheStats::Metric::constructor);
     _blocksfd = -1;
     _cachePath = filePath + "/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".tzr";
     std::string indexPath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".idx");
@@ -200,15 +198,13 @@ NewFileCache::NewFileCache(std::string cacheName, CacheType type, uint64_t cache
     _pid = (uint32_t)::getpid();
 
     _shared = true;
-    stats.end(false, CacheStats::Metric::constructor, thread_id);
+    stats.end(false, CacheStats::Metric::constructor);
 }
 
 NewFileCache::~NewFileCache() {
     //std::cout<<"[TAZER] " << "deleting " << _name << " in shared memory cache, collisions: " << _collisions << std::endl;
     //std::cout<<"[TAZER] " << "numBlks: " << _numBlocks << " numBins: " << _numBins << " cacheSize: " << _cacheSize << std::endl;
-    std::thread::id thread_id = std::this_thread::get_id();
-    stats.checkThread(thread_id, true);
-    stats.start(false, CacheStats::Metric::destructor, thread_id);
+    stats.start(false, CacheStats::Metric::destructor);
     if (false) {
         //code from FileCacheRegister...
     }
@@ -224,7 +220,7 @@ NewFileCache::~NewFileCache() {
         }
     }
     std::cout<<_name<<" number of empty blocks: "<<numEmpty<<std::endl;
-    stats.end(false, CacheStats::Metric::destructor, thread_id);
+    stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
     std::cout << std::endl;
 
