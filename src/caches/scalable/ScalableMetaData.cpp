@@ -197,6 +197,14 @@ uint64_t ScalableMetaData::getNumBlocks() {
     return ret;
 }
 
+uint64_t ScalableMetaData::getPattern() {
+    uint64_t ret = 0;
+    metaLock.readerLock();
+    ret = pattern;
+    metaLock.readerUnlock();
+    return ret;
+}
+
 uint8_t * ScalableMetaData::randomBlock(uint64_t &blockIndex) {
     uint8_t * ret = NULL;
     metaLock.writerLock();
@@ -286,12 +294,13 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         double Fp = fpGrowth.getValue(i);
         double Mp = missInterval.getValue(i);
         DPRINTF("* Fp: %lf Mp: %lf\n", Fp, Mp);
-        double fp = Fp / Mp;
+        //double fp = Fp / Mp;
         DPRINTF("* access: %lf misses: %lf\n", (double)access, (double)misses);
-        double ap = (double) access / (double) misses;
-        DPRINTF("* i: %lf fp: %lf ap: %lf\n", i, fp, ap);
+        //double ap = (double) access / (double) misses;
+        //DPRINTF("* i: %lf fp: %lf ap: %lf\n", i, fp, ap);
         
-        marginalBenefit = fp * ap;
+        //marginalBenefit = fp * ap;
+        marginalBenefit = Mp / Fp; 
         ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks); // * blockSize));
         DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
         recalc = false;

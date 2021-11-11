@@ -107,7 +107,7 @@ class TazerAllocator : public Trackable<std::string, TazerAllocator *>
         }
 
     public:
-        virtual uint8_t * allocateBlock(uint32_t allocateForFileIndex) = 0;
+        virtual uint8_t * allocateBlock(uint32_t allocateForFileIndex, bool must = false) = 0;
         virtual void closeFile(ScalableMetaData * meta) { }
 };
 
@@ -118,7 +118,7 @@ class SimpleAllocator : public TazerAllocator
         SimpleAllocator(uint64_t blockSize, uint64_t maxSize):
             TazerAllocator(blockSize, maxSize) { }
 
-        uint8_t * allocateBlock(uint32_t allocateForFileIndex) {
+        uint8_t * allocateBlock(uint32_t allocateForFileIndex, bool must = false) {
             return new uint8_t[_blockSize];
         }
 
@@ -142,7 +142,7 @@ class FirstTouchAllocator : public TazerAllocator
                 PPRINTF("NUMBER OF BLOCKS: %lu\n", _maxBlocks);
             }
 
-        uint8_t * allocateBlock(uint32_t allocateForFileIndex) {
+        uint8_t * allocateBlock(uint32_t allocateForFileIndex, bool must = false) {
             uint64_t temp = _numBlocks.fetch_add(1);
             if(temp < _maxBlocks)
                 return new uint8_t[_blockSize];

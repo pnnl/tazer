@@ -90,7 +90,7 @@ class StealingAllocator : public TazerAllocator
         void setCache(ScalableCache * cache);
 
         //JS: This is the steal heuristic.  Overload for more iteresting things!
-        virtual uint8_t * stealBlock(uint32_t allocateForFileIndex, uint64_t &sourceBlockIndex, uint32_t &sourceFileIndex) {
+        virtual uint8_t * stealBlock(uint32_t allocateForFileIndex, uint64_t &sourceBlockIndex, uint32_t &sourceFileIndex, bool must = false) {
             auto meta = scalableCache->oldestFile(sourceFileIndex);
             if(meta)
                 return meta->oldestBlock(sourceBlockIndex);
@@ -101,7 +101,7 @@ class StealingAllocator : public TazerAllocator
         StealingAllocator(uint64_t blockSize, uint64_t maxSize):
             TazerAllocator(blockSize, maxSize) { }
 
-        uint8_t * allocateBlock(uint32_t allocateForFileIndex);
+        uint8_t * allocateBlock(uint32_t allocateForFileIndex, bool must);
         virtual void closeFile(ScalableMetaData * meta);
         static TazerAllocator * addStealingAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache);
 };
@@ -113,7 +113,7 @@ class RandomStealingAllocator : public StealingAllocator
 
     protected:
         //JS: This is a more iteresting one!
-        virtual uint8_t * stealBlock(uint32_t allocateForFileIndex, uint64_t &sourceBlockIndex, uint32_t &sourceFileIndex) {
+        virtual uint8_t * stealBlock(uint32_t allocateForFileIndex, uint64_t &sourceBlockIndex, uint32_t &sourceFileIndex, bool must = false) {
             auto meta = scalableCache->randomFile(sourceFileIndex);
             if(meta) {
                 if(_randomBlock)
@@ -143,7 +143,7 @@ class RandomStealingAllocator : public StealingAllocator
 class LargestStealingAllocator : public StealingAllocator
 {
     protected:
-        virtual uint8_t * stealBlock(uint32_t allocateForFileIndex, uint64_t &sourceBlockIndex, uint32_t &sourceFileIndex) {
+        virtual uint8_t * stealBlock(uint32_t allocateForFileIndex, uint64_t &sourceBlockIndex, uint32_t &sourceFileIndex, bool must = false) {
             auto meta = scalableCache->largestFile(sourceFileIndex);
             if(meta) {
                 return meta->oldestBlock(sourceBlockIndex);
@@ -166,8 +166,8 @@ class AdaptiveAllocator : public StealingAllocator
 {
     protected:
         //JS: This is a more iteresting one!
-        virtual uint8_t * stealBlock(uint32_t allocateForFileIndex, uint64_t &sourceBlockIndex, uint32_t &sourceFileIndex) {
-            auto meta = scalableCache->findVictim(allocateForFileIndex, sourceFileIndex);
+        virtual uint8_t * stealBlock(uint32_t allocateForFileIndex, uint64_t &sourceBlockIndex, uint32_t &sourceFileIndex, bool must) {
+            auto meta = scalableCache->findVictim(allocateForFileIndex, sourceFileIndex, must);
             if(meta)
                 return meta->oldestBlock(sourceBlockIndex);
             return NULL;

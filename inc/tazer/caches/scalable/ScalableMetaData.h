@@ -157,6 +157,7 @@ struct ScalableMetaData {
         uint8_t * randomBlock(uint64_t &blockIndex);
         uint64_t getLastTimeStamp();
         uint64_t getNumBlocks();
+        uint64_t getPattern();
 
         //JS: From Nathan
         void updateStats(bool miss, uint64_t timestamp);

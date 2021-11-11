@@ -211,9 +211,10 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
 
     while(!dest) {
         //JS: Are we allowed to get more blocks
-        if(doAlloc) {
+        auto must = (meta->getNumBlocks()>0 ? false : true );
+        if(must && doAlloc) { //doAlloc is left here but shouldn't affect the if check 
             DPRINTF("[JS] ScalableCache::setBlock new block\n");
-            dest = _allocator->allocateBlock(fileIndex);
+            dest = _allocator->allocateBlock(fileIndex, must);
         }
 
         //JS: We can't due to our pattern so lets LRU ourself
@@ -230,6 +231,7 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
             stats.addAmt(false, CacheStats::Metric::backout, 1);
             break;
         }
+
     }
     
     if(dest) {
@@ -392,6 +394,10 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     double sourceFileRank;
     double minRank = std::numeric_limits<double>::max();
     uint32_t minFileIndex = (uint32_t) -1;
+    //Burcu: if we have streaming pattern files, they are priority victim for stealing, so keep track of minimum ranked streaming pattern
+    double minStreamRank = std::numeric_limits<double>::max();
+    uint32_t minStreamFileIndex = (uint32_t) -1;
+
 
     //JS: Find lowest rank
     DPRINTF("+++++++++++Starting Search\n");
@@ -406,11 +412,25 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
                 minFileIndex = fileIndex;
                 DPRINTF("*******NEW MIN: %u : %lf\n", minFileIndex, minRank);
             }
+            //second check for minimum streaming pattern search 
+            //Burcu TODO : stridepattern[blockstreaming] = 1 , fixme so enum order won't chenge the code!!
+            if(meta->getPattern() == 1 && !std::isnan(temp) && temp > 0 && temp < minStreamRank) {
+                minStreamRank = temp;
+                minStreamFileIndex = fileIndex;
+                DPRINTF("*******NEW STREAM MIN: %u : %lf\n", minStreamFileIndex, minStreamRank);
+            }
         }
         else {
             sourceFileRank = meta->calcRank(timestamp-startTimeStamp, localMisses);
             DPRINTF("-------Source Index: %u %lf\n", fileIndex, sourceFileRank);
         }
+    }
+
+    //if we fond a streaming pattern file, select that one as the victim
+    if(minStreamFileIndex!= (uint32_t) -1) {
+        minFileIndex = minStreamFileIndex;
+        minRank = minStreamRank;
+        DPRINTF("********STREAMING VICTIM: %u : %lf\n", minFileIndex, minFileRank);
     }
     DPRINTF("+++++++++++End Search\n");
     ScalableMetaData * ret = NULL;

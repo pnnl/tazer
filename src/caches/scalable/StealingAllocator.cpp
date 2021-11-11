@@ -91,7 +91,7 @@ TazerAllocator * StealingAllocator::addStealingAllocator(uint64_t blockSize, uin
     return ret;
 }
 
-uint8_t * StealingAllocator::allocateBlock(uint32_t allocateForFileIndex) {
+uint8_t * StealingAllocator::allocateBlock(uint32_t allocateForFileIndex, bool must) {
     //JS: For trackBlock
     uint64_t sourceBlockIndex;
     uint32_t sourceFileIndex;
@@ -115,7 +115,7 @@ uint8_t * StealingAllocator::allocateBlock(uint32_t allocateForFileIndex) {
 
     //JS: Try to steal
     if(!ret) {
-        ret = stealBlock(allocateForFileIndex, sourceBlockIndex, sourceFileIndex);
+        ret = stealBlock(allocateForFileIndex, sourceBlockIndex, sourceFileIndex, must);
         DPRINTF("[JS] StealingAllocator::allocateBlock trying to steal %p %lu %u\n", ret, sourceBlockIndex, sourceFileIndex);
         if(ret)
             scalableCache->trackBlockEviction(sourceFileIndex, sourceBlockIndex);
