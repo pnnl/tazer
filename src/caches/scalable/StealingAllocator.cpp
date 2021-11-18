@@ -109,6 +109,10 @@ uint8_t * StealingAllocator::allocateBlock(uint32_t allocateForFileIndex, bool m
     if(priorityVictims.size()) {
         auto meta = priorityVictims.back();
         ret = meta->oldestBlock(sourceBlockIndex);
+        //if no blocks left, remove it from victims list
+        if( ! meta->getNumBlocks() ) {
+            priorityVictims.pop_back();
+        }
         DPRINTF("[JS] StealingAllocator::allocateBlock taking from victim %p\n", ret);
     }
     allocLock.writerUnlock();
@@ -129,3 +133,14 @@ void StealingAllocator::closeFile(ScalableMetaData * meta) {
     DPRINTF("[JS] StealingAllocator::closeFile adding a victim file\n");
     allocLock.writerUnlock();
 }
+
+/*
+void StealingAllocator::openFile(ScalableMetaData * meta) {
+    //remove from priority victims list if it's there
+    allocLock.writerLock();
+    for (auto victim : priorityVictims) {
+        //do we need an identifier for the meta???
+    }
+    allocLock.writerUnlock();
+}
+*/
