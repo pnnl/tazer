@@ -36,7 +36,7 @@ TAZeR combines state-of-the-art techniques to lower data access latencies and in
 References
 -----------------------------------------------------------------------------
 
-* Ryan D. Friese, Burcu O. Mutlu, Nathan R. Tallent, Joshua Suetterlein, Jan Strube, "Effectively using remote I/O for work com- position in distributed workflows," in Proc. of the 2020 IEEE Intl. Conf. on Big Data, IEEE Computer Society, December 2020.
+* Ryan D. Friese, Burcu O. Mutlu, Nathan R. Tallent, Joshua Suetterlein, Jan Strube, "Effectively using remote I/O for work com- position in distributed workflows," in Proc. of the 2020 IEEE Intl. Conf. on Big Data, IEEE Computer Society, December 2020. <http://doi.org/10.1109/BigData50022.2020.9378352>
 
 * Joshua Suetterlein, Ryan D. Friese, Nathan R. Tallent, and Malachi Schram, "TAZeR: Hiding the cost of remote I/O in distributed scientific workflows," in Proc. of the 2019 IEEE Intl. Conf. on Big Data, IEEE Computer Society, December 2019. <http://doi.org/10.1109/BigData47090.2019.9006418>
 
