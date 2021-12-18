@@ -116,7 +116,8 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
-
+//#define BPRINTF(...) fprintf(stderr, __VA_ARGS__)
+#define BPRINTF(...)
 #define TIMEON(...) __VA_ARGS__
 //#define TIMEON(...)
 
@@ -295,6 +296,7 @@ void InputFile::open() {
                 }
 
                 DPRINTF("REG: %p\n", reg);
+                BPRINTF("[BM] InputFile open: %s\n",_name.c_str());
             }
             else { //We failed to open the file
                 _active.store(false);
@@ -312,6 +314,7 @@ void InputFile::open() {
 //Close doesn't really do much, we hedge our bet that we will likey reopen the file thus we keep our connections to the servers active...but we do close a file descriptor if localfilecache is used
 void InputFile::close() {
     std::unique_lock<std::mutex> lock(_openCloseLock);
+    BPRINTF("[BM] InputFile close: %s\n",_name.c_str());
     bool prev = true;
     if (_active.compare_exchange_strong(prev, false)) {
         DPRINTF("CLOSE: _FC: %p _BC: %p\n", _fc, _bc);
@@ -320,9 +323,9 @@ void InputFile::close() {
         ((LocalFileCache*)_cache->getCacheByName(LOCALFILECACHENAME))->removeFile(_regFileIndex);
     }
     //bmutlu
-    // if (Config::useMemoryCache) {
-    //     ((ScalableMemoryCache*)_cache->getCacheByName(SCALABLEMEMORYCACHENAME))->sendCloseSignal(_regFileIndex);
-    // }
+    if (Config::useMemoryCache && Config::useScalableCache) {
+        ((ScalableCache*)_cache->getCacheByName(SCALABLECACHENAME))->closeFile(_regFileIndex);
+    }
     //end bmutlu
     lock.unlock();
     // std::cout << "Closing file " << _name << std::endl;

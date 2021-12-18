@@ -134,13 +134,16 @@ void StealingAllocator::closeFile(ScalableMetaData * meta) {
     allocLock.writerUnlock();
 }
 
-/*
+
 void StealingAllocator::openFile(ScalableMetaData * meta) {
     //remove from priority victims list if it's there
     allocLock.writerLock();
-    for (auto victim : priorityVictims) {
-        //do we need an identifier for the meta???
+    for ( std::vector<ScalableMetaData*>::iterator it = priorityVictims.begin(); it != priorityVictims.end(); it++ ){
+        if(*it == meta){
+            priorityVictims.erase(it);
+            DPRINTF("[BM] StealingAllocator::openFile removed a victim file\n");
+            break;
+        }
     }
     allocLock.writerUnlock();
 }
-*/

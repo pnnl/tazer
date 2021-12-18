@@ -91,8 +91,8 @@
 
 #define DPRINTF(...)
 
-// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -165,9 +165,9 @@ void ScalableCache::addFile(uint32_t fileIndex, std::string filename, uint64_t b
         uint64_t hash = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
         _fileMap.emplace(fileIndex, FileEntry{filename, blockSize, fileSize, hash});
         _metaMap[fileIndex] = new ScalableMetaData(blockSize, fileSize);
-        //_allocator->openFile(_metaMap[fileIndex]);
         DPRINTF("[JS] ScalableCache::addFile %s %u\n", filename.c_str(), fileIndex);
     }
+    _allocator->openFile(_metaMap[fileIndex]);
     _cacheLock->writerUnlock();
     
     if (_nextLevel) {
@@ -208,17 +208,14 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
     _cacheLock->readerLock();
     auto meta = _metaMap[fileIndex];
     uint8_t * dest = NULL;
+    PPRINTF("calling check pattern, fileindex: %lu numblocks:%d\n",fileIndex, meta->getNumBlocks());
     auto doAlloc = meta->checkPattern(this, fileIndex);
 
     while(!dest) {
-        //JS: Are we allowed to get more blocks
+        //Ask for a new block from allocator
         auto must = (meta->getNumBlocks()>0 ? false : true );
-        if(must && doAlloc) { //doAlloc is left here but shouldn't affect the if check 
-            DPRINTF("[JS] ScalableCache::setBlock new block\n");
-            dest = _allocator->allocateBlock(fileIndex, must);
-        }
+        dest = _allocator->allocateBlock(fileIndex, must);
 
-        //JS: We can't due to our pattern so lets LRU ourself
         if(!dest) {
             DPRINTF("[JS] ScalableCache::setBlock Reusing block\n");
             dest = meta->oldestBlock(sourceBlockIndex);
@@ -286,7 +283,7 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
         _cacheLock->readerUnlock();
     }
     
-    DPRINTF("[JS] ScalableCache::readBlock req->size: %lu req->blkIndex: %lu\n", req->size, req->blkIndex);
+    DPRINTF("[JS] ScalableCache::readBlock req->size: %lu req->fileIndex: %lu req->blkIndex: %lu\n", req->size, req->fileIndex, req->blkIndex);
     trackBlock(_name, (priority != 0 ? " [BLOCK_PREFETCH_REQUEST] " : " [BLOCK_REQUEST] "), fileIndex, index, priority);
 
     if (req->size <= _blockSize) {
@@ -431,7 +428,7 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     if(minStreamFileIndex!= (uint32_t) -1) {
         minFileIndex = minStreamFileIndex;
         minRank = minStreamRank;
-        DPRINTF("********STREAMING VICTIM: %u : %lf\n", minFileIndex, minFileRank);
+        DPRINTF("********STREAMING VICTIM: %u : %lf\n", minFileIndex, minRank);
     }
     DPRINTF("+++++++++++End Search\n");
     ScalableMetaData * ret = NULL;

@@ -104,6 +104,7 @@ class StealingAllocator : public TazerAllocator
         uint8_t * allocateBlock(uint32_t allocateForFileIndex, bool must);
         virtual void closeFile(ScalableMetaData * meta);
         static TazerAllocator * addStealingAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache);
+        virtual void openFile(ScalableMetaData * meta);
 };
 
 class RandomStealingAllocator : public StealingAllocator

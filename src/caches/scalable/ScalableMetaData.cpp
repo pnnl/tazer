@@ -163,7 +163,7 @@ bool ScalableMetaData::checkPattern(Cache * cache, uint32_t fileIndex) {
         }
     }
 
-    DPRINTF("oldPattern: %s newPattern: %s\n", patternName[oldPattern], patternName[newPattern]);
+    DPRINTF("FILEINDEX: %d, oldPattern: %s newPattern: %s\n", fileIndex, patternName[oldPattern], patternName[newPattern]);
     //JS: For now the only case that limits is linear with more than one block
     if(newPattern == BLOCKSTREAMING && numBlocks.load())
         ret = false;
