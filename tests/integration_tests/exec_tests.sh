@@ -29,7 +29,7 @@ mkdir -p ${node_workspace}
 cd ${node_workspace}
 
 
-integration_test_path=${tazer_path}/tests/integration_tests
+integration_test_path=${tazer_path} #/tests/integration_tests
 tazer_cp_read=${integration_test_path}/tazer_cp_read_test_client.sh
 tazer_cp_write=${integration_test_path}/tazer_cp_write_test_client.sh
 workflow_test=${integration_test_path}/tazer_client_workflow_test.sh
@@ -57,10 +57,11 @@ NUM_CORES=( 10 )
 TASKS_PER_CORE=(1)
 SEGMENT_SIZES=($((0)) $((8*1024*1024)))
 READ_PROBS=(.75)
-NUM_CYCLES=(1 4)
-MAX_FILE_SIZES=( $((1*1024*1024*1024)) )
+NUM_CYCLES=(1 4) #(1 4)
+MAX_FILE_SIZES=( $((2*1024*1024*1024)) )
 READ_SIZES=( $((8*1024))  $((300*1024)))
-EXEC_TIMES=(30)
+EXEC_TIMES=(30) #30
+#ACCESS_PATTERN=( "--random" "--random" )
 ACCESS_PATTERN=( "" "--random" )
 
 MY_NODE=$SLURM_PROCID
@@ -83,18 +84,18 @@ echo "&&&&&&& TESTID ${test_id} ${starting_id} ${MY_NODE} ${NUM_NODES} clock dri
 
 
 
-
-test_pids=()
-$tazer_cp_write ${node_workspace} ${data_path} ${tazer_path} ${build_dir} ${server_addr} ${server_port} ${test_id} ${ref_time} &
-test_pids+=("$!")
-test_id=$((test_id+NUM_NODES))
-$tazer_cp_read ${node_workspace} ${data_path} ${tazer_path} ${build_dir} ${server_addr} ${server_port} ${test_id} ${shmem} ${burstbuff} ${filelock} ${ref_time} &
-test_pids+=("$!")
-test_id=$((test_id+NUM_NODES))
+files_1=(${data_path}/*.dat)
+#test_pids=()
+#$tazer_cp_write ${node_workspace} ${data_path} ${tazer_path} ${build_dir} ${server_addr} ${server_port} ${test_id} ${ref_time} &
+#test_pids+=("$!")
+#test_id=$((test_id+NUM_NODES))
+#$tazer_cp_read ${node_workspace} ${data_path} ${tazer_path} ${build_dir} ${server_addr} ${server_port} ${test_id} ${shmem} ${burstbuff} ${filelock} ${ref_time} &
+#test_pids+=("$!")
+#test_id=$((test_id+NUM_NODES))
 
 
 # echo " ${IO_RATES[@]} --- ${NUM_CORES[@]} --- ${TASKS_PER_CORE[@]} --- ${SEGMENT_SIZES[@]} --- ${READ_PROBS[@]} --- ${NUM_CYCLES[@]} --- ${READ_SIZES[@]} --- ${EXEC_TIMES[@]} ---"
-
+index=0
 for io_rate in "${IO_RATES[@]}"; do
     for num_cores in "${NUM_CORES[@]}"; do
         for tpc in "${TASKS_PER_CORE[@]}"; do
@@ -105,10 +106,20 @@ for io_rate in "${IO_RATES[@]}"; do
                             for rdsz in "${READ_SIZES[@]}"; do
                                 for t in "${EXEC_TIMES[@]}"; do
                                     for pat in "${ACCESS_PATTERN[@]}"; do
-                                    
-$workflow_test ${node_workspace} ${data_path} ${tazer_path} ${build_dir} ${server_addr} ${server_port} ${test_id} ${simdir} "--ioRate=${io_rate} --numCores=${num_cores} --tasksPerCore=${tpc} --segmentSize=${seg_size}  --readProbability=${prob} --numCycles=${cyc} --readSize=${rdsz} --execTime=${t} ${pat}" ${shmem} ${burstbuff} ${filelock} ${ref_time} &
+                                        for i in {0..1}; do
+size=${#files_1[@]}
+#index=$(($RANDOM % $size))
+h=${files_1[$index]}
+a=`echo $h | awk -F'/' '{print $NF}'` 
+SUB="test"
+if [[ "$a" != *"$SUB"* ]]; then
+$workflow_test ${node_workspace} ${data_path} ${tazer_path} ${build_dir} ${server_addr} ${server_port} ${test_id} ${simdir} "--ioRate=${io_rate} --numCores=${num_cores} --tasksPerCore=${tpc} --segmentSize=${seg_size}  --readProbability=${prob} --numCycles=${cyc} --readSize=${rdsz} --execTime=${t} ${pat}" ${shmem} ${burstbuff} ${filelock} ${ref_time}  ${a} &
 test_pids+=("$!")
 test_id=$((test_id+NUM_NODES))
+fi
+index=$((index+1))
+index=$((index%size))
+                                        done
                                     done
                                 done
                             done

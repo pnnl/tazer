@@ -24,8 +24,9 @@ echo "$0 $1 $2 $3 $4 $5"
 server_addr=$server_nodes #this currently assumes just a single server...
 server_port="5001"
 
-CACHE_SIZES=(256*1024*1024  2*1024*1024*1024)
-#
+#CACHE_SIZES=(256*1024*1024  2*1024*1024*1024)
+CACHE_SIZES=(512*1024*1024  2*1024*1024*1024)
+#CACHE_SIZES=(2*1024*1024*1024 3*1024*1024*1024) #worked with this line
 
 #clean up global bounded file cache from previous
 global_cache_path=${workspace}/tazer_cache/gc

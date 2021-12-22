@@ -10,14 +10,14 @@ fi
 
 TAZER_BUILD_DIR=$1
 if [ -z "$TAZER_BUILD_DIR" ];  then
-    TAZER_BUILD_DIR=build
+    TAZER_BUILD_DIR=../../build
 fi
 
 
 
 cd tests/integration_tests
 
-module load gcc/8.1.0 python/3.7.0
+module load gcc/10.2.0 python/3.7.0
 
 #Edit these values (total_client_nodes and total_clients_per)
 #Each node will have a certain number of clients running tests on it. Half of a given nodes clients will run
@@ -46,25 +46,51 @@ if [ ! -f $data_path/tazer1GB.dat ]; then
     dd if=/dev/urandom of=$data_path/tazer1GB.dat bs=10M count=100 &
 fi
 
+DIRECTORY=${data_path}/flag #./data2
+#DIRECTORY2=./out
+DIRECTORY3=${data_path}/Done
+if [ ! -d "$DIRECTORY" ]; then
+  # Control will enter here if $DIRECTORY exists.
+  mkdir $DIRECTORY
+  D=./data
+  if [ ! -d "$D" ]; then
+    mkdir $D
+  fi
+  cp ${TAZER_WORKSPACE_ROOT}/generate_data.sh $DIRECTORY
+  y=$(${DIRECTORY}/generate_data.sh 1 2 4 50) #24 5 50 50)
+  #mv tazer* data/
+  sleep 5
+  mv tazer*.dat ${data_path}
+  mkdir $DIRECTORY3
+fi
+
+while [ ! -d "$DIRECTORY3" ]
+do
+  sleep 1
+done
 
 
 
-git clone ssh://git@gitlab.pnnl.gov:2222/perf-lab-hub/tazer/tazer-bigflow-sim.git ${workspace}/tazer-bigflow-sim
-cur_dir=`pwd`
-cd ${workspace}/tazer-bigflow-sim
-make -j
-cd $cur_dir
+#git clone ssh://git@gitlab.pnnl.gov:2222/perf-lab-hub/tazer/tazer-bigflow-sim.git ${workspace}/tazer-bigflow-sim
+#cur_dir=`pwd`
+#cd ${workspace}/tazer-bigflow-sim
+#make -j
+#cd $cur_dir
 
 
 
+#cd model
+#sbatch run_training.sh
+#cd .. 
 
-
-
+#cd runner-test/integration/tazer-bigflow-sim/
+#sbatch combineWork.sh ../client #../client ${workspace}/test_${test_id}/
+#cd ../../../
 
 tazer_server_port=5001
 #Start the tazer server on a node and sleep for a while to be sure that the server has time to create its 1GB data file and 
 #start up before the clients start trying to use it.
-tazer_server_task_id=`sbatch --parsable --exclude=node04,node33,node23,node24,node43 -N1 start_tazer_server.sh $workspace $TAZER_WORKSPACE_ROOT $TAZER_BUILD_DIR $tazer_server_port`
+tazer_server_task_id=`sbatch --parsable --exclude=node04,node33,node23,node24,node43,node05,node22 -N1 start_tazer_server.sh $workspace $TAZER_WORKSPACE_ROOT $TAZER_BUILD_DIR $tazer_server_port`
 tazer_server_nodes=`squeue -j ${tazer_server_task_id} -h -o "%N"`
 while [ -z "$tazer_server_nodes" ]; do
 tazer_server_nodes=`squeue -j ${tazer_server_task_id} -h -o "%N"`
@@ -74,7 +100,7 @@ $TAZER_WORKSPACE_ROOT/${TAZER_BUILD_DIR}/test/PingServer $tazer_server_nodes $ta
 
 wait #need to wait for the temp files to finish being created
 
-sbatch --wait --exclude=node04,node33,node23,node24,node43 -N ${total_client_nodes} launch_tazer_clients.sh ${workspace} ${data_path} ${TAZER_WORKSPACE_ROOT} ${TAZER_BUILD_DIR} ${tazer_server_nodes} ${tazer_server_port} ${total_clients_per} ${total_client_nodes} 
+sbatch --wait --exclude=node04,node33,node23,node24,node43,node05,node22 -N ${total_client_nodes} launch_tazer_clients.sh ${workspace} ${data_path} ${TAZER_WORKSPACE_ROOT} ${TAZER_BUILD_DIR} ${tazer_server_nodes} ${tazer_server_port} ${total_clients_per} ${total_client_nodes} 
 
 echo "Closing server ..."
 
