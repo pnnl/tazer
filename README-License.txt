@@ -1,6 +1,6 @@
         TAZeR (Transparent Asynchronous Zero-copy Remote I/O)
                         github.com/pnnl/tazer/
-                  gitlab.pnnl.gov/perf-lab-hub/tazer
+                    gitlab.pnnl.gov/perf-lab/tazer
 
 
 Copyright ((c)) 2019, Battelle Memorial Institute
