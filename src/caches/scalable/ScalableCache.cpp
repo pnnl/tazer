@@ -208,7 +208,7 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
     _cacheLock->readerLock();
     auto meta = _metaMap[fileIndex];
     uint8_t * dest = NULL;
-    PPRINTF("calling check pattern, fileindex: %lu numblocks:%d\n",fileIndex, meta->getNumBlocks());
+    //PPRINTF("calling check pattern, fileindex: %lu numblocks:%d\n",fileIndex, meta->getNumBlocks());
     auto doAlloc = meta->checkPattern(this, fileIndex);
 
     while(!dest) {
