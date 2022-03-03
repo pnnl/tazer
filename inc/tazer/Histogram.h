@@ -82,7 +82,7 @@
 #include <algorithm>
 #include "ReaderWriterLock.h"
 
-// #define PRINTF(...) fprintf(stderr, __VA_ARGS__)
+#define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 class Histogram {
     private:
@@ -283,7 +283,17 @@ class Histogram {
             double ret = 0;
             if(doLock)
                 lock.readerLock();
-            ret = sum(key+range) - sum(key-range);
+
+            if(key > _max){
+                ret = sum(_max) - sum(_max-range);
+            }
+            else if(key < _min){
+                ret = sum(_min+range) - sum(_min);
+            }
+            else{
+                ret = sum(key+range) - sum(key-range);
+            }
+            
             if(doLock)
                 lock.readerUnlock();
             return ret;
@@ -302,14 +312,14 @@ class Histogram {
                 ret = getValue(key, 0.5, false);
                 
             lock.readerUnlock();
-            // printBins();
+            //printBins();
             return ret;
         }
 
         void printBins() {
             lock.readerLock();
             for(size_t i = 0; i < _bins.size(); ++i)
-                printf("histo i: %u %lf %lf\n", i, std::get<0>(_bins[i]), std::get<1>(_bins[i]));
+                PRINTF("histo i: %u %lf %lf\n", i, std::get<0>(_bins[i]), std::get<1>(_bins[i]));
             lock.readerUnlock();
         }
 };
