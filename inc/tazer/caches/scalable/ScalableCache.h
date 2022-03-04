@@ -131,10 +131,12 @@ class ScalableCache : public Cache {
     uint8_t * getBlockData(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset);
     uint8_t * getBlockDataOrReserve(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset, bool &reserve);
     void setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * data, uint64_t dataSize);
-    
+
     //JS: Metric piggybacking
     ReaderWriterLock * _lastVictimFileIndexLock;
     uint32_t _lastVictimFileIndex;
+
+    std::once_flag first_miss;
 };
 
 #endif // SCALABLECACHE_H

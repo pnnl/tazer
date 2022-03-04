@@ -93,6 +93,8 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define MeMPRINTF(...)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -180,6 +182,7 @@ void ScalableCache::addFile(uint32_t fileIndex, std::string filename, uint64_t b
 
 void ScalableCache::closeFile(uint32_t fileIndex) {
     DPRINTF("[JS] ScalableCache::closeFile %u\n", fileIndex);
+    MeMPRINTF("ScalableCache::closeFile %u\n", fileIndex);
     _cacheLock->readerLock();
     _allocator->closeFile(_metaMap[fileIndex]);
     _cacheLock->readerUnlock();
@@ -216,6 +219,7 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
 
     while(!dest) {
         //Ask for a new block from allocator
+        MeMPRINTF("ASKING FOR NEW BLOCK:%d:%d:%lu\n", fileIndex, meta->getNumBlocks(),Timer::getCurrentTime());
         auto must = (meta->getNumBlocks()>0 ? false : true );
         dest = _allocator->allocateBlock(fileIndex, must);
 
@@ -279,6 +283,12 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
     auto index = req->blkIndex;
     auto fileIndex = req->fileIndex;
     auto fileOffset = req->offset;
+    //MeMPRINTF("PARTITION INFO:%d:%d:%lu\n", fileIndex, _metaMap[fileIndex]->getNumBlocks(),Timer::getCurrentTime());
+    
+    // auto nowVal = Timer::getCurrentTime();
+    // for ( auto met : _metaMap ){
+    //     MeMPRINTF("PARTITION INFO:%d:%d:%lu\n", met.first, met.second->getNumBlocks(), nowVal);
+    // }
 
     if (!req->size) { //JS: This get the blockSize from the file
         _cacheLock->readerLock();
@@ -312,6 +322,8 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
         }
         else { //JS: Data not currently present
             trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
+            //setting startTimeStamp to fist miss we encounter
+            std::call_once(first_miss, [this]() { startTimeStamp = (uint64_t)Timer::getCurrentTime(); });
             misses.fetch_add(1);
             stats.addAmt(false, CacheStats::Metric::misses, 1);
             stats.end(false, CacheStats::Metric::misses);
@@ -387,6 +399,7 @@ ScalableMetaData * ScalableCache::oldestFile(uint32_t &oldestFileIndex) {
 ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, bool mustSucceed) {
     _cacheLock->readerLock();
     DPRINTF("---------- %u of %u ----------\n", allocateForFileIndex, _metaMap.size());
+    MeMPRINTF("---------- %u of %u ----------\n", allocateForFileIndex, _metaMap.size());
     //JS: For calcRank
     auto localMisses = misses.load();
     uint64_t timestamp = Timer::getCurrentTime();
@@ -396,8 +409,8 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     double minRank = std::numeric_limits<double>::max();
     uint32_t minFileIndex = (uint32_t) -1;
     //Burcu: if we have streaming pattern files, they are priority victim for stealing, so keep track of minimum ranked streaming pattern
-    double minStreamRank = std::numeric_limits<double>::max();
-    uint32_t minStreamFileIndex = (uint32_t) -1;
+    //double minStreamRank = std::numeric_limits<double>::max();
+    //uint32_t minStreamFileIndex = (uint32_t) -1;
 
 
     //JS: Find lowest rank
@@ -408,31 +421,33 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
         if(allocateForFileIndex != fileIndex) {
             auto temp = meta->calcRank(timestamp-startTimeStamp, localMisses);
             DPRINTF("-------Index: %u %lf\n", fileIndex, temp);
+            MeMPRINTF("-------Index: %u %lf\n", fileIndex, temp);
             if(!std::isnan(temp) && temp > 0 && temp < minRank) {
                 minRank = temp;
                 minFileIndex = fileIndex;
                 DPRINTF("*******NEW MIN: %u : %lf\n", minFileIndex, minRank);
             }
             //second check for minimum streaming pattern search 
-            //Burcu TODO : stridepattern[blockstreaming] = 1 , fixme so enum order won't chenge the code!!
-            if(meta->getPattern() == 1 && !std::isnan(temp) && temp > 0 && temp < minStreamRank) {
-                minStreamRank = temp;
-                minStreamFileIndex = fileIndex;
-                DPRINTF("*******NEW STREAM MIN: %u : %lf\n", minStreamFileIndex, minStreamRank);
-            }
+            //Burcu TODO : stridepattern[blockstreaming] = 1 , fixme so enum order won't change the code!!
+            // if(meta->getPattern() == 1 && !std::isnan(temp) && temp > 0 && temp < minStreamRank) {
+            //     minStreamRank = temp;
+            //     minStreamFileIndex = fileIndex;
+            //     DPRINTF("*******NEW STREAM MIN: %u : %lf\n", minStreamFileIndex, minStreamRank);
+            // }
         }
         else {
             sourceFileRank = meta->calcRank(timestamp-startTimeStamp, localMisses);
             DPRINTF("-------Source Index: %u %lf\n", fileIndex, sourceFileRank);
+            MeMPRINTF("-------Source Index: %u %lf\n", fileIndex, sourceFileRank);
         }
     }
 
-    //if we fond a streaming pattern file, select that one as the victim
-    if(minStreamFileIndex!= (uint32_t) -1) {
-        minFileIndex = minStreamFileIndex;
-        minRank = minStreamRank;
-        DPRINTF("********STREAMING VICTIM: %u : %lf\n", minFileIndex, minRank);
-    }
+    // //if we fond a streaming pattern file, select that one as the victim
+    // if(minStreamFileIndex!= (uint32_t) -1) {
+    //     minFileIndex = minStreamFileIndex;
+    //     minRank = minStreamRank;
+    //     DPRINTF("********STREAMING VICTIM: %u : %lf\n", minFileIndex, minRank);
+    // }
     DPRINTF("+++++++++++End Search\n");
     ScalableMetaData * ret = NULL;
     sourceFileIndex = (uint32_t) -1;
@@ -441,6 +456,7 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
             ret = _metaMap[minFileIndex];
             //JS: Do update rank here
             DPRINTF("**************SOURCE: %u DEST: %u\n", minFileIndex, allocateForFileIndex);
+            MeMPRINTF("-----------SOURCE: %u DEST: %u\n", minFileIndex, allocateForFileIndex);
             _metaMap[minFileIndex]->updateRank(true);
             _metaMap[allocateForFileIndex]->updateRank(false);
             //JS: Set this for the tracking

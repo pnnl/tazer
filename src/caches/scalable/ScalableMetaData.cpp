@@ -77,10 +77,10 @@
 #include <cmath>
 #include <cfloat>
 
-// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define DPRINTF(...)
-#define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-
+//#define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define PRINTF(...)
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
     bool toReserve = false;
     auto blockEntry = &blocks[blockIndex];
@@ -156,6 +156,7 @@ bool ScalableMetaData::checkPattern(Cache * cache, uint32_t fileIndex) {
         newPattern = BLOCKSTREAMING;
         for (unsigned int i = 1; i < window.size(); i++) {
             uint64_t stride = window[i-1][1] - window[i][1];
+            DPRINTF("window[%d] : %lu %lu %lu\n", i-1, window[i-1][0], window[i-1][1], window[i-1][2]);
             DPRINTF("%d:%lu - %d:%lu %lu\n", i, window[i-1][1], i-1, window[i][1], stride);
             if (stride > 1) {
                 newPattern = UNKNOWN;
@@ -297,12 +298,16 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         //double fp = Fp / Mp;
         DPRINTF("* access: %lf misses: %lf\n", (double)access, (double)misses);
         //double ap = (double) access / (double) misses;
-        //DPRINTF("* i: %lf fp: %lf ap: %lf\n", i, fp, ap);
-        
+
         //marginalBenefit = fp * ap;
         marginalBenefit = Mp / Fp; 
-        ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks); // * blockSize));
+        ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks.load()); // * blockSize));
         DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
+        PRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
+        if(isnan(unitMarginalBenefit)){
+            PRINTF("* nan! i: %f, misses: %d, Fp: %lf Mp: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Fp, Mp , marginalBenefit, unitMarginalBenefit,numBlocks.load());
+            fpGrowth.printBins();
+        }
         recalc = false;
     }
     metaLock.writerUnlock();
