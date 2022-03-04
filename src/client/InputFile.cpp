@@ -114,8 +114,8 @@
 #include <thread>
 #include <unistd.h>
 
-// #define UMB_METRIC_PIGGYBACK(a, b)
-#define UMB_METRIC_PIGGYBACK(a, b) a = (ScalableCache*) b
+#define UMB_METRIC_PIGGYBACK(a, b)
+// #define UMB_METRIC_PIGGYBACK(a, b) a = (ScalableCache*) b
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)

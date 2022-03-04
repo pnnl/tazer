@@ -79,7 +79,7 @@
 #include <string.h>
 
 #define DPRINTF(...)
-// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+// #define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 void StealingAllocator::setCache(ScalableCache * cache) {
     scalableCache = cache;
@@ -128,16 +128,18 @@ uint8_t * StealingAllocator::allocateBlock(uint32_t allocateForFileIndex, bool m
 }
 
 void StealingAllocator::closeFile(ScalableMetaData * meta) {
-    allocLock.writerLock();
-    priorityVictims.push_back(meta);
-    DPRINTF("[JS] StealingAllocator::closeFile adding a victim file\n");
-    allocLock.writerUnlock();
+    if(meta) {
+        allocLock.writerLock();
+        priorityVictims.push_back(meta);
+        allocLock.writerUnlock();
+    }
 }
 
 
 void StealingAllocator::openFile(ScalableMetaData * meta) {
     //remove from priority victims list if it's there
     allocLock.writerLock();
+    DPRINTF("[JS] StealingAllocator::openFile adding new file %p\n", meta);
     for ( std::vector<ScalableMetaData*>::iterator it = priorityVictims.begin(); it != priorityVictims.end(); it++ ){
         if(*it == meta){
             priorityVictims.erase(it);

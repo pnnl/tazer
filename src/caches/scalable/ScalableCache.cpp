@@ -169,7 +169,7 @@ void ScalableCache::addFile(uint32_t fileIndex, std::string filename, uint64_t b
         uint64_t hash = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
         _fileMap.emplace(fileIndex, FileEntry{filename, blockSize, fileSize, hash});
         _metaMap[fileIndex] = new ScalableMetaData(blockSize, fileSize);
-        DPRINTF("[JS] ScalableCache::addFile %s %u\n", filename.c_str(), fileIndex);
+        DPRINTF("[JS] ScalableCache::addFile %s %u %p size: %u\n", filename.c_str(), fileIndex, _metaMap[fileIndex], _metaMap.size());
     }
     _allocator->openFile(_metaMap[fileIndex]);
     _cacheLock->writerUnlock();
@@ -180,10 +180,11 @@ void ScalableCache::addFile(uint32_t fileIndex, std::string filename, uint64_t b
 }
 
 void ScalableCache::closeFile(uint32_t fileIndex) {
-    DPRINTF("[JS] ScalableCache::closeFile %u\n", fileIndex);
+    DPRINTF("[JS] ScalableCache::closeFile start %u %u\n", fileIndex, _metaMap.size());
     MeMPRINTF("ScalableCache::closeFile %u\n", fileIndex);
     _cacheLock->readerLock();
-    _allocator->closeFile(_metaMap[fileIndex]);
+    if(_metaMap.count(fileIndex))
+        _allocator->closeFile(_metaMap[fileIndex]);
     _cacheLock->readerUnlock();
 }
 
@@ -211,6 +212,7 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
     uint32_t sourceFileIndex;
     
     _cacheLock->readerLock();
+
     auto meta = _metaMap[fileIndex];
     uint8_t * dest = NULL;
     //PPRINTF("calling check pattern, fileindex: %lu numblocks:%d\n",fileIndex, meta->getNumBlocks());
@@ -416,7 +418,7 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
 
 
     //JS: Find lowest rank
-    DPRINTF("+++++++++++Starting Search\n");
+    DPRINTF("+++++++++++Starting Search %u\n", _metaMap.size());
     for (auto const &x : _metaMap) {
         auto fileIndex = x.first;
         auto meta = x.second;
