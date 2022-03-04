@@ -114,6 +114,9 @@
 #include <thread>
 #include <unistd.h>
 
+// #define UMB_METRIC_PIGGYBACK(a, b)
+#define UMB_METRIC_PIGGYBACK(a, b) a = (ScalableCache*) b
+
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 //#define BPRINTF(...) fprintf(stderr, __VA_ARGS__)
@@ -134,10 +137,12 @@ std::chrono::time_point<std::chrono::high_resolution_clock> *InputFile::_time_of
 void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     int level = 0;
     Cache *c = NULL;
+    ScalableCache * sc = NULL;
 
     if (Config::useMemoryCache) {
         if(Config::useScalableCache) {
             c = ScalableCache::addScalableCache(SCALABLECACHENAME, CacheType::scalable, Config::memoryCacheBlocksize, Config::scalableCacheNumBlocks * Config::memoryCacheBlocksize);
+            UMB_METRIC_PIGGYBACK(sc, c);
             std::cerr << "[TAZER] " << "scalable cache: " << (void *)c << std::endl;
         }
         else {
@@ -149,10 +154,7 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     }
 
     if (Config::useSharedMemoryCache && Config::enableSharedMem) {
-        if(Config::useScalableCache)
-            c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity, (ScalableCache*)c);
-        else
-            c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
+        c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity, sc);
         std::cerr << "[TAZER] "
                   << "shared mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);

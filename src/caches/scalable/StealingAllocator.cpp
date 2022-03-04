@@ -121,12 +121,8 @@ uint8_t * StealingAllocator::allocateBlock(uint32_t allocateForFileIndex, bool m
     if(!ret) {
         ret = stealBlock(allocateForFileIndex, sourceBlockIndex, sourceFileIndex, must);
         DPRINTF("[JS] StealingAllocator::allocateBlock trying to steal %p %lu %u\n", ret, sourceBlockIndex, sourceFileIndex);
-        if(ret) {
+        if(ret)
             scalableCache->trackBlockEviction(sourceFileIndex, sourceBlockIndex);
-            //JS: This is the new spot we will propagate who we stole from for other caches.
-            //Not sure how great this idea is...
-            scalableCache->setLastVictim(sourceFileIndex);
-        }
     }
     return ret;
 }

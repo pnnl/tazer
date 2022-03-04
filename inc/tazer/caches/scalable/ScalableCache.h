@@ -108,8 +108,7 @@ class ScalableCache : public Cache {
     void trackPattern(uint32_t fileIndex, std::string pattern);
   
     //JS: This is so we can let others piggyback off our metrics...
-    void setLastVictim(uint32_t fileIndex);
-    uint32_t getLastVictim();
+    double getLastUnitMarginalBenefit(uint32_t fileIndex);
 
   protected:
     ReaderWriterLock *_cacheLock;
@@ -134,7 +133,7 @@ class ScalableCache : public Cache {
 
     //JS: Metric piggybacking
     ReaderWriterLock * _lastVictimFileIndexLock;
-    uint32_t _lastVictimFileIndex;
+    std::unordered_map<uint32_t, double> _UMBMap;
 
     std::once_flag first_miss;
 };

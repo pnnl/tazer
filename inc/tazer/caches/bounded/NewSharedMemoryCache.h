@@ -80,10 +80,10 @@
 
 class NewSharedMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
   public:
-    NewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, ScalableCache * scalableCache=NULL);
+    NewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, ScalableCache * scalableCache);
     ~NewSharedMemoryCache();
 
-    static Cache *addNewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, ScalableCache * scalableCache=NULL);
+    static Cache *addNewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, ScalableCache * scalableCache);
     
 
   protected:

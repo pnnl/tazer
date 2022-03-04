@@ -101,8 +101,7 @@ Cache(cacheName, type),
 evictHisto(100),
 access(0), 
 misses(0),
-startTimeStamp((uint64_t)Timer::getCurrentTime()),
-_lastVictimFileIndex((uint32_t)-1) {
+startTimeStamp((uint64_t)Timer::getCurrentTime()) {
     stats.start();
     log(this) << _name << std::endl;
     _lastVictimFileIndexLock = new ReaderWriterLock();
@@ -296,7 +295,7 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
         _cacheLock->readerUnlock();
     }
     
-    PPRINTF("[JS] ScalableCache::readBlock req->size: %lu req->fileIndex: %lu req->blkIndex: %lu\n", req->size, req->fileIndex, req->blkIndex);
+    DPRINTF("[JS] ScalableCache::readBlock req->size: %lu req->fileIndex: %lu req->blkIndex: %lu\n", req->size, req->fileIndex, req->blkIndex);
     trackBlock(_name, (priority != 0 ? " [BLOCK_PREFETCH_REQUEST] " : " [BLOCK_REQUEST] "), fileIndex, index, priority);
 
     if (req->size <= _blockSize) {
@@ -400,6 +399,9 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     _cacheLock->readerLock();
     DPRINTF("---------- %u of %u ----------\n", allocateForFileIndex, _metaMap.size());
     MeMPRINTF("---------- %u of %u ----------\n", allocateForFileIndex, _metaMap.size());
+    //JS: This is for recording the unit marginal benifit and making it available to other caches
+    std::vector<std::tuple<uint32_t, double>> UMBList;
+    
     //JS: For calcRank
     auto localMisses = misses.load();
     uint64_t timestamp = Timer::getCurrentTime();
@@ -420,6 +422,7 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
         auto meta = x.second;
         if(allocateForFileIndex != fileIndex) {
             auto temp = meta->calcRank(timestamp-startTimeStamp, localMisses);
+            UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,temp));
             DPRINTF("-------Index: %u %lf\n", fileIndex, temp);
             MeMPRINTF("-------Index: %u %lf\n", fileIndex, temp);
             if(!std::isnan(temp) && temp > 0 && temp < minRank) {
@@ -464,6 +467,12 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
         }
     }
     _cacheLock->readerUnlock();
+
+    _lastVictimFileIndexLock->writerLock();
+    for(const auto &UMB : UMBList) 
+        _UMBMap[std::get<0>(UMB)] =  std::get<1>(UMB);
+    _lastVictimFileIndexLock->writerUnlock();
+
     return ret;
 }
 
@@ -512,17 +521,12 @@ void ScalableCache::trackPattern(uint32_t fileIndex, std::string pattern) {
     trackBlock(_name, pattern, fileIndex, -1, -1);
 }
 
-void ScalableCache::setLastVictim(uint32_t fileIndex) {
-    _lastVictimFileIndexLock->writerLock();
-    _lastVictimFileIndex = fileIndex;
-    PPRINTF("SETTING LAST VICTIM %u\n", _lastVictimFileIndex);
-    _lastVictimFileIndexLock->writerUnlock();
-}
-
-uint32_t ScalableCache::getLastVictim() {
+double ScalableCache::getLastUnitMarginalBenefit(uint32_t fileIndex) {
+    double ret = std::numeric_limits<double>::max();
     _lastVictimFileIndexLock->readerLock();
-    auto ret = _lastVictimFileIndex;
-    DPRINTF("GETTING LAST VICTIM %u\n", ret);
+    auto it = _UMBMap.find(fileIndex);
+    if(it != _UMBMap.end())
+        ret = it->second;
     _lastVictimFileIndexLock->readerUnlock();
     return ret;
 }

@@ -119,6 +119,7 @@ NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, ui
     log(this) << _name << " " << _cacheSize << " " << _blockSize << " " << _numBlocks << " " << _associativity << " " << _numBins << std::endl;
     _localLock = new ReaderWriterLock();
     stats.end(false, CacheStats::Metric::constructor);
+    PPRINTF("*********************SETTING SCALABLE CACHE HERE %p blockSize %lu\n", _scalableCache, _blockSize);
 }
 
 template <class Lock>
@@ -206,9 +207,8 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
 
     BlockEntry *victimEntry = NULL;
     uint32_t victimFileIndex = -1;
-    uint32_t victimMinTime = -1;
-    if(_scalableCache)
-        victimFileIndex = _scalableCache->getLastVictim();
+    uint32_t victimTime = -1;
+    double victimMinUMB = std::numeric_limits<double>::max();
 
     for (uint32_t i = 0; i < _associativity; i++) { // maybe we want to split this into two loops--first to check if any empty or if its here, then a lru pass, other wise we require checking the number of active users on every block which can be expensive for file backed caches
         //Find actual, empty, or oldest
@@ -223,24 +223,28 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
         }
         else if (blkEntry->status == BLK_AVAIL) {// we found an available block, deterimine if we evict it
             //JS: Scalable metric piggybacking
-            if(_scalableCache && fileIndex != victimFileIndex) {
-                if(blkEntry->fileIndex == victimFileIndex) {
-                    if (blkEntry->timeStamp < victimMinTime) {
+            if(_scalableCache) {
+                if(blkEntry->fileIndex != victimFileIndex) {
+                    auto umb = _scalableCache->getLastUnitMarginalBenefit(fileIndex);
+                    if(umb < victimMinUMB) {
                         if (!anyUsers(blkEntry,req)) {
-                            victimMinTime = blkEntry->timeStamp;
+                            victimTime = blkEntry->timeStamp;
+                            victimMinUMB = umb;
                             victimEntry = blkEntry;
+                            PPRINTF("OK SO WE ARE HERE... %lf\n", umb);
                         }
-                        else
-                            PPRINTF("SCALE D\n");
+                        // else
+                        //     PPRINTF("SCALE D -- Users...\n");
                     }
-                    else
-                        PPRINTF("SCALE C\n");
+                    // else
+                    //     PPRINTF("SCALE C -- %lf - %lf\n", umb, victimMinUMB);
                 }
-                else
-                    PPRINTF("SCALE B\n");
+                // else
+                //     PPRINTF("SCALE B %u - %u\n", blkEntry->fileIndex, victimFileIndex);
             }
-            else
-                PPRINTF("SCALE A\n");
+            // else
+            //     PPRINTF("SCALE A %p\n", _scalableCache);
+
             //LRU
             if (blkEntry->timeStamp < minTime) { //Look for an old one
                 if (!anyUsers(blkEntry,req)) { //can optimize a read since we already have the blkEntry, pass the pointer to the entry?
@@ -270,11 +274,13 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
     }
     
     //JS: if we can piggyback then lets set mins, otherwise fall back on LRU
-    if (victimMinTime != (uint32_t)-1 && victimEntry) { //Did we find a space
-       minTime = victimMinTime;
+    if (victimTime != (uint32_t)-1 && victimEntry) { //Did we find a space
+       minTime = victimTime;
        minEntry = victimEntry;
-       PPRINTF("SCALE METRIC PIGGYBACK\n");
+    //    PPRINTF("SCALE METRIC PIGGYBACK %lf\n", victimMinUMB);
     }
+    // else
+    //     PPRINTF("FAILED SCALE METRIC PIGGYBACK %u %p %lf\n", victimTime, victimEntry, victimMinUMB);
 
     if (minTime != (uint32_t)-1 && minEntry) { //Did we find a space
         _collisions++;
@@ -440,7 +446,6 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
     //     req->globalTrigger=false;
     // }
     req->trace()<<_name<<" READ BLOCK"<<std::endl;
-    PPRINTF("[JS] NewBoundedCache::readBlock req->size: %lu req->fileIndex: %lu req->blkIndex: %lu\n", req->size, req->fileIndex, req->blkIndex);
     log(this) << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << " nl: " << _nextLevel->name() << std::endl;
     trackBlock(_name, (priority != 0 ? " [BLOCK_PREFETCH_REQUEST] " : " [BLOCK_REQUEST] "), req->fileIndex, req->blkIndex, priority);
     // if ((_nextLevel->name() == NETWORKCACHENAME && getRequestTime() > _nextLevel->getRequestTime()) && Timer::getCurrentTime() % 1000 < 999) {
