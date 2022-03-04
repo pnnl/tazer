@@ -95,7 +95,7 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-NewSharedMemoryCache::NewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : NewBoundedCache(cacheName, type, cacheSize, blockSize, associativity) {
+NewSharedMemoryCache::NewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, ScalableCache * scalableCache) : NewBoundedCache(cacheName, type, cacheSize, blockSize, associativity, scalableCache) {
     // std::cout<<"[TAZER] " << "Constructing " << _name << " in shared memory cache" << std::endl;
     stats.start();
     std::string filePath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
@@ -259,10 +259,10 @@ bool NewSharedMemoryCache::anyUsers(BlockEntry * entry, Request* req) {
     return ((MemBlockEntry*)entry)->activeCnt;
 }
 
-Cache *NewSharedMemoryCache::addNewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) {
+Cache *NewSharedMemoryCache::addNewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, ScalableCache * scalableCache) {
     return Trackable<std::string, Cache *>::AddTrackable(
         cacheName, [&]() -> Cache * {
-            Cache *temp = new NewSharedMemoryCache(cacheName, type, cacheSize, blockSize, associativity);
+            Cache *temp = new NewSharedMemoryCache(cacheName, type, cacheSize, blockSize, associativity, scalableCache);
             return temp;
         });
 }

@@ -75,6 +75,7 @@
 #ifndef NewBoundedCache_H
 #define NewBoundedCache_H
 #include "Cache.h"
+#include "../scalable/ScalableCache.h"
 #include "Loggable.h"
 #include "ReaderWriterLock.h"
 #include "Trackable.h"
@@ -95,7 +96,7 @@
 template <class Lock>
 class NewBoundedCache : public Cache {
   public:
-    NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity);
+    NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, ScalableCache * scalableCache=NULL);
     virtual ~NewBoundedCache();
 
     virtual bool writeBlock(Request *req);
@@ -201,6 +202,9 @@ class NewBoundedCache : public Cache {
 
     //JS: This is just temp for checking which files had blocks evicted
     Histogram evictHisto;
+
+    //JS: Metric piggybacking
+    ScalableCache * _scalableCache;
 };
 
 #endif /* NewBoundedCache_H */

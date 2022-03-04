@@ -92,16 +92,18 @@
 #define DPRINTF(...)
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-//#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
 evictHisto(100),
 access(0), 
 misses(0),
-startTimeStamp((uint64_t)Timer::getCurrentTime()) {
+startTimeStamp((uint64_t)Timer::getCurrentTime()),
+_lastVictimFileIndex((uint32_t)-1) {
     stats.start();
     log(this) << _name << std::endl;
+    _lastVictimFileIndexLock = new ReaderWriterLock();
     _cacheLock = new ReaderWriterLock();
     _blockSize = blockSize;
 
@@ -141,6 +143,7 @@ startTimeStamp((uint64_t)Timer::getCurrentTime()) {
 ScalableCache::~ScalableCache() {
     _terminating = true;
     log(this) << "deleting " << _name << " in ScalableCache" << std::endl;
+    delete _lastVictimFileIndexLock;
     delete _cacheLock;
     evictHisto.printBins();
     stats.print(_name);
@@ -283,7 +286,7 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
         _cacheLock->readerUnlock();
     }
     
-    DPRINTF("[JS] ScalableCache::readBlock req->size: %lu req->fileIndex: %lu req->blkIndex: %lu\n", req->size, req->fileIndex, req->blkIndex);
+    PPRINTF("[JS] ScalableCache::readBlock req->size: %lu req->fileIndex: %lu req->blkIndex: %lu\n", req->size, req->fileIndex, req->blkIndex);
     trackBlock(_name, (priority != 0 ? " [BLOCK_PREFETCH_REQUEST] " : " [BLOCK_REQUEST] "), fileIndex, index, priority);
 
     if (req->size <= _blockSize) {
@@ -491,4 +494,19 @@ void ScalableCache::trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex) 
 void ScalableCache::trackPattern(uint32_t fileIndex, std::string pattern) {
     DPRINTF("SETTING PATTER %s\n", pattern.c_str());
     trackBlock(_name, pattern, fileIndex, -1, -1);
+}
+
+void ScalableCache::setLastVictim(uint32_t fileIndex) {
+    _lastVictimFileIndexLock->writerLock();
+    _lastVictimFileIndex = fileIndex;
+    PPRINTF("SETTING LAST VICTIM %u\n", _lastVictimFileIndex);
+    _lastVictimFileIndexLock->writerUnlock();
+}
+
+uint32_t ScalableCache::getLastVictim() {
+    _lastVictimFileIndexLock->readerLock();
+    auto ret = _lastVictimFileIndex;
+    DPRINTF("GETTING LAST VICTIM %u\n", ret);
+    _lastVictimFileIndexLock->readerUnlock();
+    return ret;
 }

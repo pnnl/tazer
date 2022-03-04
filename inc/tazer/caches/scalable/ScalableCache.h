@@ -107,6 +107,10 @@ class ScalableCache : public Cache {
     void trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex);
     void trackPattern(uint32_t fileIndex, std::string pattern);
   
+    //JS: This is so we can let others piggyback off our metrics...
+    void setLastVictim(uint32_t fileIndex);
+    uint32_t getLastVictim();
+
   protected:
     ReaderWriterLock *_cacheLock;
     std::unordered_map<uint32_t, ScalableMetaData*> _metaMap;
@@ -121,10 +125,16 @@ class ScalableCache : public Cache {
     std::atomic<uint64_t> misses;
     uint64_t startTimeStamp;
 
+
+
   private:
     uint8_t * getBlockData(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset);
     uint8_t * getBlockDataOrReserve(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset, bool &reserve);
     void setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * data, uint64_t dataSize);
+    
+    //JS: Metric piggybacking
+    ReaderWriterLock * _lastVictimFileIndexLock;
+    uint32_t _lastVictimFileIndex;
 };
 
 #endif // SCALABLECACHE_H

@@ -149,7 +149,10 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     }
 
     if (Config::useSharedMemoryCache && Config::enableSharedMem) {
-        c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
+        if(Config::useScalableCache)
+            c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity, (ScalableCache*)c);
+        else
+            c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
         std::cerr << "[TAZER] "
                   << "shared mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);

@@ -94,7 +94,7 @@
 #define PPRINTF(...) fprintf(stderr, __VA_ARGS__)
 
 template <class Lock>
-NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity) : Cache(cacheName,type),
+NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, ScalableCache * scalableCache) : Cache(cacheName,type),
                                                                                                                           _cacheSize(cacheSize),
                                                                                                                           _blockSize(blockSize),
                                                                                                                           _associativity(associativity),
@@ -102,7 +102,8 @@ NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, ui
                                                                                                                           _collisions(0),
                                                                                                                           _prefetchCollisions(0),
                                                                                                                           _outstanding(0),
-                                                                                                                          evictHisto(100) {
+                                                                                                                          evictHisto(100),
+                                                                                                                          _scalableCache(scalableCache) {
 
     // log(this) /*debug()*/<< "Constructing " << _name << " in NewBoundedCache" << std::endl;
     stats.start();
@@ -203,6 +204,12 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
     BlockEntry *entry = cmpBlk.get();
     auto blkEntries = readBin(binIndex);
 
+    BlockEntry *victimEntry = NULL;
+    uint32_t victimFileIndex = -1;
+    uint32_t victimMinTime = -1;
+    if(_scalableCache)
+        victimFileIndex = _scalableCache->getLastVictim();
+
     for (uint32_t i = 0; i < _associativity; i++) { // maybe we want to split this into two loops--first to check if any empty or if its here, then a lru pass, other wise we require checking the number of active users on every block which can be expensive for file backed caches
         //Find actual, empty, or oldest
         blkEntry = blkEntries[i];
@@ -215,6 +222,25 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
             return blkEntry;
         }
         else if (blkEntry->status == BLK_AVAIL) {// we found an available block, deterimine if we evict it
+            //JS: Scalable metric piggybacking
+            if(_scalableCache && fileIndex != victimFileIndex) {
+                if(blkEntry->fileIndex == victimFileIndex) {
+                    if (blkEntry->timeStamp < victimMinTime) {
+                        if (!anyUsers(blkEntry,req)) {
+                            victimMinTime = blkEntry->timeStamp;
+                            victimEntry = blkEntry;
+                        }
+                        else
+                            PPRINTF("SCALE D\n");
+                    }
+                    else
+                        PPRINTF("SCALE C\n");
+                }
+                else
+                    PPRINTF("SCALE B\n");
+            }
+            else
+                PPRINTF("SCALE A\n");
             //LRU
             if (blkEntry->timeStamp < minTime) { //Look for an old one
                 if (!anyUsers(blkEntry,req)) { //can optimize a read since we already have the blkEntry, pass the pointer to the entry?
@@ -242,6 +268,14 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
         stats.addAmt(1, CacheStats::Metric::evictions, 1);
         return minPrefetchEntry;
     }
+    
+    //JS: if we can piggyback then lets set mins, otherwise fall back on LRU
+    if (victimMinTime != (uint32_t)-1 && victimEntry) { //Did we find a space
+       minTime = victimMinTime;
+       minEntry = victimEntry;
+       PPRINTF("SCALE METRIC PIGGYBACK\n");
+    }
+
     if (minTime != (uint32_t)-1 && minEntry) { //Did we find a space
         _collisions++;
         trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 0);
@@ -406,7 +440,7 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
     //     req->globalTrigger=false;
     // }
     req->trace()<<_name<<" READ BLOCK"<<std::endl;
-    
+    PPRINTF("[JS] NewBoundedCache::readBlock req->size: %lu req->fileIndex: %lu req->blkIndex: %lu\n", req->size, req->fileIndex, req->blkIndex);
     log(this) << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << " nl: " << _nextLevel->name() << std::endl;
     trackBlock(_name, (priority != 0 ? " [BLOCK_PREFETCH_REQUEST] " : " [BLOCK_REQUEST] "), req->fileIndex, req->blkIndex, priority);
     // if ((_nextLevel->name() == NETWORKCACHENAME && getRequestTime() > _nextLevel->getRequestTime()) && Timer::getCurrentTime() % 1000 < 999) {
