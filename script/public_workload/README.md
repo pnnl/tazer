@@ -10,4 +10,6 @@ Run the code:
 
 python transform.py <Experiment ID>
 
-ex: python transform.py 216 
+ex: python transform.py 216
+
+NOTE: Only use the clean script if you want to remove all the files and folders created by transform.py 
