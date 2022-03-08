@@ -94,6 +94,8 @@ class ReaderWriterLock {
     bool tryReaderLock();
     bool cowardlyUpdgradeWriterLock();
 
+    void print();
+
     ReaderWriterLock();
     ~ReaderWriterLock();
 

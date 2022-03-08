@@ -91,3 +91,6 @@ configure_file(FileStressTest.sh ${CMAKE_BINARY_DIR}/test/FileStressTest.sh @ONL
 
 add_executable(HistTest HistTest.cpp )
 target_link_libraries(HistTest testLib)
+
+add_executable(ResetSharedScalableMetric ResetSharedScalableMetric.cpp)
+target_link_libraries(ResetSharedScalableMetric testLib)

@@ -191,6 +191,10 @@ bool ReaderWriterLock::tryReaderLock() {
     return false;
 }
 
+void ReaderWriterLock::print() {
+    std::cout << "Readers: " << _readers.load() << " Writers: " << _writers.load() << std::endl; 
+}
+
 MultiReaderWriterLock::MultiReaderWriterLock(uint32_t numEntries) : _numEntries(numEntries), _dataAddr(NULL) {
 
     _readers = new std::atomic<uint16_t>[_numEntries];

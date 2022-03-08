@@ -116,9 +116,13 @@ class NewSharedMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
 
     //JS: This is for scalable cache metrics
     ReaderWriterLock *_UMBLock;
-    ReaderWriterLock *_UMBResetLock;
     double * _UMB; //Unit Marginal Benifit
     unsigned int * _UMBC;
+
+  // JS: This is a hack.  I need to get the size of a MemBlockEntry to create a 
+  // shared memory resetter.
+  public:
+    static unsigned int getSizeOfMemBlockEntry() { return sizeof(MemBlockEntry); }
 };
 
 #endif /* NewSharedMemoryCache_H */

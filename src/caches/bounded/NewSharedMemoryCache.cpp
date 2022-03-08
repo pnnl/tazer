@@ -91,19 +91,21 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <math.h>
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
-#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+// #define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+#define PPRINTF(...)
 
 #define SCALEABLE_METRIC_FILE_MAX 1000
 
 NewSharedMemoryCache::NewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, Cache * scalableCache) : NewBoundedCache(cacheName, type, cacheSize, blockSize, associativity, scalableCache) {
     // std::cout<<"[TAZER] " << "Constructing " << _name << " in shared memory cache" << std::endl;
     stats.start();
-    std::string filePath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + "_______");
+    std::string filePath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
     
-    unsigned int memSize = sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins) + 2 * sizeof(ReaderWriterLock) + (sizeof(double) + sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX + sizeof(uint32_t);
+    unsigned int memSize = sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins) + sizeof(ReaderWriterLock) + (sizeof(double) + sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX;
     
     int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
     PPRINTF("Trying to open %s %d\n", filePath.c_str(), fd);
@@ -125,25 +127,20 @@ NewSharedMemoryCache::NewSharedMemoryCache(std::string cacheName, CacheType type
             auto binLockDataAddr = (uint8_t *)_blkIndex + _numBlocks * sizeof(MemBlockEntry);
             _binLock = new MultiReaderWriterLock(_numBins, binLockDataAddr);
 
+            //JS: This is the addition for the scalable metric
+            uint8_t * startPtr = (uint8_t*)ptr;
+            uint8_t * endPtr = startPtr + memSize;
             uint8_t * lockAddr = binLockDataAddr + MultiReaderWriterLock::getDataSize(_numBins);
-            _UMBResetLock = (ReaderWriterLock*)lockAddr;
-            uint8_t * lockAddr2 = lockAddr + sizeof(ReaderWriterLock);
-            _UMBLock = (ReaderWriterLock*)lockAddr;
-            uint8_t * UMBAddr = lockAddr2 + sizeof(ReaderWriterLock);
-            _UMB = (double*)UMBAddr;
+            uint8_t * UMBAddr = lockAddr + sizeof(ReaderWriterLock);
             uint8_t * UMBCAddr = UMBAddr + sizeof(double) * SCALEABLE_METRIC_FILE_MAX;
+            if(UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX != endPtr) {
+                PRINTF("JS: REUSE: ERROR ON SHARED MEMORY POINTER ARITHMETIC!!! %s\n", filePath.c_str());
+                PRINTF("JS: REUSE: %p - %p = %u\n", endPtr, UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX, endPtr - (UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX));
+            }
+            //JS: Just reuse the lock as it is in use
+            _UMBLock = (ReaderWriterLock*)lockAddr;
+            _UMB = (double*)UMBAddr;
             _UMBC = (unsigned int*) UMBCAddr;
-            //JS: Try to reset if there is no other users
-            // if(_UMBResetLock->cowardlyTryWriterLock()) {
-                PPRINTF("Shared memory setting UMB to zero\n");
-                for(unsigned int i=0; i<SCALEABLE_METRIC_FILE_MAX; i++) {
-                    _UMB[i] = 0;
-                    _UMBC[i] = 0;
-                }
-                // _UMBResetLock->writerUnlock();
-            // }
-            //JS: Otherwise let people know we are here
-            // _UMBResetLock->readerLock();
 
             log(this) << "init: " << (uint32_t)*init << std::endl;
         }
@@ -173,25 +170,20 @@ NewSharedMemoryCache::NewSharedMemoryCache(std::string cacheName, CacheType type
         }
         _binLock->writerUnlock(0);
 
+        //JS: This is the addition for the scalable metric
+        uint8_t * startPtr = (uint8_t*)ptr;
+        uint8_t * endPtr = startPtr + memSize;
         uint8_t * lockAddr = binLockDataAddr + MultiReaderWriterLock::getDataSize(_numBins);
-        _UMBResetLock = new (lockAddr) ReaderWriterLock();
-        uint8_t * lockAddr2 = lockAddr + sizeof(ReaderWriterLock);
-        _UMBLock = new (lockAddr2) ReaderWriterLock();
-        uint8_t * UMBAddr = lockAddr2 + sizeof(ReaderWriterLock);
-        _UMB = (double*)UMBAddr;
+        uint8_t * UMBAddr = lockAddr + sizeof(ReaderWriterLock);
         uint8_t * UMBCAddr = UMBAddr + sizeof(double) * SCALEABLE_METRIC_FILE_MAX;
+        if(UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX != endPtr) {
+            PRINTF("JS: CREATION: ERROR ON SHARED MEMORY POINTER ARITHMETIC!!! %s\n", filePath.c_str());
+            PRINTF("JS: CREATION: %p - %p = %u\n", endPtr, UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX, endPtr - (UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX));
+        }
+        //JS: Create new lock since we are the first
+        _UMBLock = new (lockAddr) ReaderWriterLock();
+        _UMB = (double*)UMBAddr;
         _UMBC = (unsigned int*) UMBCAddr;
-        //JS: Try to reset if there is no other users
-        // if(_UMBResetLock->cowardlyTryWriterLock()) {
-            PPRINTF("Shared memory setting UMB to zero\n");
-            for(unsigned int i=0; i<SCALEABLE_METRIC_FILE_MAX; i++) {
-                _UMB[i] = 0;
-                _UMBC[i] = 0;
-            }
-            // _UMBResetLock->writerUnlock();
-        // }
-        //JS: Otherwise let people know we are here
-        // _UMBResetLock->readerLock();
         
         *init = 1;
         log(this) << "init: " << *init << std::endl;
@@ -220,7 +212,6 @@ NewSharedMemoryCache::~NewSharedMemoryCache() {
             numEmpty+=1;
         }
     }
-    // _UMBResetLock->readerUnlock();
     std::cout<<_name<<" number of empty blocks: "<<numEmpty<<std::endl;
     stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
@@ -334,7 +325,7 @@ double NewSharedMemoryCache::getLastUMB(uint32_t fileIndex) {
     double ret = std::numeric_limits<double>::max();
     if(fileIndex < SCALEABLE_METRIC_FILE_MAX) {
         _UMBLock->readerLock();
-        if(_UMBC[fileIndex]) {
+        if(_UMBC[fileIndex] && !isnan(_UMB[fileIndex]) && !isinf(_UMB[fileIndex])) {
             ret = _UMB[fileIndex] / _UMBC[fileIndex];
             PPRINTF("---------------getLastUMB %lf %u\n", _UMB[fileIndex], _UMBC[fileIndex]);
         }
