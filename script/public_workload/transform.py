@@ -1,6 +1,7 @@
 import glob
 import numpy as np
 import sys
+import os
 
 #exp_num = 216
 exp_num = sys.argv[1]
@@ -37,7 +38,8 @@ for i in list_of_files:
             offset[out[0]] = []
         offset[out[0]].append(float(tt[-2]))
         out.append(tt[-1])
-        #t.append(out) 
+        #Bigflowsim's 0 requirement
+        out.append("0 0") 
         if tt[0] not in data_dict.keys():
             data_dict[tt[0]] = []
         data_dict[tt[0]].append(out)
@@ -105,3 +107,41 @@ for i in f.keys():
 file_out = open("FileIDs_exp"+str(exp_num)+".txt", "w")
 file_out.write(ss_out2)
 file_out.close()
+
+max_offsets = []
+ind_files = []
+for i in offset.keys():
+    max_offsets.append(max(offset[i]))
+    if i not in ind_files and "output" not in i:
+        ind_files.append(i)
+
+# uncomment the following lines if you need the files removed, if they are in the same folder as the current script
+# for i in glob.glob("tazer*.dat"):
+#     if os.path.isfile(i) and "tazer.dat" not in i:
+#         os.unlink(i)
+#
+# if os.path.isfile("tazer.dat"):
+#     os.unlink("tazer.dat")
+#
+# for i in glob.glob("tazer*.dat.meta.in"):
+#     if os.path.isfile(i):
+#         os.unlink(i)
+
+max_size = int(max(max_offsets))
+if not os.path.isdir('main_data'):
+    os.mkdir("main_data")
+if not os.path.isdir('main_data/'+str(max_size)):
+    os.mkdir("main_data/"+str(max_size))
+if not os.path.isfile("main_data/"+str(max_size)+"/tazer.dat"):
+    with open('main_data/'+str(max_size)+'/tazer.dat', 'wb') as f:
+        f.write('0' * max_size)
+
+# the experiment folder
+if not os.path.isdir('exp_'+str(exp_num)):
+    os.mkdir("exp_"+str(exp_num))
+    for i in ind_files:
+        os.symlink( '/files0/belo700/speedracer/test/tazer/script/new_workload/main_data/'+str(max_size)+'/tazer.dat', 'exp_'+str(exp_num)+"/"+i)
+        #Writing the meta.in files
+        f = open('exp_'+str(exp_num)+"/"+i+".meta.in", "w")
+        f.write("nodeX:6024:0:0:0:128:"+i+"|")
+        f.close()
