@@ -34,29 +34,31 @@ int main() {
         uint32_t * init = (uint32_t*) ptr;
         if(*init) {
             PRINTF("Shared Memory was already initialized %s\n", filePath.c_str());
-            uint8_t * startPtr = (uint8_t*)ptr;
-            uint8_t * endPtr = startPtr + memSize;
-            uint8_t * lockAddr = endPtr - scalableSize;
-            uint8_t * UMBAddr = lockAddr + sizeof(ReaderWriterLock);
-            uint8_t * UMBCAddr = UMBAddr + sizeof(double) * SCALEABLE_METRIC_FILE_MAX;
-            if(UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX != endPtr) {
-                PRINTF("JS: ERROR ON POINTER ARITHMETIC!!! %s\n", filePath.c_str());
-                PRINTF("JS: %p - %p = %u\n", endPtr, UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX, endPtr - (UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX));
-            }
-            else {
-                ReaderWriterLock * check = (ReaderWriterLock*)lockAddr;
-                check->print();
+            *init = 2;
+            PRINTF("New init %s : %u\n", filePath.c_str(), *init);
+            // uint8_t * startPtr = (uint8_t*)ptr;
+            // uint8_t * endPtr = startPtr + memSize;
+            // uint8_t * lockAddr = endPtr - scalableSize;
+            // uint8_t * UMBAddr = lockAddr + sizeof(ReaderWriterLock);
+            // uint8_t * UMBCAddr = UMBAddr + sizeof(double) * SCALEABLE_METRIC_FILE_MAX;
+            // if(UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX != endPtr) {
+            //     PRINTF("JS: ERROR ON POINTER ARITHMETIC!!! %s\n", filePath.c_str());
+            //     PRINTF("JS: %p - %p = %u\n", endPtr, UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX, endPtr - (UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX));
+            // }
+            // else {
+            //     ReaderWriterLock * check = (ReaderWriterLock*)lockAddr;
+            //     check->print();
 
-                PRINTF("Reseting UMB Shared Memory %s\n", filePath.c_str());
-                ReaderWriterLock * _UMBLock = new (lockAddr) ReaderWriterLock();
-                double * _UMB = (double*)UMBAddr;
-                unsigned int * _UMBC = (unsigned int*) UMBCAddr;
-                for(unsigned int i=0; i<SCALEABLE_METRIC_FILE_MAX; i++) {
-                    _UMB = 0;
-                    _UMBC = 0;
-                }
-                _UMBLock->print();
-            }
+            //     PRINTF("Reseting UMB Shared Memory %s\n", filePath.c_str());
+            //     ReaderWriterLock * _UMBLock = new (lockAddr) ReaderWriterLock();
+            //     double * _UMB = (double*)UMBAddr;
+            //     unsigned int * _UMBC = (unsigned int*) UMBCAddr;
+            //     for(unsigned int i=0; i<SCALEABLE_METRIC_FILE_MAX; i++) {
+            //         _UMB = 0;
+            //         _UMBC = 0;
+            //     }
+            //     _UMBLock->print();
+            // }
         }
         shm_unlink(filePath.c_str());
     }

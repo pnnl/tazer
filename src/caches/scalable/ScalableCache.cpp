@@ -101,7 +101,9 @@ Cache(cacheName, type),
 evictHisto(100),
 access(0), 
 misses(0),
-startTimeStamp((uint64_t)Timer::getCurrentTime()) {
+startTimeStamp((uint64_t)Timer::getCurrentTime()),
+_sharedMemoryCache(NULL),
+_fileCache(NULL) {
     stats.start();
     log(this) << _name << std::endl;
     _lastVictimFileIndexLock = new ReaderWriterLock();
@@ -471,8 +473,10 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     _cacheLock->readerUnlock();
     if(_sharedMemoryCache)
         _sharedMemoryCache->setLastUMB(UMBList);
-    else
-        setLastUMB(UMBList);
+    if(_fileCache)
+        _fileCache->setLastUMB(UMBList);
+    // else
+    //     setLastUMB(UMBList);
     return ret;
 }
 
@@ -541,5 +545,11 @@ double ScalableCache::getLastUMB(uint32_t fileIndex) {
 void ScalableCache::setSharedMemoryCache(NewSharedMemoryCache * cache) {
     _lastVictimFileIndexLock->writerLock();
     _sharedMemoryCache = cache;
+    _lastVictimFileIndexLock->writerUnlock();
+}
+
+void ScalableCache::setFileCache(NewBoundedFilelockCache * cache) {
+    _lastVictimFileIndexLock->writerLock();
+    _fileCache = cache;
     _lastVictimFileIndexLock->writerUnlock();
 }

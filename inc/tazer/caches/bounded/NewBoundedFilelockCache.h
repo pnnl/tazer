@@ -83,12 +83,15 @@
 
 class NewBoundedFilelockCache : public NewBoundedCache<FcntlBoundedReaderWriterLock> {
   public:
-    NewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
+    NewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath, Cache * scalableCache);
     virtual ~NewBoundedFilelockCache();
 
     virtual bool writeBlock(Request *req);
-    static Cache *addNewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
+    static Cache *addNewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath, Cache * scalableCache);
 
+    virtual double getLastUMB(uint32_t fileIndex);
+    void setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList);
+    
   private:
     struct FileBlockEntry : BlockEntry {
         uint16_t activeCnt;
@@ -174,6 +177,15 @@ class NewBoundedFilelockCache : public NewBoundedCache<FcntlBoundedReaderWriterL
 
     ThreadPool<std::function<void()>> *_writePool;
     std::atomic<std::uint64_t> _myOutstandingWrites;
+
+    //JS: This is for scalable cache metrics
+    int _scaleFd;
+    unsigned int _scaleMemSize;
+    ReaderWriterLock *_UMBLock;
+    double * _UMB;
+    unsigned int * _UMBC;
+    bool initScalableMetricPiggyBack(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
+    void closeScalableMetricPiggyBack();
 };
 
 #endif /* NewBoundedFilelockCache_H */

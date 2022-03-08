@@ -114,8 +114,13 @@
 #include <thread>
 #include <unistd.h>
 
-// #define UMB_METRIC_PIGGYBACK(a, b)
-#define UMB_METRIC_PIGGYBACK(a, b) a = (ScalableCache*) b
+//JS: Turn this on to enable the NewSharedMemoryCache to use unit marginal benifit to decide what to evict
+// #define UMB_METRIC_PIGGYBACK_SM(a, b)
+#define UMB_METRIC_PIGGYBACK_SM(a, b) a = (ScalableCache*) b
+
+//JS: Turn this on to enable NewBoundedFilelockCache to use unit marginal benifit to decide what to evict
+#define UMB_METRIC_PIGGYBACK_FC(a, b)
+// #define UMB_METRIC_PIGGYBACK_FC(a, b) a = (ScalableCache*) b
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
@@ -137,12 +142,14 @@ std::chrono::time_point<std::chrono::high_resolution_clock> *InputFile::_time_of
 void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     int level = 0;
     Cache *c = NULL;
-    ScalableCache * sc = NULL;
+    ScalableCache * scForSM = NULL;
+    ScalableCache * scForFC = NULL;
 
     if (Config::useMemoryCache) {
         if(Config::useScalableCache) {
             c = ScalableCache::addScalableCache(SCALABLECACHENAME, CacheType::scalable, Config::memoryCacheBlocksize, Config::scalableCacheNumBlocks * Config::memoryCacheBlocksize);
-            UMB_METRIC_PIGGYBACK(sc, c);
+            UMB_METRIC_PIGGYBACK_SM(scForSM, c);
+            UMB_METRIC_PIGGYBACK_FC(scForFC, c);
             std::cerr << "[TAZER] " << "scalable cache: " << (void *)c << std::endl;
         }
         else {
@@ -154,9 +161,9 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     }
 
     if (Config::useSharedMemoryCache && Config::enableSharedMem) {
-        c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity, sc);
-        if(sc)
-            sc->setSharedMemoryCache((NewSharedMemoryCache*)c);
+        c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity, scForSM);
+        if(scForSM)
+            scForSM->setSharedMemoryCache((NewSharedMemoryCache*)c);
         std::cerr << "[TAZER] "
                   << "shared mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
@@ -177,7 +184,9 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     }
 
     if (Config::useBoundedFilelockCache) {
-        c = NewBoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
+        c = NewBoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath, scForFC);
+        if(scForFC)
+            scForFC->setFileCache((NewBoundedFilelockCache*)c);
         std::cerr << "[TAZER] "
                   << "bounded filelock cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);

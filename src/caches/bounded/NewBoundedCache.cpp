@@ -92,6 +92,7 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 #define PPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define PPRINTF(...)
 
 template <class Lock>
 NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, Cache * scalableCache) : Cache(cacheName,type),
@@ -270,7 +271,7 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
     if (victimTime != (uint32_t)-1 && victimEntry) { //Did we find a space
        minTime = victimTime;
        minEntry = victimEntry;
-       PPRINTF("SCALE METRIC PIGGYBACK %lf\n", victimMinUMB);
+       PPRINTF("%s : SCALE METRIC PIGGYBACK %lf\n", _name, victimMinUMB);
     }
 
     if (minTime != (uint32_t)-1 && minEntry) { //Did we find a space

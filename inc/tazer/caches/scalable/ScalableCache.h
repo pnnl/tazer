@@ -81,6 +81,7 @@
 #include "ScalableMetaData.h"
 #include "ScalableAllocator.h"
 #include "../bounded/NewSharedMemoryCache.h"
+#include "../bounded/NewBoundedFilelockCache.h"
 #include <map>
 
 #define SCALABLECACHENAME "scalable"
@@ -112,6 +113,7 @@ class ScalableCache : public Cache {
     double getLastUMB(uint32_t fileIndex);
     void setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList);
     void setSharedMemoryCache(NewSharedMemoryCache * cache);
+    void setFileCache(NewBoundedFilelockCache * cache);
 
   protected:
     ReaderWriterLock *_cacheLock;
@@ -138,6 +140,7 @@ class ScalableCache : public Cache {
     ReaderWriterLock * _lastVictimFileIndexLock;
     std::unordered_map<uint32_t, double> _UMBMap;
     NewSharedMemoryCache * _sharedMemoryCache;
+    NewBoundedFilelockCache * _fileCache;
 
     std::once_flag first_miss;
 };

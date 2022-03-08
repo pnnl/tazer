@@ -89,15 +89,19 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <math.h>
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
+#define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+// #define PPRINTF(...)
 
+#define SCALEABLE_METRIC_FILE_MAX 1000
 
 //look into a link based locking mechanism... something where we have a lock file for each bin, forcing to be mutex, in the lock file we also mainiting the reader/writer block for each block, which should just be an added section in the _binFd entries...
 // verify we only write to block while bin is locked, but we can have multiple readers to a blk, if so we can do the link trick on the blks as well using that as our counter
 //TODO: create version that locks the file when reserved and only releases after it has written it...
-NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath) : NewBoundedCache(cacheName, type, cacheSize, blockSize, associativity),
+NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath, Cache * scalableCache) : NewBoundedCache(cacheName, type, cacheSize, blockSize, associativity, scalableCache),
                                                                                                                                                            _open((unixopen_t)dlsym(RTLD_NEXT, "open")),
                                                                                                                                                            _close((unixclose_t)dlsym(RTLD_NEXT, "close")),
                                                                                                                                                            _read((unixread_t)dlsym(RTLD_NEXT, "read")),
@@ -106,10 +110,17 @@ NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheTyp
                                                                                                                                                            _fsync((unixfdatasync_t)dlsym(RTLD_NEXT, "fdatasync")),
                                                                                                                                                            _stat((unixxstat_t)dlsym(RTLD_NEXT, "stat")),
                                                                                                                                                            _cachePath(cachePath),
-                                                                                                                                                           _myOutstandingWrites(0) {
+                                                                                                                                                           _myOutstandingWrites(0),
+                                                                                                                                                           _scaleFd(-1),
+                                                                                                                                                           _scaleMemSize(0),
+                                                                                                                                                           _UMBLock(NULL),
+                                                                                                                                                           _UMB(NULL),
+                                                                                                                                                           _UMBC(NULL) {
     stats.start();
     std::error_code err;
-    std::string shmPath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
+    if(scalableCache)
+        initScalableMetricPiggyBack(cacheName, type, cacheSize, blockSize, associativity, cachePath);
+    // std::string shmPath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
     // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
     // if(shmFd == -1){
     //     debug() <<_name<< " Reusing shared memory" << std::endl;
@@ -321,6 +332,7 @@ NewBoundedFilelockCache::~NewBoundedFilelockCache() {
     // delete _blkLock;
     // std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
     // shm_unlink(shmPath.c_str());
+    closeScalableMetricPiggyBack();
     stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
     debug() << std::endl;
@@ -633,13 +645,88 @@ void NewBoundedFilelockCache::cleanUpBlockData(uint8_t *data) {
     delete[] data;
 }
 
-Cache *NewBoundedFilelockCache::addNewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath) {
+Cache *NewBoundedFilelockCache::addNewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath, Cache * scalableCache) {
     return Trackable<std::string, Cache *>::AddTrackable(
         cacheName, [=]() -> Cache * {
-            Cache *temp = new NewBoundedFilelockCache(cacheName, type, cacheSize, blockSize, associativity, cachePath);
+            Cache *temp = new NewBoundedFilelockCache(cacheName, type, cacheSize, blockSize, associativity, cachePath, scalableCache);
             if (temp)
                 return temp;
             delete temp;
             return NULL;
         });
+}
+
+bool NewBoundedFilelockCache::initScalableMetricPiggyBack(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath) {
+    bool ret = false;
+
+    std::string filePath(_cachePath + "/scalable" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc");
+    PPRINTF("initScalableMetricPiggyBack: %s\n", filePath.c_str());
+    _scaleMemSize = sizeof(ReaderWriterLock) + (sizeof(double) + sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX;
+    
+    bool created = true;
+    _scaleFd = (*_open)(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, S_IRWXU);
+    if(_scaleFd == -1) {
+        int _scaleFd = (*_open)(filePath.c_str(), O_RDWR);
+        created = false;
+    }
+
+    if(_scaleFd != -1) {
+        ftruncate(_scaleFd, _scaleMemSize);
+        void * ptr = mmap(NULL, _scaleMemSize, PROT_READ | PROT_WRITE, MAP_SHARED, _scaleFd, 0);
+        uint8_t * lockAddr = (uint8_t*) ptr;
+        uint8_t * UMBAddr = lockAddr + sizeof(ReaderWriterLock);
+        uint8_t * UMBCAddr = UMBAddr + sizeof(double) * SCALEABLE_METRIC_FILE_MAX;
+        _UMB = (double*)UMBAddr;
+        _UMBC = (unsigned int*) UMBCAddr;
+        if(created) {
+            _UMBLock = new (lockAddr) ReaderWriterLock();
+            for(unsigned int i=0; i<SCALEABLE_METRIC_FILE_MAX; i++) {
+                _UMB = 0;
+                _UMBC = 0;
+            }
+        }
+        else
+            _UMBLock = (ReaderWriterLock*)lockAddr;
+        ret = true;
+    }
+    
+    return ret;
+}
+
+void NewBoundedFilelockCache::closeScalableMetricPiggyBack() {
+    if(_UMBLock) {
+        munmap((void*)_UMBLock, _scaleMemSize);
+        (*_close)(_scaleFd);
+    }
+}
+
+void NewBoundedFilelockCache::setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList) {
+    if(_UMBLock) {
+        PPRINTF("FC-------------setLastUMB\n");
+        _UMBLock->writerLock();
+        for(const auto &UMB : UMBList) {
+            uint32_t index = std::get<0>(UMB);
+            double umb = std::get<1>(UMB);
+            if(index < SCALEABLE_METRIC_FILE_MAX) {
+                _UMB[index] += umb;
+                _UMBC[index]++;
+            }
+        }
+        _UMBLock->writerUnlock();
+    }
+}
+
+double NewBoundedFilelockCache::getLastUMB(uint32_t fileIndex) {
+    double ret = std::numeric_limits<double>::max();
+    if(_UMBLock) {
+        if(fileIndex < SCALEABLE_METRIC_FILE_MAX) {
+            _UMBLock->readerLock();
+            if(_UMBC[fileIndex] && !isnan(_UMB[fileIndex]) && !isinf(_UMB[fileIndex])) {
+                ret = _UMB[fileIndex] / _UMBC[fileIndex];
+                PPRINTF("FC-------------getLastUMB %lf %u\n", _UMB[fileIndex], _UMBC[fileIndex]);
+            }
+            _UMBLock->readerUnlock();
+        }
+    }
+    return ret;
 }
