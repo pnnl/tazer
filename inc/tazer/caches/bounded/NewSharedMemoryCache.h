@@ -80,11 +80,13 @@
 
 class NewSharedMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
   public:
-    NewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, ScalableCache * scalableCache);
+    NewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, Cache * scalableCache);
     ~NewSharedMemoryCache();
 
-    static Cache *addNewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, ScalableCache * scalableCache);
+    static Cache *addNewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, Cache * scalableCache);
     
+    virtual double getLastUMB(uint32_t fileIndex);
+    void setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList);
 
   protected:
     struct MemBlockEntry : BlockEntry {
@@ -111,6 +113,12 @@ class NewSharedMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
   private:
     MemBlockEntry *_blkIndex;
     uint8_t *_blocks;
+
+    //JS: This is for scalable cache metrics
+    ReaderWriterLock *_UMBLock;
+    ReaderWriterLock *_UMBResetLock;
+    double * _UMB; //Unit Marginal Benifit
+    unsigned int * _UMBC;
 };
 
 #endif /* NewSharedMemoryCache_H */

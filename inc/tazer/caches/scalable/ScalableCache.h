@@ -80,6 +80,7 @@
 #include "ReaderWriterLock.h"
 #include "ScalableMetaData.h"
 #include "ScalableAllocator.h"
+#include "../bounded/NewSharedMemoryCache.h"
 #include <map>
 
 #define SCALABLECACHENAME "scalable"
@@ -108,7 +109,9 @@ class ScalableCache : public Cache {
     void trackPattern(uint32_t fileIndex, std::string pattern);
   
     //JS: This is so we can let others piggyback off our metrics...
-    double getLastUnitMarginalBenefit(uint32_t fileIndex);
+    double getLastUMB(uint32_t fileIndex);
+    void setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList);
+    void setSharedMemoryCache(NewSharedMemoryCache * cache);
 
   protected:
     ReaderWriterLock *_cacheLock;
@@ -134,6 +137,7 @@ class ScalableCache : public Cache {
     //JS: Metric piggybacking
     ReaderWriterLock * _lastVictimFileIndexLock;
     std::unordered_map<uint32_t, double> _UMBMap;
+    NewSharedMemoryCache * _sharedMemoryCache;
 
     std::once_flag first_miss;
 };

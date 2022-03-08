@@ -93,8 +93,8 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-//#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-#define MeMPRINTF(...)
+#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+// #define MeMPRINTF(...)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -469,12 +469,10 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
         }
     }
     _cacheLock->readerUnlock();
-
-    _lastVictimFileIndexLock->writerLock();
-    for(const auto &UMB : UMBList) 
-        _UMBMap[std::get<0>(UMB)] =  std::get<1>(UMB);
-    _lastVictimFileIndexLock->writerUnlock();
-
+    if(_sharedMemoryCache)
+        _sharedMemoryCache->setLastUMB(UMBList);
+    else
+        setLastUMB(UMBList);
     return ret;
 }
 
@@ -523,7 +521,14 @@ void ScalableCache::trackPattern(uint32_t fileIndex, std::string pattern) {
     trackBlock(_name, pattern, fileIndex, -1, -1);
 }
 
-double ScalableCache::getLastUnitMarginalBenefit(uint32_t fileIndex) {
+void ScalableCache::setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList) {
+    _lastVictimFileIndexLock->writerLock();
+    for(const auto &UMB : UMBList) 
+        _UMBMap[std::get<0>(UMB)] =  std::get<1>(UMB);
+    _lastVictimFileIndexLock->writerUnlock();
+}
+
+double ScalableCache::getLastUMB(uint32_t fileIndex) {
     double ret = std::numeric_limits<double>::max();
     _lastVictimFileIndexLock->readerLock();
     auto it = _UMBMap.find(fileIndex);
@@ -531,4 +536,10 @@ double ScalableCache::getLastUnitMarginalBenefit(uint32_t fileIndex) {
         ret = it->second;
     _lastVictimFileIndexLock->readerUnlock();
     return ret;
+}
+
+void ScalableCache::setSharedMemoryCache(NewSharedMemoryCache * cache) {
+    _lastVictimFileIndexLock->writerLock();
+    _sharedMemoryCache = cache;
+    _lastVictimFileIndexLock->writerUnlock();
 }

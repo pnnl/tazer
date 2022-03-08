@@ -114,8 +114,8 @@
 #include <thread>
 #include <unistd.h>
 
-#define UMB_METRIC_PIGGYBACK(a, b)
-// #define UMB_METRIC_PIGGYBACK(a, b) a = (ScalableCache*) b
+// #define UMB_METRIC_PIGGYBACK(a, b)
+#define UMB_METRIC_PIGGYBACK(a, b) a = (ScalableCache*) b
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
@@ -155,6 +155,8 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
 
     if (Config::useSharedMemoryCache && Config::enableSharedMem) {
         c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity, sc);
+        if(sc)
+            sc->setSharedMemoryCache((NewSharedMemoryCache*)c);
         std::cerr << "[TAZER] "
                   << "shared mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);

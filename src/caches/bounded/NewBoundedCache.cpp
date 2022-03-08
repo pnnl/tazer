@@ -94,7 +94,7 @@
 #define PPRINTF(...) fprintf(stderr, __VA_ARGS__)
 
 template <class Lock>
-NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, ScalableCache * scalableCache) : Cache(cacheName,type),
+NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, Cache * scalableCache) : Cache(cacheName,type),
                                                                                                                           _cacheSize(cacheSize),
                                                                                                                           _blockSize(blockSize),
                                                                                                                           _associativity(associativity),
@@ -225,25 +225,18 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
             //JS: Scalable metric piggybacking
             if(_scalableCache) {
                 if(blkEntry->fileIndex != victimFileIndex) {
-                    auto umb = _scalableCache->getLastUnitMarginalBenefit(fileIndex);
+                    auto umb = getLastUMB(fileIndex);
+                    // auto umb = _scalableCache->getLastUMB(fileIndex);
                     if(umb < victimMinUMB) {
                         if (!anyUsers(blkEntry,req)) {
                             victimTime = blkEntry->timeStamp;
                             victimMinUMB = umb;
                             victimEntry = blkEntry;
-                            PPRINTF("OK SO WE ARE HERE... %lf\n", umb);
+                            DPRINTF("Got a UMB %lf\n", umb);
                         }
-                        // else
-                        //     PPRINTF("SCALE D -- Users...\n");
                     }
-                    // else
-                    //     PPRINTF("SCALE C -- %lf - %lf\n", umb, victimMinUMB);
                 }
-                // else
-                //     PPRINTF("SCALE B %u - %u\n", blkEntry->fileIndex, victimFileIndex);
             }
-            // else
-            //     PPRINTF("SCALE A %p\n", _scalableCache);
 
             //LRU
             if (blkEntry->timeStamp < minTime) { //Look for an old one
@@ -277,10 +270,8 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
     if (victimTime != (uint32_t)-1 && victimEntry) { //Did we find a space
        minTime = victimTime;
        minEntry = victimEntry;
-    //    PPRINTF("SCALE METRIC PIGGYBACK %lf\n", victimMinUMB);
+       PPRINTF("SCALE METRIC PIGGYBACK %lf\n", victimMinUMB);
     }
-    // else
-    //     PPRINTF("FAILED SCALE METRIC PIGGYBACK %u %p %lf\n", victimTime, victimEntry, victimMinUMB);
 
     if (minTime != (uint32_t)-1 && minEntry) { //Did we find a space
         _collisions++;
@@ -644,6 +635,12 @@ void NewBoundedCache<Lock>::addFile(uint32_t index, std::string filename, uint64
     if (_nextLevel) {
         _nextLevel->addFile(index, filename, blockSize, fileSize);
     }
+}
+
+template <class Lock>
+double NewBoundedCache<Lock>::getLastUMB(uint32_t fileIndex) { 
+    PPRINTF("********************* Nothing Here*********************"); 
+    return std::numeric_limits<double>::max();
 }
 
 // template class NewBoundedCache<ReaderWriterLock>;
