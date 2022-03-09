@@ -163,7 +163,7 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     if (Config::useSharedMemoryCache && Config::enableSharedMem) {
         c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity, scForSM);
         if(scForSM)
-            scForSM->setSharedMemoryCache((NewSharedMemoryCache*)c);
+            scForSM->setUMBCache(c);
         std::cerr << "[TAZER] "
                   << "shared mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
@@ -186,7 +186,7 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     if (Config::useBoundedFilelockCache) {
         c = NewBoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath, scForFC);
         if(scForFC)
-            scForFC->setFileCache((NewBoundedFilelockCache*)c);
+            scForFC->setUMBCache(c);
         std::cerr << "[TAZER] "
                   << "bounded filelock cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);

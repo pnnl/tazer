@@ -80,8 +80,6 @@
 #include "ReaderWriterLock.h"
 #include "ScalableMetaData.h"
 #include "ScalableAllocator.h"
-#include "../bounded/NewSharedMemoryCache.h"
-#include "../bounded/NewBoundedFilelockCache.h"
 #include <map>
 
 #define SCALABLECACHENAME "scalable"
@@ -109,11 +107,11 @@ class ScalableCache : public Cache {
     void trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex);
     void trackPattern(uint32_t fileIndex, std::string pattern);
   
-    //JS: This is so we can let others piggyback off our metrics...
-    double getLastUMB(uint32_t fileIndex);
-    void setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList);
-    void setSharedMemoryCache(NewSharedMemoryCache * cache);
-    void setFileCache(NewBoundedFilelockCache * cache);
+    //JS: This is so we can let others piggyback off our metrics.
+    //JS: I guess it is not that bad to just return vectors...
+    //https://stackoverflow.com/questions/15704565/efficient-way-to-return-a-stdvector-in-c
+    std::vector<std::tuple<uint32_t, double>> getLastUMB(Cache * cache);
+    void setUMBCache(Cache * cache);
 
   protected:
     ReaderWriterLock *_cacheLock;
@@ -138,9 +136,8 @@ class ScalableCache : public Cache {
 
     //JS: Metric piggybacking
     ReaderWriterLock * _lastVictimFileIndexLock;
-    std::unordered_map<uint32_t, double> _UMBMap;
-    NewSharedMemoryCache * _sharedMemoryCache;
-    NewBoundedFilelockCache * _fileCache;
+    std::vector<std::tuple<uint32_t, double>> _UMBList;
+    std::unordered_map<Cache*, bool> _UMBDirty;
 
     std::once_flag first_miss;
 };

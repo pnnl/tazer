@@ -84,9 +84,6 @@ class NewSharedMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
     ~NewSharedMemoryCache();
 
     static Cache *addNewSharedMemoryCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, Cache * scalableCache);
-    
-    virtual double getLastUMB(uint32_t fileIndex);
-    void setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList);
 
   protected:
     struct MemBlockEntry : BlockEntry {
@@ -110,6 +107,10 @@ class NewSharedMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
     virtual int decBlkCnt(BlockEntry * entry, Request* req);
     virtual bool anyUsers(BlockEntry * entry, Request* req);
 
+    //JS: Metric piggybacking
+    virtual double getLastUMB(uint32_t fileIndex);
+    virtual void setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList);
+
   private:
     MemBlockEntry *_blkIndex;
     uint8_t *_blocks;
@@ -118,6 +119,7 @@ class NewSharedMemoryCache : public NewBoundedCache<MultiReaderWriterLock> {
     ReaderWriterLock *_UMBLock;
     double * _UMB; //Unit Marginal Benifit
     unsigned int * _UMBC;
+    
 
   // JS: This is a hack.  I need to get the size of a MemBlockEntry to create a 
   // shared memory resetter.

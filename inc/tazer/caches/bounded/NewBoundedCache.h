@@ -75,6 +75,7 @@
 #ifndef NewBoundedCache_H
 #define NewBoundedCache_H
 #include "Cache.h"
+#include "../scalable/ScalableCache.h"
 #include "Loggable.h"
 #include "ReaderWriterLock.h"
 #include "Trackable.h"
@@ -104,9 +105,6 @@ class NewBoundedCache : public Cache {
 
     //TODO: merge/reimplement from old cache structure...
     virtual void cleanReservation();
-
-    //JS: Metric piggybacking
-    virtual double getLastUMB(uint32_t fileIndex);
 
   protected:
     struct BlockEntry {
@@ -207,6 +205,8 @@ class NewBoundedCache : public Cache {
 
     //JS: Metric piggybacking
     Cache * _scalableCache;
+    virtual double getLastUMB(uint32_t fileIndex);
+    virtual void setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList);
 };
 
 #endif /* NewBoundedCache_H */

@@ -95,8 +95,8 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
-#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-// #define PPRINTF(...)
+// #define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+#define PPRINTF(...)
 
 #define SCALEABLE_METRIC_FILE_MAX 1000
 

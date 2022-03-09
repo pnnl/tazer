@@ -101,9 +101,7 @@ Cache(cacheName, type),
 evictHisto(100),
 access(0), 
 misses(0),
-startTimeStamp((uint64_t)Timer::getCurrentTime()),
-_sharedMemoryCache(NULL),
-_fileCache(NULL) {
+startTimeStamp((uint64_t)Timer::getCurrentTime()) {
     stats.start();
     log(this) << _name << std::endl;
     _lastVictimFileIndexLock = new ReaderWriterLock();
@@ -403,9 +401,10 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     _cacheLock->readerLock();
     DPRINTF("---------- %u of %u ----------\n", allocateForFileIndex, _metaMap.size());
     MeMPRINTF("---------- %u of %u ----------\n", allocateForFileIndex, _metaMap.size());
-    //JS: This is for recording the unit marginal benifit and making it available to other caches
-    std::vector<std::tuple<uint32_t, double>> UMBList;
     
+    //JS: Making a local copy of UMBList
+    std::vector<std::tuple<uint32_t, double>> UMBList;
+
     //JS: For calcRank
     auto localMisses = misses.load();
     uint64_t timestamp = Timer::getCurrentTime();
@@ -426,6 +425,7 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
         auto meta = x.second;
         if(allocateForFileIndex != fileIndex) {
             auto temp = meta->calcRank(timestamp-startTimeStamp, localMisses);
+            //JS: This is for recording the unit marginal benifit and making it available to other caches
             UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,temp));
             DPRINTF("-------Index: %u %lf\n", fileIndex, temp);
             MeMPRINTF("-------Index: %u %lf\n", fileIndex, temp);
@@ -470,13 +470,16 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
             sourceFileIndex = minFileIndex;
         }
     }
+
+    //JS: Updated _UMBList
+    _lastVictimFileIndexLock->writerLock();
+    _UMBList = UMBList;
+    //JS: Update dirty flags to true
+    for (auto &x : _UMBDirty) {
+        x.second = true;
+    }
+    _lastVictimFileIndexLock->writerUnlock();
     _cacheLock->readerUnlock();
-    if(_sharedMemoryCache)
-        _sharedMemoryCache->setLastUMB(UMBList);
-    if(_fileCache)
-        _fileCache->setLastUMB(UMBList);
-    // else
-    //     setLastUMB(UMBList);
     return ret;
 }
 
@@ -525,31 +528,22 @@ void ScalableCache::trackPattern(uint32_t fileIndex, std::string pattern) {
     trackBlock(_name, pattern, fileIndex, -1, -1);
 }
 
-void ScalableCache::setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList) {
-    _lastVictimFileIndexLock->writerLock();
-    for(const auto &UMB : UMBList) 
-        _UMBMap[std::get<0>(UMB)] =  std::get<1>(UMB);
-    _lastVictimFileIndexLock->writerUnlock();
-}
-
-double ScalableCache::getLastUMB(uint32_t fileIndex) {
-    double ret = std::numeric_limits<double>::max();
+std::vector<std::tuple<uint32_t, double>> ScalableCache::getLastUMB(Cache * cache) {
+    std::vector<std::tuple<uint32_t, double>> ret;
     _lastVictimFileIndexLock->readerLock();
-    auto it = _UMBMap.find(fileIndex);
-    if(it != _UMBMap.end())
-        ret = it->second;
+    // if(_UMBDirty.count(cache)) {
+        if(_UMBDirty[cache]) {
+            ret = _UMBList;
+            _UMBDirty[cache] = false;
+        }
+    // }
     _lastVictimFileIndexLock->readerUnlock();
     return ret;
 }
 
-void ScalableCache::setSharedMemoryCache(NewSharedMemoryCache * cache) {
+void ScalableCache::setUMBCache(Cache * cache) {
     _lastVictimFileIndexLock->writerLock();
-    _sharedMemoryCache = cache;
+    _UMBDirty[cache] = true;
     _lastVictimFileIndexLock->writerUnlock();
 }
 
-void ScalableCache::setFileCache(NewBoundedFilelockCache * cache) {
-    _lastVictimFileIndexLock->writerLock();
-    _fileCache = cache;
-    _lastVictimFileIndexLock->writerUnlock();
-}

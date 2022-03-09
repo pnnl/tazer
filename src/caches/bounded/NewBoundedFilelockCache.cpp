@@ -93,8 +93,8 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
-#define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
-// #define PPRINTF(...)
+// #define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+#define PPRINTF(...)
 
 #define SCALEABLE_METRIC_FILE_MAX 1000
 
@@ -670,6 +670,8 @@ bool NewBoundedFilelockCache::initScalableMetricPiggyBack(std::string cacheName,
         created = false;
     }
 
+    //JS: The ReaderWriterLock is not good enough.  Instead use FcntlReaderWriterLock!
+
     if(_scaleFd != -1) {
         ftruncate(_scaleFd, _scaleMemSize);
         void * ptr = mmap(NULL, _scaleMemSize, PROT_READ | PROT_WRITE, MAP_SHARED, _scaleFd, 0);
@@ -701,6 +703,7 @@ void NewBoundedFilelockCache::closeScalableMetricPiggyBack() {
 }
 
 void NewBoundedFilelockCache::setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList) {
+    //JS: We need to flush the file to propagate the changes
     if(_UMBLock) {
         PPRINTF("FC-------------setLastUMB\n");
         _UMBLock->writerLock();

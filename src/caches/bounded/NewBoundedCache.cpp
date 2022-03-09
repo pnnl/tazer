@@ -91,8 +91,8 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
-#define PPRINTF(...) fprintf(stderr, __VA_ARGS__)
-// #define PPRINTF(...)
+// #define PPRINTF(...) fprintf(stdout, __VA_ARGS__)
+#define PPRINTF(...)
 
 template <class Lock>
 NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, Cache * scalableCache) : Cache(cacheName,type),
@@ -222,7 +222,19 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
             req->trace()<<"found  empty entry: "<<blockEntryStr(blkEntry)<<std::endl;
             return blkEntry;
         }
-        else if (blkEntry->status == BLK_AVAIL) {// we found an available block, deterimine if we evict it
+    }
+
+    //JS: Update my UMB list here
+    if(_scalableCache) {
+        auto umbs = ((ScalableCache*)_scalableCache)->getLastUMB(static_cast<Cache*>(this));
+        PPRINTF("UMB SIZE %u\n", umbs.size());
+        if(umbs.size()) {
+            setLastUMB(umbs);
+        }
+    }
+
+    for (uint32_t i = 0; i < _associativity; i++) {
+        if (blkEntry->status == BLK_AVAIL) {// we found an available block, deterimine if we evict it
             //JS: Scalable metric piggybacking
             if(_scalableCache) {
                 if(blkEntry->fileIndex != victimFileIndex) {
@@ -246,6 +258,7 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
                     minEntry = blkEntry;
                 }
             }
+
             //PrefetchEvict policy evicts prefetched blocks first
             if (Config::prefetchEvict && blkEntry->prefetched && blkEntry->timeStamp < minPrefetchTime) {
                 if (!anyUsers(blkEntry,req)) {
@@ -271,7 +284,7 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
     if (victimTime != (uint32_t)-1 && victimEntry) { //Did we find a space
        minTime = victimTime;
        minEntry = victimEntry;
-       PPRINTF("%s : SCALE METRIC PIGGYBACK %lf\n", _name, victimMinUMB);
+       PPRINTF("SCALE METRIC PIGGYBACK %lf\n", victimMinUMB);
     }
 
     if (minTime != (uint32_t)-1 && minEntry) { //Did we find a space
@@ -640,8 +653,14 @@ void NewBoundedCache<Lock>::addFile(uint32_t index, std::string filename, uint64
 
 template <class Lock>
 double NewBoundedCache<Lock>::getLastUMB(uint32_t fileIndex) { 
-    PPRINTF("********************* Nothing Here*********************"); 
+    PPRINTF("********************* getLastUMB Nothing Here*********************"); 
     return std::numeric_limits<double>::max();
+}
+
+template <class Lock>
+void NewBoundedCache<Lock>::setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList) {
+    PPRINTF("********************* setLastUMB Nothing Here*********************"); 
+    return;
 }
 
 // template class NewBoundedCache<ReaderWriterLock>;

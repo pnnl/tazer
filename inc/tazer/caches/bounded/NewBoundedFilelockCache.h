@@ -88,10 +88,11 @@ class NewBoundedFilelockCache : public NewBoundedCache<FcntlBoundedReaderWriterL
 
     virtual bool writeBlock(Request *req);
     static Cache *addNewBoundedFilelockCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath, Cache * scalableCache);
-
+  
+  protected:
     virtual double getLastUMB(uint32_t fileIndex);
-    void setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList);
-    
+    virtual void setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList);
+
   private:
     struct FileBlockEntry : BlockEntry {
         uint16_t activeCnt;
