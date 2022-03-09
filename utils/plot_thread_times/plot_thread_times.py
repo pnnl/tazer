@@ -265,8 +265,8 @@ def plotMachine(machines,s_i,mint):
             (np.sum(ovh),"k","ovh")]
 
     sumvals = [i[0] for i in barsums]
-    #exp_dir = os.path.basename(os.getcwd())
-    exp_dir = "125MBs_io_8_tpf"
+    exp_dir = os.path.basename(os.getcwd())
+    # exp_dir = "125MBs_io_8_tpf"
     # 125MBs_io_8_tpf
     io=exp_dir.split("MBs")[0]
     tpf=exp_dir.split("_")[2]

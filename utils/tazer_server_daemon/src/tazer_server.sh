@@ -82,7 +82,7 @@ cd $workspace
 
 t=$(date +%s)
 var_names="${var_names},StartExp" && var_vals="${var_vals},${t}" && var_times="${var_times},${t}"
-
+export TAZER_THREAD_STATS=1
 $env $tazer_server $port  &> ${output_path}/server.log
 
 t=$(date +%s)
