@@ -255,6 +255,7 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
 
 bool ScalableCache::writeBlock(Request *req){
     DPRINTF("[JS] ScalableCache::writeBlock start\n");
+    PPRINTF("DELIVERY TIME FOR BM: %p %lu\n", req, req->deliveryTime);
     req->time = Timer::getCurrentTime();
     bool ret = false;
     if (req->originating == this) {

@@ -124,7 +124,7 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
-//#define BPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define BPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define BPRINTF(...)
 #define TIMEON(...) __VA_ARGS__
 //#define TIMEON(...)
@@ -399,7 +399,9 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
         _cache->stats.start(); // "read" timer
         _cache->stats.start(); // "hit"  timer
         _cache->stats.start(); // "ovh" timer
-
+        //JS: Adding for UMB metric
+        uint64_t requestStartTime = Timer::getCurrentTime();
+        
         if (_filePos[index] >= _fileSize) {
             log(this) << "[TAZER] " << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
             _eof[index] = true;
@@ -439,6 +441,7 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
                 // err(this) << "reading block "<<blk<<" from: "<<request->originating->name()<<std::endl;
                 auto amt = copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
                 request->originating->stats.addAmt(false, CacheStats::Metric::read, amt);
+                request->deliveryTime = Timer::getCurrentTime() - requestStartTime;
                 _cache->bufferWrite(request);
             }
             else {
@@ -490,6 +493,8 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
                     err(this) << "(net) waiting cache was empty" <<std::endl;
                 }
                 request->originating->stats.addAmt(false, CacheStats::Metric::stalled, amt);
+                //JS: Adding this here to capture the deliveryTime for scalable cache.
+                request->deliveryTime = Timer::getCurrentTime() - requestStartTime;
                 _cache->bufferWrite(request);
             }
         }
@@ -521,6 +526,8 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
                     err(this) << "(local) waiting cache was empty" <<std::endl;
                 }
                 request->originating->stats.addAmt(false, CacheStats::Metric::stalled, amt);
+                //JS: Adding this here to capture the deliveryTime for scalable cache.
+                request->deliveryTime = Timer::getCurrentTime() - requestStartTime;
                 _cache->bufferWrite(request);
             }
         }
