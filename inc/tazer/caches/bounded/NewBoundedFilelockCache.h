@@ -126,8 +126,8 @@ class NewBoundedFilelockCache : public NewBoundedCache<FcntlBoundedReaderWriterL
     void readFromFile(int fd, uint64_t size, uint8_t *buff);
     void writeToFile(int fd, uint64_t size, uint8_t *buff);
 
-    void preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
-    void pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset);
+    void preadFromFile(int fd, uint64_t size, uint8_t *buff, off_t offset);
+    void pwriteToFile(int fd, uint64_t size, uint8_t *buff, off_t offset);
     
     void readFileBlockEntry(FileBlockEntry *entry, Request* req);
     void writeFileBlockEntry(FileBlockEntry *entry);
@@ -161,14 +161,19 @@ class NewBoundedFilelockCache : public NewBoundedCache<FcntlBoundedReaderWriterL
 
     ReaderWriterLock *_shmLock;
     FcntlBoundedReaderWriterLock *_blkLock;
+    FcntlBoundedReaderWriterLock *_scalableLock;
 
     int _binFd;
     int _blkFd;
+    int _scalableFd;
+    int _scalableLockFd;
 
     uint32_t _pid;
 
     std::string _cachePath;
     std::string _lockPath;
+    std::string _scalablePath;
+    std::string _scalableLockPath;
     std::string _entriesPath;
 
     FileBlockEntry *_cacheEntries; // essentially a shared memory shadow cache for the node... 
@@ -182,11 +187,12 @@ class NewBoundedFilelockCache : public NewBoundedCache<FcntlBoundedReaderWriterL
     //JS: This is for scalable cache metrics
     int _scaleFd;
     unsigned int _scaleMemSize;
-    ReaderWriterLock *_UMBLock;
-    double * _UMB;
-    unsigned int * _UMBC;
-    bool initScalableMetricPiggyBack(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
-    void closeScalableMetricPiggyBack();
+    Cache* _scalableCache;
+    // ReaderWriterLock *_UMBLock;
+    // double * _UMB;
+    // unsigned int * _UMBC;
+    // bool initScalableMetricPiggyBack(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
+    // void closeScalableMetricPiggyBack();
 };
 
 #endif /* NewBoundedFilelockCache_H */

@@ -119,8 +119,8 @@
 #define UMB_METRIC_PIGGYBACK_SM(a, b) a = (ScalableCache*) b
 
 //JS: Turn this on to enable NewBoundedFilelockCache to use unit marginal benifit to decide what to evict
-#define UMB_METRIC_PIGGYBACK_FC(a, b)
-// #define UMB_METRIC_PIGGYBACK_FC(a, b) a = (ScalableCache*) b
+// #define UMB_METRIC_PIGGYBACK_FC(a, b)
+#define UMB_METRIC_PIGGYBACK_FC(a, b) a = (ScalableCache*) b
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)

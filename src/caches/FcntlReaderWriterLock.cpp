@@ -754,7 +754,9 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
     // _readerMutex = new std::atomic<uint8_t>[_numEntries];
     // init_atomic_array(_readerMutex,_numEntries,(uint8_t)0);
     _fdMutex = new ReaderWriterLock();
+    Loggable::debug()<<"lock path"<<_lockPath<<std::endl;
     _fd = (*(unixopen_t)dlsym(RTLD_NEXT, "open"))(_lockPath.c_str(), O_RDWR);
+    if (_fd > 0){
     if (Config::enableSharedMem){
         std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck."+_id);
         Loggable::debug()<<shmPath<<std::endl;
@@ -806,6 +808,10 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
         _readerMutex = new std::atomic<uint8_t>[_numEntries];
         init_atomic_array(_readerMutex,_numEntries,(uint8_t)0);
     }
+    }
+    else{
+         Loggable::debug()<<"error opening lock file"<<std::endl;
+    }
 }
 
 //todo better delete aka make sure all readers/writers are done...
@@ -842,7 +848,9 @@ int FcntlBoundedReaderWriterLock::lockOp(uint64_t entry, int lock_type, int op_t
 }
 
 void FcntlBoundedReaderWriterLock::readerLock(uint64_t entry, Request* req, bool debug) {
-    req->trace(debug)<<_id<<" trying to rlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    if (req){
+        req->trace(debug)<<_id<<" trying to rlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
     _shmLock->writerLock();
     while (_writers[entry].load()) {
         _shmLock->writerUnlock();
@@ -856,18 +864,23 @@ void FcntlBoundedReaderWriterLock::readerLock(uint64_t entry, Request* req, bool
         cnt++;
         if (cnt == 1000000 || (errno != EACCES && errno != EAGAIN)){
             cnt = 0;
-            Loggable::log() << "[TAZER] R LOCK ERROR!!! "<<_id<<" " << entry << " " << __LINE__ << " " << strerror(errno) << std::endl;
+            Loggable::log() << "[TAZER] R LOCK ERROR!!! "<<_id<<" " << entry <<" fd: "<<_fd<<" es "<<_entrySize<< " "<< __LINE__ << " " << strerror(errno) << std::endl;
+            exit(1);
         }
         std::this_thread::sleep_for(std::chrono::microseconds(sleepTime));
         _shmLock->writerLock();
     }
     _readers[entry].fetch_add(1);
     _shmLock->writerUnlock();
-    req->trace(debug)<<_id<<" leaving rlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    if (req){
+        req->trace(debug)<<_id<<" leaving rlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
 }
 
 void FcntlBoundedReaderWriterLock::readerUnlock(uint64_t entry, Request* req,bool debug) {
-    req->trace(debug)<<_id<<" trying to runlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    if (req){
+        req->trace(debug)<<_id<<" trying to runlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
     _shmLock->writerLock();
     int cnt = 0;
     _readers[entry].fetch_sub(1);
@@ -883,11 +896,15 @@ void FcntlBoundedReaderWriterLock::readerUnlock(uint64_t entry, Request* req,boo
         _shmLock->writerLock();
     }
     _shmLock->writerUnlock();  
-    req->trace(debug)<<_id<<" leaving runlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;    
+    if (req){
+        req->trace(debug)<<_id<<" leaving runlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;    
+    }
 }
 
 void FcntlBoundedReaderWriterLock::writerLock(uint64_t entry,Request* req, bool debug) {
-    req->trace(debug)<<_id<<" trying to wlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    if (req){
+        req->trace(debug)<<_id<<" trying to wlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
     _shmLock->writerLock();
     uint16_t check = 1;
     while (_writers[entry].exchange(check) == 1) { //get the writer lock
@@ -915,11 +932,15 @@ void FcntlBoundedReaderWriterLock::writerLock(uint64_t entry,Request* req, bool 
         
     }
     _shmLock->writerUnlock();
-    req->trace(debug)<<_id<<" leaving wlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    if (req){
+        req->trace(debug)<<_id<<" leaving wlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
 }
 
 void FcntlBoundedReaderWriterLock::writerUnlock(uint64_t entry, Request* req, bool debug) {
-    req->trace(debug)<<_id<<" trying to wunlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    if (req){
+        req->trace(debug)<<_id<<" trying to wunlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
     _shmLock->writerLock();
     int cnt =0;
     while (lockOp(entry, F_UNLCK, F_SETLK) == -1){
@@ -935,12 +956,15 @@ void FcntlBoundedReaderWriterLock::writerUnlock(uint64_t entry, Request* req, bo
     }
     _writers[entry].store(0);
     _shmLock->writerUnlock();
-
-    req->trace(debug)<<_id<<" leaving wunlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;    
+    if (req){
+        req->trace(debug)<<_id<<" leaving wunlock: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;    
+    }
 }
 
 int FcntlBoundedReaderWriterLock::lockAvail(uint64_t entry, Request* req, bool debug) {
-    req->trace(debug)<<_id<<" checking avail: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    if (req){
+        req->trace(debug)<<_id<<" checking avail: "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<std::endl;
+    }
     _shmLock->writerLock();
     int ret = -1;
     struct flock lock = {};
@@ -974,6 +998,8 @@ int FcntlBoundedReaderWriterLock::lockAvail(uint64_t entry, Request* req, bool d
         }
     }
     _shmLock->writerUnlock();
-    req->trace(debug)<<_id<<" avail: "<< ret<<" "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<" l: "<<lock.l_type<<std::endl;
+    if (req){
+        req->trace(debug)<<_id<<" avail: "<< ret<<" "<<entry<<" w: "<<_writers[entry].load()<<" r: "<<_readers[entry].load()<<" l: "<<lock.l_type<<std::endl;
+    }
     return ret;
 }

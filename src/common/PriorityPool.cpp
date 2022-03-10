@@ -107,7 +107,7 @@ unsigned int PriorityPool::addThreads(unsigned int numThreads) {
 
         _currentThreads.fetch_add(threadsToAdd);
         for (unsigned int i = 0; i < threadsToAdd; i++)
-            _threads.push_back(std::thread([this] { workLoop(); }));
+            _threads.push_back(std::thread([this] { std::cout<<"priority pool thread"<<std::endl; workLoop(); }));
     }
     lock.unlock();
     return threadsToAdd;

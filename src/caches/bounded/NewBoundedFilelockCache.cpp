@@ -93,8 +93,8 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
-// #define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
-#define PPRINTF(...)
+#define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+// #define PPRINTF(...)
 
 #define SCALEABLE_METRIC_FILE_MAX 1000
 
@@ -111,15 +111,15 @@ NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheTyp
                                                                                                                                                            _stat((unixxstat_t)dlsym(RTLD_NEXT, "stat")),
                                                                                                                                                            _cachePath(cachePath),
                                                                                                                                                            _myOutstandingWrites(0),
-                                                                                                                                                           _scaleFd(-1),
-                                                                                                                                                           _scaleMemSize(0),
-                                                                                                                                                           _UMBLock(NULL),
-                                                                                                                                                           _UMB(NULL),
-                                                                                                                                                           _UMBC(NULL) {
+                                                                                                                                                           _scalableLock(NULL),
+                                                                                                                                                           _scalableCache(NULL), 
+                                                                                                                                                           _scaleMemSize(0)
+                                                                                                                                                           {
     stats.start();
     std::error_code err;
-    if(scalableCache)
-        initScalableMetricPiggyBack(cacheName, type, cacheSize, blockSize, associativity, cachePath);
+    _scalableCache = scalableCache;
+    // if(scalableCache)
+    //     initScalableMetricPiggyBack(cacheName, type, cacheSize, blockSize, associativity, cachePath);
     // std::string shmPath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
     // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
     // if(shmFd == -1){
@@ -166,7 +166,7 @@ NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheTyp
         //first create shared shadow cache...
         
 
-        debug()<<"Creating bounded file lock cache"<<std::endl;
+        debug()<<"Creating bounded file lock cache, size = "<<_numBlocks * sizeof(FileBlockEntry)<<" ("<<_numBlocks<<"*"<<sizeof(FileBlockEntry)<<")"<<std::endl;
         int fd = (*_open)((_cachePath + "/lock_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
         if (fd == -1 ){
             debug()<<"[TAZER ERROR] "<<_name<<" lock creation open error "<<strerror(errno)<<std::endl;
@@ -243,6 +243,73 @@ NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheTyp
             debug() << _name << " ERROR: data rename went wrong!!!" << strerror(errno) << std::endl;
             exit(1);
         }
+
+        if(_scalableCache){
+            _scaleMemSize = (sizeof(double) + sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX;
+            fd = (*_open)((_cachePath + "/scalable_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+            if (fd == -1 ){
+                debug()<<"[TAZER ERROR] "<<_name<<" lock creation open error "<<strerror(errno)<<std::endl;
+                exit(1);
+            }
+            ret = ftruncate(fd, _scaleMemSize);
+            if (ret == -1 ){
+                debug()<<"[TAZER ERROR] "<<_name<<" lock creation ftruncate error "<<strerror(errno)<<std::endl;
+            }
+            ret = (*_lseek)(fd, _scaleMemSize, SEEK_SET);
+            if (ret == -1 ){
+                debug()<<"[TAZER ERROR] "<<_name<<" data creation seek error "<<strerror(errno)<<std::endl;
+            }
+            ret = (*_write)(fd, &byte, sizeof(uint8_t));
+            if (ret == -1 ){
+                debug()<<"[TAZER ERROR] "<<_name<<" data creation write error "<<strerror(errno)<<std::endl;
+            }
+            ret = (*_fsync)(fd);
+            if (ret == -1 ){
+                debug()<<"[TAZER ERROR] "<<_name<<" data creation fsync error "<<strerror(errno)<<std::endl;
+            }
+            ret = (*_close)(fd);
+            if (ret == -1 ){
+                debug()<<"[TAZER ERROR] "<<_name<<" data creation close error "<<strerror(errno)<<std::endl;
+            }
+            ret = rename((_cachePath + "/scalable_tmp").c_str(), (_cachePath + "/scalable" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc").c_str());
+            if (ret == -1 ) {
+                debug() << _name << " ERROR: data rename went wrong!!!" << strerror(errno) << std::endl;
+                exit(1);
+            }
+
+
+            fd = (*_open)((_cachePath + "/scalable_lock_tmp").c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+            if (fd == -1 ){
+                debug()<<"[TAZER ERROR] "<<_name<<" lock creation open error "<<strerror(errno)<<std::endl;
+                exit(1);
+            }
+            ret = ftruncate(fd, 1);
+            if (ret == -1 ){
+                debug()<<"[TAZER ERROR] "<<_name<<" lock creation ftruncate error "<<strerror(errno)<<std::endl;
+            }
+            ret = (*_lseek)(fd, 1, SEEK_SET);
+            if (ret == -1 ){
+                debug()<<"[TAZER ERROR] "<<_name<<" data creation seek error "<<strerror(errno)<<std::endl;
+            }
+            ret = (*_write)(fd, &byte, sizeof(uint8_t));
+            if (ret == -1 ){
+                debug()<<"[TAZER ERROR] "<<_name<<" data creation write error "<<strerror(errno)<<std::endl;
+            }
+            ret = (*_fsync)(fd);
+            if (ret == -1 ){
+                debug()<<"[TAZER ERROR] "<<_name<<" data creation fsync error "<<strerror(errno)<<std::endl;
+            }
+            ret = (*_close)(fd);
+            if (ret == -1 ){
+                debug()<<"[TAZER ERROR] "<<_name<<" data creation close error "<<strerror(errno)<<std::endl;
+            }
+            ret = rename((_cachePath + "/scalable_lock_tmp").c_str(), (_cachePath + "/scalable_lock" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc").c_str());
+            if (ret == -1 ) {
+                debug() << _name << " ERROR: data rename went wrong!!!" << strerror(errno) << std::endl;
+                exit(1);
+            }
+        }
+        // initScalableMetricPiggyBack(cacheName, type, cacheSize, blockSize, associativity, cachePath);
         // _shmLock->writerUnlock();
     }
     else {
@@ -263,9 +330,37 @@ NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheTyp
                 exit(1);
             }
         }
+        if(_scalableCache){
+            cnt = 0;
+            while (!std::experimental::filesystem::exists(_cachePath + "/scalable" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc")) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                if (cnt++ > 100) {
+                    debug() << _name << " ERROR: waiting for data to appear!!!" << strerror(errno) << _cachePath + "/data" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc" << std::endl;
+                    exit(1);
+                }
+            }
+            cnt = 0;
+            while (!std::experimental::filesystem::exists(_cachePath + "/scalable_lock" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc")) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                if (cnt++ > 100) {
+                    debug() << _name << " ERROR: waiting for data to appear!!!" << strerror(errno) << _cachePath + "/data" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc" << std::endl;
+                    exit(1);
+                }
+            }
+        }
+    }
+    if(scalableCache){
+        _scalablePath = _cachePath + "/scalable" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc";
+        _scalableLockPath = _cachePath + "/scalable_lock" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity)+ ".gc";
+
+        
+        _scalableLock = new FcntlBoundedReaderWriterLock(1,1,_scalableLockPath,"scalableLock");
+        _scalableFd = (*_open)(_scalablePath.c_str(), O_RDWR| O_DIRECT| O_SYNC);
+        _scalableLockFd = (*_open)(_scalableLockPath.c_str(), O_RDWR| O_DIRECT| O_SYNC);
     }
     _lockPath = _cachePath + "/lock" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity);
     _cachePath = _cachePath + "/data" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc";
+    
 
     _binLock = new FcntlBoundedReaderWriterLock(sizeof(FileBlockEntry) * _associativity, _numBins, _lockPath,"bin");
 
@@ -273,6 +368,8 @@ NewBoundedFilelockCache::NewBoundedFilelockCache(std::string cacheName, CacheTyp
 
     _binFd = (*_open)(_lockPath.c_str(), O_RDWR| O_DIRECT| O_SYNC);
     _blkFd = (*_open)(_cachePath.c_str(), O_RDWR| O_DIRECT| O_SYNC);
+    
+    debug() <<"bin fd "<<_binFd<<" blk fd"<<_blkFd<<std::endl;
     _shared = true;
     _pid = (uint32_t)::getpid();
 
@@ -329,10 +426,15 @@ NewBoundedFilelockCache::~NewBoundedFilelockCache() {
     (*close)(_blkFd);
     delete _binLock;
     delete[] _cacheEntries;
+    if(_scalableCache){
+        (*close)(_scalableFd);
+        (*close)(_scalableLockFd);
+        delete _scalableLock;
+    }
     // delete _blkLock;
     // std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck");
     // shm_unlink(shmPath.c_str());
-    closeScalableMetricPiggyBack();
+    // closeScalableMetricPiggyBack();
     stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
     debug() << std::endl;
@@ -369,7 +471,7 @@ void NewBoundedFilelockCache::readFromFile(int fd, uint64_t size, uint8_t *buff)
     }
 }
 
-void NewBoundedFilelockCache::pwriteToFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset) {
+void NewBoundedFilelockCache::pwriteToFile(int fd, uint64_t size, uint8_t *buff, off_t offset) {
     uint8_t *local = buff;
     // auto origSize = size;
     // auto start = Timer::getCurrentTime();
@@ -391,7 +493,7 @@ void NewBoundedFilelockCache::pwriteToFile(int fd, uint64_t size, uint8_t *buff,
     // updateIoRate(elapsed, size);
 }
 
-void NewBoundedFilelockCache::preadFromFile(int fd, uint64_t size, uint8_t *buff, uint64_t offset) {
+void NewBoundedFilelockCache::preadFromFile(int fd, uint64_t size, uint8_t *buff, off_t offset) {
     uint8_t *local = buff;
     // auto origSize = size;
     // auto start = Timer::getCurrentTime();
@@ -407,8 +509,8 @@ void NewBoundedFilelockCache::preadFromFile(int fd, uint64_t size, uint8_t *buff
             offset += bytes;
         }
         else {
-            debug() << "[TAZER ERROR] Failed a read " << fd <<" ("<<_binFd<<","<<_blkFd<<") "<<(void*)buff<< " " <<offset<<" "<< size <<" "<<strerror(errno)<< std::endl;
-            exit(1);
+            debug() << "[TAZER ERROR] Failed a read " << fd <<" ("<<_binFd<<","<<_blkFd<<") "<<(void*)buff<< " " <<offset<<" "<< size <<" "<<strerror(errno)<<"("<<errno<<")"<< std::endl;
+            raise(SIGINT);
         }
     }
     // auto elapsed = Timer::getCurrentTime() - start;
@@ -656,80 +758,109 @@ Cache *NewBoundedFilelockCache::addNewBoundedFilelockCache(std::string cacheName
         });
 }
 
-bool NewBoundedFilelockCache::initScalableMetricPiggyBack(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath) {
-    bool ret = false;
+// bool NewBoundedFilelockCache::initScalableMetricPiggyBack(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath) {
+//     bool ret = false;
 
-    std::string filePath(_cachePath + "/scalable" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc");
-    PPRINTF("initScalableMetricPiggyBack: %s\n", filePath.c_str());
-    _scaleMemSize = sizeof(ReaderWriterLock) + (sizeof(double) + sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX;
+//     std::string filePath(_cachePath + "/scalable" + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity) + ".gc");
+//     PPRINTF("initScalableMetricPiggyBack: %s\n", filePath.c_str());
+
+
     
-    bool created = true;
-    _scaleFd = (*_open)(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, S_IRWXU);
-    if(_scaleFd == -1) {
-        int _scaleFd = (*_open)(filePath.c_str(), O_RDWR);
-        created = false;
-    }
-
-    //JS: The ReaderWriterLock is not good enough.  Instead use FcntlReaderWriterLock!
-
-    if(_scaleFd != -1) {
-        ftruncate(_scaleFd, _scaleMemSize);
-        void * ptr = mmap(NULL, _scaleMemSize, PROT_READ | PROT_WRITE, MAP_SHARED, _scaleFd, 0);
-        uint8_t * lockAddr = (uint8_t*) ptr;
-        uint8_t * UMBAddr = lockAddr + sizeof(ReaderWriterLock);
-        uint8_t * UMBCAddr = UMBAddr + sizeof(double) * SCALEABLE_METRIC_FILE_MAX;
-        _UMB = (double*)UMBAddr;
-        _UMBC = (unsigned int*) UMBCAddr;
-        if(created) {
-            _UMBLock = new (lockAddr) ReaderWriterLock();
-            for(unsigned int i=0; i<SCALEABLE_METRIC_FILE_MAX; i++) {
-                _UMB = 0;
-                _UMBC = 0;
-            }
-        }
-        else
-            _UMBLock = (ReaderWriterLock*)lockAddr;
-        ret = true;
-    }
+//     _scaleMemSize = sizeof(ReaderWriterLock) + (sizeof(double) + sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX;
     
-    return ret;
-}
+//     bool created = true;
+//     _scaleFd = (*_open)(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, S_IRWXU);
+//     if(_scaleFd == -1) {
+//         int _scaleFd = (*_open)(filePath.c_str(), O_RDWR);
+//         created = false;
+//     }
 
-void NewBoundedFilelockCache::closeScalableMetricPiggyBack() {
-    if(_UMBLock) {
-        munmap((void*)_UMBLock, _scaleMemSize);
-        (*_close)(_scaleFd);
-    }
-}
+//     //JS: The ReaderWriterLock is not good enough.  Instead use FcntlReaderWriterLock!
+
+//     if(_scaleFd != -1) {
+//         ftruncate(_scaleFd, _scaleMemSize);
+//         void * ptr = mmap(NULL, _scaleMemSize, PROT_READ | PROT_WRITE, MAP_SHARED, _scaleFd, 0);
+//         uint8_t * lockAddr = (uint8_t*) ptr;
+//         uint8_t * UMBAddr = lockAddr + sizeof(ReaderWriterLock);
+//         uint8_t * UMBCAddr = UMBAddr + sizeof(double) * SCALEABLE_METRIC_FILE_MAX;
+//         _UMB = (double*)UMBAddr;
+//         _UMBC = (unsigned int*) UMBCAddr;
+//         if(created) {
+//             _UMBLock = new (lockAddr) ReaderWriterLock();
+//             for(unsigned int i=0; i<SCALEABLE_METRIC_FILE_MAX; i++) {
+//                 _UMB = 0;
+//                 _UMBC = 0;
+//             }
+//         }
+//         else
+//             _UMBLock = (ReaderWriterLock*)lockAddr;
+//         ret = true;
+//     }
+    
+//     return ret;
+// }
+
+// void NewBoundedFilelockCache::closeScalableMetricPiggyBack() {
+//     if(_UMBLock) {
+//         munmap((void*)_UMBLock, _scaleMemSize);
+//         (*_close)(_scaleFd);
+//     }
+// }
 
 void NewBoundedFilelockCache::setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList) {
     //JS: We need to flush the file to propagate the changes
-    if(_UMBLock) {
-        PPRINTF("FC-------------setLastUMB\n");
-        _UMBLock->writerLock();
+    // if(_UMBLock) {
+        // PPRINTF("FC-------------setLastUMB\n");
+        debug() <<"FC-------------setLastUMB\n"<<std::endl;
+        _scalableLock->writerLock(0,NULL,false);
         for(const auto &UMB : UMBList) {
             uint32_t index = std::get<0>(UMB);
             double umb = std::get<1>(UMB);
+            
             if(index < SCALEABLE_METRIC_FILE_MAX) {
-                _UMB[index] += umb;
-                _UMBC[index]++;
+                // _UMB[index] += umb; 
+                off_t umb_offset = index* sizeof(double);
+                double old_umb = 0;
+                preadFromFile(_scalableFd,sizeof(double),(uint8_t*)&old_umb,umb_offset);
+                old_umb += umb;
+                pwriteToFile(_scalableFd,sizeof(double),(uint8_t*)&old_umb,umb_offset);
+                
+                 // _UMBC[index]++;
+                off_t umbc_offset = sizeof(double)*SCALEABLE_METRIC_FILE_MAX + index * sizeof(unsigned int);
+                unsigned int old_umbc = 0;
+                preadFromFile(_scalableFd,sizeof(unsigned int),(uint8_t*)&old_umbc,umbc_offset);
+                old_umbc ++;
+                pwriteToFile(_scalableFd,sizeof(unsigned int),(uint8_t*)&old_umbc,umbc_offset);
+                (*_fsync)(_scalableFd);
             }
         }
-        _UMBLock->writerUnlock();
-    }
+        _scalableLock->writerUnlock(0,NULL,false);
+    // }
 }
 
 double NewBoundedFilelockCache::getLastUMB(uint32_t fileIndex) {
+    debug() <<"FC-------------GetLastUMB\n"<<std::endl;
     double ret = std::numeric_limits<double>::max();
-    if(_UMBLock) {
+    // if(_UMBLock) {
         if(fileIndex < SCALEABLE_METRIC_FILE_MAX) {
-            _UMBLock->readerLock();
-            if(_UMBC[fileIndex] && !isnan(_UMB[fileIndex]) && !isinf(_UMB[fileIndex])) {
-                ret = _UMB[fileIndex] / _UMBC[fileIndex];
-                PPRINTF("FC-------------getLastUMB %lf %u\n", _UMB[fileIndex], _UMBC[fileIndex]);
+            _scalableLock->readerLock(0,NULL,false);
+
+            off_t umb_offset = fileIndex* sizeof(double);
+            double umb = 0;
+            preadFromFile(_scalableFd,sizeof(double),(uint8_t*)&umb,umb_offset);
+            
+            off_t umbc_offset = sizeof(double)*SCALEABLE_METRIC_FILE_MAX + fileIndex * sizeof(unsigned int);
+            unsigned int umbc = 0;
+            preadFromFile(_scalableFd,sizeof(unsigned int),(uint8_t*)&umbc,umbc_offset);
+
+
+            if(umbc && !isnan(umb) && !isinf(umb)) {
+                ret = umb / umbc;
+                // PPRINTF("FC-------------getLastUMB %lf %u\n", umb, umbc);
+                
             }
-            _UMBLock->readerUnlock();
+            _scalableLock->readerUnlock(0,NULL,false);
         }
-    }
+    // }
     return ret;
 }

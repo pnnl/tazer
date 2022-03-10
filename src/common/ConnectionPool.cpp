@@ -266,6 +266,7 @@ void ConnectionPool::addOpenFileTask(Connection *server) {
     //if (_prefetchLock.tryReaderLock()) { //This makes sure the file isn't deleted
     // std::cout << "adding open file task " << server->addrport() << std::endl;
     std::thread t = std::thread([this, server] {
+        std::cout << "adding open file task " << server->addrport() << std::endl;
         //if (_active) {
         if (openFileOnServer(server)) {
             for (uint32_t j = 0; j < server->numSockets(); j++) {
@@ -308,7 +309,7 @@ bool ConnectionPool::closeFileOnAllServers() {
         Connection *server = _connections[i];
         std::thread t = std::thread([this, server, &closeCnt] {
             server->lock();
-            // std::cout << "sending close file" << std::endl;
+            std::cout << "sending close file" << std::endl;
             sendCloseFileMsg(server, _name);
             recAckMsg(server, CLOSE_FILE_MSG);
             // std::cout << "closed" << std::endl;
