@@ -129,6 +129,7 @@ struct Request {
     uint64_t size;
     uint64_t time;
     uint64_t retryTime;
+    uint64_t deliveryTime;
     std::unordered_map<Cache *, uint8_t> reservedMap;
     bool ready;
     bool printTrace;
@@ -141,9 +142,9 @@ struct Request {
     uint64_t id;
     std::stringstream ss;
 
-    Request() : data(NULL), originating(NULL), blkIndex(0), fileIndex(0), offset(0), size(0), globalTrigger(false) { }
+    Request() : data(NULL), originating(NULL), blkIndex(0), fileIndex(0), offset(0), size(0), deliveryTime(0), globalTrigger(false) { }
     Request(uint32_t blk, uint32_t fileIndex, uint64_t size, uint64_t offset, Cache *orig, uint8_t *data) : data(data), originating(orig), blkIndex(blk), fileIndex(fileIndex), 
-                                                                                           offset(offset), size(size), time(Timer::getCurrentTime()),retryTime(0), ready(false), 
+                                                                                           offset(offset), size(size), time(Timer::getCurrentTime()),retryTime(0), deliveryTime(0), ready(false), 
                                                                                            printTrace(false),globalTrigger(false), waitingCache(CacheType::empty),id(Request::ID_CNT.fetch_add(1)) {
     }
     ~Request(){
