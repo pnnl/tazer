@@ -116,7 +116,7 @@ uint32_t PriorityThreadPool<T>::addThreads(uint32_t numThreads) {
 
         _currentThreads.fetch_add(threadsToAdd);
         for (uint32_t i = 0; i < threadsToAdd; i++)
-            _threads.push_back(std::thread([this] { workLoop(); }));
+            _threads.push_back(std::thread([this] { std::cout<<"prioritythread pool thread"<<std::endl;workLoop(); }));
     }
     lock.unlock();
     return threadsToAdd;
