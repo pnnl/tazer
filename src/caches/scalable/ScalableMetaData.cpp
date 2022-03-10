@@ -82,24 +82,22 @@
 //#define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define PRINTF(...)
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
-    bool toReserve = false;
+    bool toReserve = true;
     auto blockEntry = &blocks[blockIndex];
     
     //JS: This is for the first call from readBlock, which sets the read lock until blockset
     if(track) {
         uint64_t timeStamp = trackAccess(blockIndex, fileOffset);
         auto old = blockEntry->blkLock.readerLock();
-        toReserve = (old == 0);
         blockEntry->timeStamp.store(timeStamp);
-        DPRINTF("ScalableMetaData::getBlockData blockIndex: %lu reserve: %d\n", blockIndex, old);
-        //JS: I think this is fine place to put this
-        updateStats(toReserve, timeStamp);
     }
 
     //JS: Look to see if the data is avail, notice this is after a reader lock
     uint8_t * ret = blockEntry->data.load();
     if(ret)
         toReserve = false;
+    if(track) 
+        updateStats(toReserve, timeStamp);
     reserve = toReserve;
     return ret;
 }
