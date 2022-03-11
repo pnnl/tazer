@@ -79,15 +79,14 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define DPRINTF(...)
-//#define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-#define PRINTF(...)
+#define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define PRINTF(...)
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
     bool toReserve = true;
     auto blockEntry = &blocks[blockIndex];
-    
+    uint64_t timeStamp = trackAccess(blockIndex, fileOffset);
     //JS: This is for the first call from readBlock, which sets the read lock until blockset
     if(track) {
-        uint64_t timeStamp = trackAccess(blockIndex, fileOffset);
         auto old = blockEntry->blkLock.readerLock();
         blockEntry->timeStamp.store(timeStamp);
     }
@@ -268,12 +267,20 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     metaLock.writerLock();
     access++;
     accessPerInterval++;
+
     if(miss) {
         if(lastMissTimeStamp) {
             double i = (double)(timestamp - lastMissTimeStamp);
             missInterval.addData(i, 1);
-            DPRINTF("fpGrowth: %lf\n", ((double) 1) / ((double) accessPerInterval) );
-            fpGrowth.addData(i, ((double) 1) / ((double) accessPerInterval) );
+
+            if(lastDeliveryTime > 0){ //check to make sure we recorded a deliverytime
+                //PRINTF("adding to cost histogram, i: %f,accessPerInterval:%d, lastDeliveryTime:%f, val: %.10f\n", i, accessPerInterval, lastDeliveryTime, ((double)accessPerInterval)/lastDeliveryTime);
+                //costHistogram.addData(i, ((double) accessPerInterval) / lastDeliveryTime);
+                costHistogram.addData(i, (lastDeliveryTime / (double) accessPerInterval) );
+            }
+            else{
+                PRINTF("BM: We have a second miss but no deliverytime yet! \n");
+            }
             accessPerInterval = 0;
             recalc = true;
         }
@@ -290,21 +297,14 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     DPRINTF("* Timestamp: %lu recalc: %u\n", time, recalc);
     if(lastMissTimeStamp && recalc) {
         double i = ((double) time) / ((double) misses);
-        double Fp = fpGrowth.getValue(i);
         double Mp = missInterval.getValue(i);
-        DPRINTF("* Fp: %lf Mp: %lf\n", Fp, Mp);
-        //double fp = Fp / Mp;
+        double Ch = costHistogram.getValue(i);
         DPRINTF("* access: %lf misses: %lf\n", (double)access, (double)misses);
-        //double ap = (double) access / (double) misses;
-
-        //marginalBenefit = fp * ap;
-        marginalBenefit = Mp / Fp; 
-        ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks.load()); // * blockSize));
+        marginalBenefit = Ch / Mp; 
+        ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks.load()); /
         DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
-        PRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
         if(isnan(unitMarginalBenefit)){
-            PRINTF("* nan! i: %f, misses: %d, Fp: %lf Mp: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Fp, Mp , marginalBenefit, unitMarginalBenefit,numBlocks.load());
-            fpGrowth.printBins();
+            PRINTF("* nan! i: %f, misses: %d, ch: %lf Mp: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Mp , marginalBenefit, unitMarginalBenefit,numBlocks.load());
         }
         recalc = false;
     }
@@ -332,4 +332,18 @@ void ScalableMetaData::updateRank(bool dec) {
         }
     }
     metaLock.writerUnlock();
+}
+
+void ScalableMetaData::updateDeliveryTime(uint64_t deliveryTime) {
+    metaLock.writerLock();
+    lastDeliveryTime = deliveryTime;
+    metaLock.writerUnlock();
+}
+
+double ScalableMetaData::getUnitMarginalBenefit() {
+    double ret = 0;
+    metaLock.readerLock();
+    ret = unitMarginalBenefit;
+    metaLock.readerUnlock();
+    return ret;
 }

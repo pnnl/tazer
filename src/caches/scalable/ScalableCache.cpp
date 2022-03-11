@@ -94,7 +94,7 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-// #define MeMPRINTF(...)
+//#define MeMPRINTF(...)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -255,7 +255,7 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
 
 bool ScalableCache::writeBlock(Request *req){
     DPRINTF("[JS] ScalableCache::writeBlock start\n");
-    PPRINTF("DELIVERY TIME FOR BM: %p %lu\n", req, req->deliveryTime);
+    //PPRINTF("DELIVERY TIME FOR BM: %p %lu\n", req, req->deliveryTime);
     req->time = Timer::getCurrentTime();
     bool ret = false;
     if (req->originating == this) {
@@ -263,6 +263,8 @@ bool ScalableCache::writeBlock(Request *req){
         //JS: Decrement our block usage
         _cacheLock->readerLock();
         _metaMap[req->fileIndex]->decBlockUsage(req->blkIndex);
+        //BM: added delivery time to metamap
+        _metaMap[req->fileIndex]->updateDeliveryTime(req->deliveryTime);
         _cacheLock->readerUnlock();
         delete req;
         ret = true;
@@ -287,10 +289,11 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
     auto fileOffset = req->offset;
     //MeMPRINTF("PARTITION INFO:%d:%d:%lu\n", fileIndex, _metaMap[fileIndex]->getNumBlocks(),Timer::getCurrentTime());
     
-    // auto nowVal = Timer::getCurrentTime();
-    // for ( auto met : _metaMap ){
-    //     MeMPRINTF("PARTITION INFO:%d:%d:%lu\n", met.first, met.second->getNumBlocks(), nowVal);
-    // }
+    auto nowVal = Timer::getCurrentTime();
+    for ( auto met : _metaMap ){
+        MeMPRINTF("PARTITION INFO:%d:%d:%lu\n", met.first, met.second->getNumBlocks(), nowVal);
+        MeMPRINTF("MARGINALBENEFIT:%d:%.20lf:%lu\n", met.first, met.second->getUnitMarginalBenefit(), nowVal);
+    }
 
     if (!req->size) { //JS: This get the blockSize from the file
         _cacheLock->readerLock();
@@ -414,10 +417,6 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     double sourceFileRank;
     double minRank = std::numeric_limits<double>::max();
     uint32_t minFileIndex = (uint32_t) -1;
-    //Burcu: if we have streaming pattern files, they are priority victim for stealing, so keep track of minimum ranked streaming pattern
-    //double minStreamRank = std::numeric_limits<double>::max();
-    //uint32_t minStreamFileIndex = (uint32_t) -1;
-
 
     //JS: Find lowest rank
     DPRINTF("+++++++++++Starting Search %u\n", _metaMap.size());
@@ -435,13 +434,6 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
                 minFileIndex = fileIndex;
                 DPRINTF("*******NEW MIN: %u : %lf\n", minFileIndex, minRank);
             }
-            //second check for minimum streaming pattern search 
-            //Burcu TODO : stridepattern[blockstreaming] = 1 , fixme so enum order won't change the code!!
-            // if(meta->getPattern() == 1 && !std::isnan(temp) && temp > 0 && temp < minStreamRank) {
-            //     minStreamRank = temp;
-            //     minStreamFileIndex = fileIndex;
-            //     DPRINTF("*******NEW STREAM MIN: %u : %lf\n", minStreamFileIndex, minStreamRank);
-            // }
         }
         else {
             sourceFileRank = meta->calcRank(timestamp-startTimeStamp, localMisses);
@@ -450,12 +442,6 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
         }
     }
 
-    // //if we fond a streaming pattern file, select that one as the victim
-    // if(minStreamFileIndex!= (uint32_t) -1) {
-    //     minFileIndex = minStreamFileIndex;
-    //     minRank = minStreamRank;
-    //     DPRINTF("********STREAMING VICTIM: %u : %lf\n", minFileIndex, minRank);
-    // }
     DPRINTF("+++++++++++End Search\n");
     ScalableMetaData * ret = NULL;
     sourceFileIndex = (uint32_t) -1;

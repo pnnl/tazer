@@ -182,7 +182,7 @@ class Histogram {
                     });
 
                 //JS: Do resize if bins are more than allowed
-                if(_bins.size() > _maxBuckets) {
+                if(_bins.size() > _maxBuckets) {               
                     //JS: Find the closest two bins
                     double minDiff = std::numeric_limits<double>::max();
                     uint64_t minDiffIndex = (uint64_t) -1;
@@ -200,8 +200,8 @@ class Histogram {
                     double qi_1 = std::get<0>(_bins[minDiffIndex]);
                     double ki_1 = std::get<1>(_bins[minDiffIndex]);
                     double newKey =  (qi * ki + qi_1 * ki_1) / (ki + ki_1);
-                    uint32_t newValue = ki + ki_1;
-                    
+                    double newValue = ki + ki_1;
+
                     //JS: Insert new bin and remove old
                     _bins[minDiffIndex] = std::make_tuple(newKey, newValue);
                     _bins.erase(_bins.begin() + minDiffIndex - 1);
