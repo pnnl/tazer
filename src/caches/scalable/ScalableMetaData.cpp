@@ -301,7 +301,7 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         double Ch = costHistogram.getValue(i);
         DPRINTF("* access: %lf misses: %lf\n", (double)access, (double)misses);
         marginalBenefit = Ch / Mp; 
-        ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks.load()); /
+        ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks.load()); 
         DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
         if(isnan(unitMarginalBenefit)){
             PRINTF("* nan! i: %f, misses: %d, ch: %lf Mp: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Mp , marginalBenefit, unitMarginalBenefit,numBlocks.load());

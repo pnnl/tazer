@@ -604,7 +604,7 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
         }
         else{ // no space available
             _binLock->writerUnlock(binIndex,req);
-        
+            stats.addAmt(prefetch, CacheStats::Metric::misses, 1);
             req->time = Timer::getCurrentTime() - req->time;
             req->trace()<<"no space got to next level ("<<req->blkIndex<<","<<req->fileIndex<<")"<<std::endl;
             updateRequestTime(req->time);
