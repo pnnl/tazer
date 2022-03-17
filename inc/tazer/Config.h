@@ -245,7 +245,7 @@ const std::string sharedMemName("/" + tazer_id + "ioCache");
 
 
 
-const bool TrackBlockStats = true;
+const bool TrackBlockStats = false;
 const bool TrackReads = false;
 const unsigned int FdsPerLocalFile = 10;
 

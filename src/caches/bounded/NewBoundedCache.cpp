@@ -541,7 +541,8 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
                     stats.start(); //ovh
                 }
                 else { //BLK_WR || BLK_RES || BLK_PRE
-                    
+                    stats.end(prefetch, CacheStats::Metric::ovh);
+                    stats.start(); //miss
                     incBlkCnt(entry,req); // someone else has already reserved so lets incrememt
                     req->trace()<<"someone else reserved: "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
                     auto  blockIndex= entry->id;
@@ -598,13 +599,15 @@ void NewBoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t,
                         return inner_fut.share();
                     });
                     reads[index] = fut.share();
+                    stats.end(prefetch, CacheStats::Metric::misses);
+                    stats.start();
                 }
 
             } 
         }
         else{ // no space available
             _binLock->writerUnlock(binIndex,req);
-        
+            stats.addAmt(prefetch, CacheStats::Metric::misses, 1);
             req->time = Timer::getCurrentTime() - req->time;
             req->trace()<<"no space got to next level ("<<req->blkIndex<<","<<req->fileIndex<<")"<<std::endl;
             updateRequestTime(req->time);
