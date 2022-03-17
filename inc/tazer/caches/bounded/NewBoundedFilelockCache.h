@@ -185,14 +185,13 @@ class NewBoundedFilelockCache : public NewBoundedCache<FcntlBoundedReaderWriterL
     std::atomic<std::uint64_t> _myOutstandingWrites;
 
     //JS: This is for scalable cache metrics
-    int _scaleFd;
     unsigned int _scaleMemSize;
     Cache* _scalableCache;
-    // ReaderWriterLock *_UMBLock;
-    // double * _UMB;
-    // unsigned int * _UMBC;
-    // bool initScalableMetricPiggyBack(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
-    // void closeScalableMetricPiggyBack();
+    ReaderWriterLock *_UMBLock;
+    double * _UMB;
+    unsigned int * _UMBC;
+    void initScalableMetricPiggyBack(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, std::string cachePath);
+    void closeScalableMetricPiggyBack();
 };
 
 #endif /* NewBoundedFilelockCache_H */

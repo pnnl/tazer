@@ -91,8 +91,8 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
-// #define PPRINTF(...) fprintf(stdout, __VA_ARGS__)
-#define PPRINTF(...)
+#define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+// #define PPRINTF(...)
 
 template <class Lock>
 NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, Cache * scalableCache) : Cache(cacheName,type),
@@ -120,7 +120,7 @@ NewBoundedCache<Lock>::NewBoundedCache(std::string cacheName, CacheType type, ui
     log(this) << _name << " " << _cacheSize << " " << _blockSize << " " << _numBlocks << " " << _associativity << " " << _numBins << std::endl;
     _localLock = new ReaderWriterLock();
     stats.end(false, CacheStats::Metric::constructor);
-    PPRINTF("*********************SETTING SCALABLE CACHE HERE %p blockSize %lu\n", _scalableCache, _blockSize);
+    PPRINTF("*********************%s SETTING SCALABLE CACHE HERE %p blockSize %lu\n", _name.c_str(), _scalableCache, _blockSize);
 }
 
 template <class Lock>
@@ -210,7 +210,6 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
     uint32_t victimFileIndex = -1;
     uint32_t victimTime = -1;
     double victimMinUMB = std::numeric_limits<double>::max();
-
     for (uint32_t i = 0; i < _associativity; i++) { // maybe we want to split this into two loops--first to check if any empty or if its here, then a lru pass, other wise we require checking the number of active users on every block which can be expensive for file backed caches
         //Find actual, empty, or oldest
         blkEntry = blkEntries[i];
@@ -225,9 +224,10 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
     }
 
     //JS: Update my UMB list here
+    PPRINTF("############################ oldestBlock %s %p ############################\n", _name.c_str(), _scalableCache);
     if(_scalableCache) {
         auto umbs = ((ScalableCache*)_scalableCache)->getLastUMB(static_cast<Cache*>(this));
-        PPRINTF("UMB SIZE %u\n", umbs.size());
+        PPRINTF("%s UMB SIZE %u\n", _name.c_str(), umbs.size());
         if(umbs.size()) {
             setLastUMB(umbs);
         }
@@ -245,7 +245,7 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
                             victimTime = blkEntry->timeStamp;
                             victimMinUMB = umb;
                             victimEntry = blkEntry;
-                            DPRINTF("Got a UMB %lf\n", umb);
+                            PPRINTF("%s Got a UMB %lf\n", _name.c_str(), umb);
                         }
                     }
                 }
@@ -284,7 +284,7 @@ typename NewBoundedCache<Lock>::BlockEntry* NewBoundedCache<Lock>::oldestBlock(u
     if (victimTime != (uint32_t)-1 && victimEntry) { //Did we find a space
        minTime = victimTime;
        minEntry = victimEntry;
-       PPRINTF("SCALE METRIC PIGGYBACK %lf\n", victimMinUMB);
+       PPRINTF("%s SCALE METRIC PIGGYBACK %lf\n", _name.c_str(), victimMinUMB);
     }
 
     if (minTime != (uint32_t)-1 && minEntry) { //Did we find a space
@@ -653,13 +653,13 @@ void NewBoundedCache<Lock>::addFile(uint32_t index, std::string filename, uint64
 
 template <class Lock>
 double NewBoundedCache<Lock>::getLastUMB(uint32_t fileIndex) { 
-    PPRINTF("********************* getLastUMB Nothing Here*********************"); 
+    PPRINTF("********************* %s getLastUMB Nothing Here*********************\n", _name.c_str()); 
     return std::numeric_limits<double>::max();
 }
 
 template <class Lock>
 void NewBoundedCache<Lock>::setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList) {
-    PPRINTF("********************* setLastUMB Nothing Here*********************"); 
+    PPRINTF("********************* %s setLastUMB Nothing Here*********************\n", _name.c_str()); 
     return;
 }
 
