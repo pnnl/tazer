@@ -504,10 +504,12 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                     stats.start(prefetch, CacheStats::Metric::ovh, thread_id); //ovh
                 }
                 else { //BLK_WR || BLK_RES || BLK_PRE
+                    stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
+                    stats.start(prefetch, CacheStats::Metric::misses, thread_id);
                     incBlkCnt(entry,req); // someone else has already reserved so lets incrememt
                     req->trace(_name)<<"someone else reserved: "<<blockEntryStr(entry)<<" "<<(void*)entry<<std::endl;
                     auto  blockIndex= entry->id;
-                    _binLock->writerUnlock(binIndex,req);            
+                    _binLock->writerUnlock(binIndex,req);   
                     auto fut = std::async(std::launch::deferred, [this, req,  blockIndex, prefetch, entry] { 
                         uint64_t stime = Timer::getCurrentTime();
                         CacheType waitingCacheType = CacheType::empty;
@@ -560,13 +562,16 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
                         return inner_fut.share();
                     });
                     reads[index] = fut.share();
+                    stats.end(prefetch, CacheStats::Metric::misses, thread_id);
+                    stats.start(prefetch, CacheStats::Metric::ovh, thread_id); //ovh
                 }
 
             } 
         }
         else{ // no space available
             _binLock->writerUnlock(binIndex,req);
-        
+            trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
+            stats.addAmt(prefetch, CacheStats::Metric::misses, 1, thread_id);
             req->time = Timer::getCurrentTime() - req->time;
             req->trace(_name)<<"no space got to next level ("<<req->blkIndex<<","<<req->fileIndex<<")"<<std::endl;
             updateRequestTime(req->time);
