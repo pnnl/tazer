@@ -423,7 +423,7 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     for (auto const &x : _metaMap) {
         auto fileIndex = x.first;
         auto meta = x.second;
-        if(allocateForFileIndex != fileIndex) {
+        if(allocateForFileIndex != fileIndex and meta->getNumBlocks()) {
             auto temp = meta->calcRank(timestamp-startTimeStamp, localMisses);
             //JS: This is for recording the unit marginal benifit and making it available to other caches
             UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,temp));
@@ -435,10 +435,12 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
                 DPRINTF("*******NEW MIN: %u : %lf\n", minFileIndex, minRank);
             }
         }
-        else {
+        else if (allocateForFileIndex == fileIndex){
             sourceFileRank = meta->calcRank(timestamp-startTimeStamp, localMisses);
             DPRINTF("-------Source Index: %u %lf\n", fileIndex, sourceFileRank);
             MeMPRINTF("-------Source Index: %u %lf\n", fileIndex, sourceFileRank);
+        }else{
+            sourceFileRank = std::numeric_limits<double>::max();
         }
     }
 
