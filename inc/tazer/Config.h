@@ -144,15 +144,15 @@ const uint32_t memoryCacheAssociativity = 16UL;
 const uint64_t memoryCacheBlocksize = maxBlockSize;
 
 //Scalable Cache Parameters
-const bool useScalableCache = getenv("TAZER_SCALABLE_CACHE") ? atoi(getenv("TAZER_SCALABLE_CACHE")) : 1;
+const bool useScalableCache = getenv("TAZER_SCALABLE_CACHE") ? atoi(getenv("TAZER_SCALABLE_CACHE")) : 0;
 const uint32_t scalableCacheNumBlocks = getenv("TAZER_SCALABLE_CACHE_NUM_BLOCKS") ? atoi(getenv("TAZER_SCALABLE_CACHE_NUM_BLOCKS")) : 16;
 //0:addAdaptiveAllocator, 1:addStealingAllocator (LRU), 2:addRandomStealingAllocator (Random File, Oldest Block), 3:addRandomStealingAllocator (Random File, Random Block), 4:LargestStealingAllocator, 5:FirstTouchAllocator, 6:addSimpleAllocator
 const uint32_t scalableCacheAllocator = getenv("TAZER_SCALABLE_CACHE_ALLOCATOR") ? atoi(getenv("TAZER_SCALABLE_CACHE_ALLOCATOR")) : 0;
 
 
 //Shared Memory Cache Parameters
-const bool useSharedMemoryCache = getenv("TAZER_SHARED_MEM_CACHE") ? atoi(getenv("TAZER_SHARED_MEM_CACHE")) : 1;
-static uint64_t sharedMemoryCacheSize = getenv("TAZER_SHARED_MEM_CACHE_SIZE") ? atol(getenv("TAZER_SHARED_MEM_CACHE_SIZE")) : 32 *  1024 * 1024UL;
+const bool useSharedMemoryCache = getenv("TAZER_SHARED_MEM_CACHE") ? atoi(getenv("TAZER_SHARED_MEM_CACHE")) : 0;
+static uint64_t sharedMemoryCacheSize = getenv("TAZER_SHARED_MEM_CACHE_SIZE") ? atol(getenv("TAZER_SHARED_MEM_CACHE_SIZE")) : 1 * 1024 * 1024 * 1024UL;
 const uint32_t sharedMemoryCacheAssociativity = 16UL;
 const uint64_t sharedMemoryCacheBlocksize = maxBlockSize;
 
@@ -172,7 +172,7 @@ const std::string fileCacheFilePath("/tmp/" + tazer_id + "/tazer_cache/fc"); // 
 
 //Bounded Filelock Cache Parameters
 const bool useBoundedFilelockCache = getenv("TAZER_BOUNDED_FILELOCK_CACHE") ? atoi(getenv("TAZER_BOUNDED_FILELOCK_CACHE")) : 1;
-static uint64_t boundedFilelockCacheSize = getenv("TAZER_BOUNDED_FILELOCK_CACHE_SIZE") ? atol(getenv("TAZER_BOUNDED_FILELOCK_CACHE_SIZE")) : 64 * 1024 * 1024UL;
+static uint64_t boundedFilelockCacheSize = getenv("TAZER_BOUNDED_FILELOCK_CACHE_SIZE") ? atol(getenv("TAZER_BOUNDED_FILELOCK_CACHE_SIZE")) : 1 * 1024 * 1024 * 1024UL;
 const uint32_t boundedFilelockCacheAssociativity = 16UL;
 const uint64_t boundedFilelockCacheBlocksize = maxBlockSize;
 const std::string boundedFilelockCacheFilePath = getenv("TAZER_BOUNDED_FILELOCK_CACHE_PATH") ? std::string(getenv("TAZER_BOUNDED_FILELOCK_CACHE_PATH")) : std::string("/tmp/" + tazer_id + "/tazer_cache/gc"); // TODO: have option to pass from environment variable
@@ -245,7 +245,7 @@ const std::string sharedMemName("/" + tazer_id + "ioCache");
 
 
 const bool ThreadStats = getenv("TAZER_THREAD_STATS") ? atoi(getenv("TAZER_THREAD_STATS")) : 0;
-const bool TrackBlockStats = true;
+const bool TrackBlockStats = false;
 const bool TrackReads = false;
 const unsigned int FdsPerLocalFile = 10;
 
