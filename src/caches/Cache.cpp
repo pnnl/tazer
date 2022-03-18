@@ -108,9 +108,11 @@ Cache::Cache(std::string name,  CacheType type) : Loggable(Config::CacheLog, nam
                                  _shared(false),
                                  _outstandingWrites(0),
                                  _terminating(false) {
-    stats.start();
 
-    // std::cout << "[TAZER] "
+    // debug() <<"in cache "<<name<<std::endl;
+    stats.start(false, CacheStats::Metric::constructor);
+
+    // debug() << "[TAZER] "
     //           << "Constructing " << _name << " in cache" << std::endl;
     if (_name == BASECACHENAME) {
         // _fm_lock = new ReaderWriterLock();
@@ -122,9 +124,9 @@ Cache::Cache(std::string name,  CacheType type) : Loggable(Config::CacheLog, nam
         _lastLevel = this;
     }
     // std::string shmPath("/" + Config::tazer_id  + _name + "_stats.lck");
-    // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+    // int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
     // if (shmFd == -1) {
-    //     shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
+    //     shmFd = shm_open(shmPath.c_str(), O_RDWR, 0666);
     //     if (shmFd != -1) {
     //         std::cout << "resusing fcntl shm lock" << std::endl;
     //         ftruncate(shmFd, sizeof(uint32_t) + 2 * sizeof(uint64_t) + 2 * sizeof(uint8_t) + _ioWinSize * sizeof(uint64_t));
@@ -185,7 +187,7 @@ Cache::Cache(std::string name,  CacheType type) : Loggable(Config::CacheLog, nam
 
 Cache::~Cache() {
     log(this) << "deleting " << _name << " in cache" << std::endl;
-    stats.start();
+    stats.start(false, CacheStats::Metric::destructor);
     while (_outstandingWrites.load()) {
         std::this_thread::yield();
     }
@@ -223,7 +225,7 @@ void Cache::blockSet(uint32_t index, uint32_t fileIndex, uint32_t blockIndex) {
 }
 
 bool Cache::writeBlock(Request *req) {
-    req->trace() << "WRITE " << _name << std::endl;
+   req->trace(_name) << "WRITE " << _name << std::endl;
     if (_nextLevel) {
         // std::cout<<"[TAZER] " << _name << " writeblock " << std::hex << (void *)buffer << std::dec << std::endl;
         return _nextLevel->writeBlock(req);
@@ -233,7 +235,7 @@ bool Cache::writeBlock(Request *req) {
 
 Request *Cache::requestBlock(uint32_t index, uint64_t &size, uint32_t fileIndex, uint64_t offset, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
     Request *req = new Request(index, fileIndex, size, offset, this, NULL);
-    req->trace() << _name << " " << this << std::endl;
+   req->trace(_name) << _name << " " << this << std::endl;
     // std::cout<<"New Request!! "<<req->str()<<std::endl;
     Cache *tmp = this;
     while (tmp) {
@@ -257,7 +259,8 @@ void Cache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_fut
 }
 
 //TODO: merge/reimplement from old cache structure
-void Cache::cleanUpBlockData(uint8_t *data) {
+void Cache::cleanUpBlockData(uint8_t* data) {
+    // debug()<<_name<<" (not)delete data"<<std::endl;
 }
 
 uint32_t Cache::numBlocks() {
@@ -327,11 +330,11 @@ void Cache::setBase(Cache *base) {
 }
 
 //TODO: merge/reimplement from old cache structure
-void Cache::cleanReservation() {
-}
+// void Cache::cleanReservation() {
+// }
 
 bool Cache::bufferWrite(Request *req) {
-    //std::cout<<"[TAZER] " << "buffered write: " << (void *)originating << std::endl;
+    // debug() << "buffered write req id:" << req->id <<" ow: "<<_outstandingWrites.load()<< std::endl;
     if (Config::bufferFileCacheWrites) { // && !_terminating) {
         _outstandingWrites.fetch_add(1);
         _writePool->addTask([this, req] {
@@ -344,8 +347,10 @@ bool Cache::bufferWrite(Request *req) {
         return false;
     }
 
-    if (!req->data) //This will cause a seg fault instead of infinitely spinning
+    if (!req->data){ //This will cause a seg fault instead of infinitely spinning
+        debug()<<"EXITING!!!!"<<__FILE__<<" "<<__LINE__<<std::endl;
         raise(SIGSEGV);
+    }
 
     if (!writeBlock(req)) {
         DPRINTF("FAILED WRITE...\n");
@@ -403,7 +408,8 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         auto request = requestBlock(blk, blkSize, regFileIndex, 0, reads, priority);
         if (request->ready) { //the block was in a client side cache!!
             //std::cout << "********************Data was on client side!!!" <<std::endl;
-            request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
+            request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize, request->threadId);
+
             bufferWrite(request);
            
         }
@@ -424,7 +430,7 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
 
         if (request->data) { // hmm what does it mean if this is NULL? do we need to catch and report this?
-            request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
+            request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize, request->threadId);
             stats.addAmt(true, CacheStats::Metric::read, blkSize);
             bufferWrite(request);
             
@@ -434,7 +440,7 @@ void Cache::prefetch(uint32_t index, std::vector<uint64_t> blocks, uint64_t file
         // uint32_t blk = (*it).first;
         auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
         if (request->data) {                     // hmm what does it mean if this is NULL? do we need to catch and report this?
-            request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize);
+            request->originating->stats.addAmt(true, CacheStats::Metric::read, blkSize, request->threadId);
             stats.addAmt(true, CacheStats::Metric::read, blkSize);
             bufferWrite(request);
         }

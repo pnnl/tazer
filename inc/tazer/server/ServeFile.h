@@ -97,6 +97,7 @@
 #include "ReaderWriterLock.h"
 #include "ThreadPool.h"
 #include "Trackable.h"
+#include "ServeFileStats.h"
 
 class ServeFile : public Loggable, public Trackable<std::string, ServeFile *> {
   public:
@@ -152,6 +153,8 @@ class ServeFile : public Loggable, public Trackable<std::string, ServeFile *> {
     static PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> _transferPool;
     static PriorityThreadPool<std::packaged_task<Request *()>> _decompressionPool;
     // ConnectionPool *_conPool;
+
+    static ServeFileStats _stats;
 };
 
 #endif /* SERVEFILE_H_ */

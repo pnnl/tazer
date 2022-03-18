@@ -102,7 +102,7 @@ evictHisto(100),
 access(0), 
 misses(0),
 startTimeStamp((uint64_t)Timer::getCurrentTime()) {
-    stats.start();
+    stats.start(false, CacheStats::Metric::constructor);
     log(this) << _name << std::endl;
     _lastVictimFileIndexLock = new ReaderWriterLock();
     _cacheLock = new ReaderWriterLock();
@@ -282,7 +282,10 @@ bool ScalableCache::writeBlock(Request *req){
 }
 
 void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority){
-    stats.start(); //read
+    std::thread::id thread_id = req->threadId;
+    bool prefetch = priority != 0;
+    stats.start(prefetch, CacheStats::Metric::read, thread_id); //read
+    stats.start(prefetch, CacheStats::Metric::ovh, thread_id); //ovh
     uint8_t *buff = nullptr;
     auto index = req->blkIndex;
     auto fileIndex = req->fileIndex;
@@ -307,7 +310,11 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
     if (req->size <= _blockSize) {
         bool reserve;
         //JS: Fill in the data if we have it
+        stats.end(prefetch, CacheStats::Metric::ovh, thread_id); //read
+        stats.start(prefetch, CacheStats::Metric::hits, thread_id); //ovh
         buff = getBlockDataOrReserve(fileIndex, index, fileOffset, reserve);
+        stats.end(prefetch, CacheStats::Metric::hits, thread_id);
+        stats.start(prefetch, CacheStats::Metric::ovh, thread_id);
         access.fetch_add(1);
 
         // std::cerr << " [JS] readBlock " << buff << " " << reserve << std::endl;
@@ -322,22 +329,26 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
             updateRequestTime(req->time);
 
             trackBlock(_name, "[BLOCK_READ_HIT]", fileIndex, index, priority);
-            stats.addAmt(false, CacheStats::Metric::hits, req->size);
-            stats.end(false, CacheStats::Metric::hits);
+            stats.addAmt(prefetch, CacheStats::Metric::hits, req->size, thread_id);
         }
         else { //JS: Data not currently present
             trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
             //setting startTimeStamp to fist miss we encounter
             std::call_once(first_miss, [this]() { startTimeStamp = (uint64_t)Timer::getCurrentTime(); });
             misses.fetch_add(1);
-            stats.addAmt(false, CacheStats::Metric::misses, 1);
-            stats.end(false, CacheStats::Metric::misses);
-
+            stats.addAmt(prefetch, CacheStats::Metric::misses, 1, thread_id);
+            
             if (reserve) { //JS: We reserved block
                 DPRINTF("[JS] ScalableCache::readBlock reseved\n");
+                stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
+                stats.start(prefetch, CacheStats::Metric::misses, thread_id); //miss
                 _nextLevel->readBlock(req, reads, priority);
-            }
+                stats.end(prefetch, CacheStats::Metric::misses, thread_id);
+                stats.start(prefetch, CacheStats::Metric::ovh, thread_id); //ovh
+            } ///continue from here
             else { //JS: Someone else will fullfill request
+                stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
+                stats.start(prefetch, CacheStats::Metric::misses, thread_id);
                 DPRINTF("[JS] ScalableCache::readBlock waiting\n");
                 auto fut = std::async(std::launch::deferred, [this, req] {
                     uint64_t offset = req->offset;
@@ -369,6 +380,8 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
                     return innerFuture.share();
                 });
                 reads[index] = fut.share();
+                stats.end(prefetch, CacheStats::Metric::misses, thread_id);
+                stats.start(prefetch, CacheStats::Metric::ovh, thread_id); 
             }
         }
     }

@@ -100,27 +100,38 @@
 NetworkCache::NetworkCache(std::string cacheName, CacheType type, PriorityThreadPool<std::packaged_task<std::shared_future<Request *>()>> &txPool, PriorityThreadPool<std::packaged_task<Request *()>> &decompPool) : Cache(cacheName,type),
                                                                                                                                                                                                       _transferPool(txPool),
                                                                                                                                                                                                       _decompPool(decompPool) {
-    stats.start();
+   
+    stats.start(false, CacheStats::Metric::constructor);
+
     _lock = new ReaderWriterLock();
+    
     stats.end(false, CacheStats::Metric::constructor);
     // //log(this) /*std::cout*/<<"[TAZER] " << "Constructing " << _name << " in network cache" << std::endl;
 }
 
 NetworkCache::~NetworkCache() {
     ////log(this) /*std::cout*/<<"[TAZER] " << "deleting " << _name << " in network cache" << std::endl;
-    stats.start();
+    stats.start(false, CacheStats::Metric::destructor);
     delete _lock;
     stats.end(false, CacheStats::Metric::destructor);
     stats.print(_name);
-    std::cout << std::endl;
+    // std::cout << std::endl;
+}
+
+void NetworkCache::cleanUpBlockData(uint8_t *data){
+    // debug()<<_name<<" delete data"<<std::endl;
+    delete[] data;
 }
 
 bool NetworkCache::writeBlock(Request *req) {
     bool ret = true;
+    req->trace(_name)<<"WRITE BLOCK"<<std::endl;
+    // debug()
     // //log(this) /*std::cout*/<<"[TAZER] " << _name << " netcache writing: " << index << " " << (void *)originating << std::endl;
     // //log(this) /*std::cout*/<<"[TAZER] "<<_name<<" writeblock "<<std::hex<<(void*)buffer<<std::dec<<std::endl;
     if (req->originating == this) {
-        delete[] req->data;
+        // req->trace(_name)<<_type<<" deleting data "<<req->id<<std::endl;
+        req->printTrace=false; 
         delete req;
     }
     else if (_nextLevel) { // currentlty this should be the last level....but it could be possible to do something like a level for site level servers and then a level for remote site servers...
@@ -158,6 +169,7 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
     // bool success = false;
     server->lock();
     bool compress = _compressMap[fileIndex];
+    req->trace(_name)<<"requesting block from: "<<server->addrport()<<std::endl;
     //Currently we are only ever getting a single block at a time (blkStart == blkEnd)
     //That makes this reasonable... A better idea is to keep track of what block succeeded
     //And only re-request those that failed...
@@ -173,7 +185,7 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
     for (uint32_t j = 0; j < Config::socketRetry; j++) {
         if (sendRequestBlkMsg(server, name, blkStart, blkEnd)) {
             for (uint32_t i = blkStart; i <= blkEnd; i++) {
-                // log(this) << _name << " requesting block " << i << std::endl;
+                req->trace(_name) << " requesting block " << i <<" try: "<<j <<" of "<< Config::socketRetry<< std::endl;
                 uint64_t start = blkStart * _blkSize;
                 uint64_t end;
                 if (blkEnd * _blkSize > _fileSize) {
@@ -190,9 +202,9 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
                 char *data = NULL;
                 uint32_t blk = 0, dataSize = 0;
                 std::string fileName = recSendBlkMsg(server, &data, blk, dataSize, _blkSize);
-                log(this) << fileName << " " << dataSize << " " << blk << std::endl;
+                debug(this) << fileName << " " << dataSize << " " << blk << std::endl;
                 if (data == NULL) {
-                    log(this) << "data null: " << fileName << " " << dataSize << " " << blk << std::endl;
+                    debug(this) << "data null: " << fileName << " " << dataSize << " " << blk << std::endl;
                     success = false;
                     break;
                     // raise(SIGSEGV);
@@ -200,13 +212,14 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
                 }
                 if (!fileName.empty() && dataSize && blk == i) { //Got a block
                     // sizeSum += dataSize;
-                    // log(this) << _name<< "Received " << fileName << " " << blk << " " << dataSize << " allocSize " << size << std::endl;
+                    req->trace(_name) << "Received " << fileName << " " << blk << " " << dataSize << " allocSize " << size << std::endl;
                     if (compress) {
 
                         auto task = std::packaged_task<Request *()>([this, req, data, dataSize, size, blk, priority]() {
-                            stats.start();
+                            stats.start(priority != 0, CacheStats::Metric::hits, req->threadId);
                             return decompress(req, data, dataSize, size, blk);
-                            stats.end(priority != 0, CacheStats::Metric::hits);
+                            stats.end(priority != 0, CacheStats::Metric::hits, req->threadId);
+
                         });
                         fut = task.get_future();
                         _decompPool.addTask(priority, std::move(task));
@@ -240,20 +253,23 @@ std::future<Request *> NetworkCache::requestBlk(Connection *server, Request *req
     // auto elapsed = Timer::getCurrentTime() - start;
     // updateIoRate(elapsed, sizeSum);
     server->unlock();
-
     return fut;
 }
 
 void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
-    stats.start(); //read
-    stats.start(); //ovh
-    stats.start(); //hits
+    std::thread::id thread_id = req->threadId;
+    // stats.checkThread(thread_id, true);
+    stats.start((priority != 0), CacheStats::Metric::read, thread_id); //read
+    stats.start((priority != 0), CacheStats::Metric::ovh, thread_id); //ovh
+    stats.start((priority != 0), CacheStats::Metric::hits, thread_id); //hits
     // std::cout << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << std::endl;
     // req->trace+=_name+":";
+    req->printTrace=false;
+    req->globalTrigger=false;
     req->time = Timer::getCurrentTime();
     req->originating = this;
+    req->trace(_name)<<" READ BLOCK"<<std::endl;
     bool prefetch = priority != 0;
-
     auto task = std::packaged_task<std::shared_future<Request *>()>([this, req, priority, prefetch] { //packaged task allow the transfer to execute on an asynchronous tx thread.
         Connection *sev = NULL;
         _lock->readerLock();
@@ -267,7 +283,7 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
         bool success = false;
         auto fut = requestBlk(sev, req, priority, success);
         int retryCnt = 0;
-        while (!success && retryCnt < 10) {
+        while (!success && retryCnt < 100) {
 
             Connection *oldSev = sev;
             sev = NULL;
@@ -275,13 +291,14 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
                 sev = pool->popConnection();
             }
             err(this) << "retrying to request block old: " << oldSev->addrport() << " " << sev->addrport() << std::endl;
+            req->trace(_name)<< "retrying to request block old: " << oldSev->addrport() << " " << sev->addrport() << std::endl;
             pool->pushConnection(oldSev, true); //TODO: determine if oldSev is still a viable connection
             success = false;
             fut = requestBlk(sev, req, priority, success);
             retryCnt++;
         }
         pool->pushConnection(sev, true);
-        stats.addAmt(prefetch, CacheStats::Metric::hits, req->size);
+        stats.addAmt(prefetch, CacheStats::Metric::hits, req->size, req->threadId);
         // req->trace+=", received->";
         return fut.share();
     });
@@ -289,9 +306,9 @@ void NetworkCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sha
     _transferPool.addTask(priority, std::move(task));
     reads[req->blkIndex] = fut.share();
 
-    stats.end(prefetch, CacheStats::Metric::hits);
-    stats.end(prefetch, CacheStats::Metric::ovh);
-    stats.end(prefetch, CacheStats::Metric::read);
+    stats.end(prefetch, CacheStats::Metric::hits, thread_id);
+    stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
+    stats.end(prefetch, CacheStats::Metric::read, thread_id);
 }
 
 void NetworkCache::setFileCompress(uint32_t index, bool compress) {

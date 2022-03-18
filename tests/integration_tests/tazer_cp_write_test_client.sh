@@ -31,10 +31,22 @@ cd ${workspace}/test_${test_id}
 
    
     echo "### Creating tazer meta files"
+    META_FILE=${client_file}.meta.out
     compression=0
     blocksize=1048576
     copy_file_path="${SERVER_DATA_PATH}/${client_file}" #this should be the absolute path (not relative to where the server is executing)
-    echo "${server_addr}:${server_port}:${compression}:0:0:${blocksize}:${copy_file_path}|" | tee ${LOCAL_DATA_PATH}/${client_file}.meta.out
+    #echo "${server_addr}:${server_port}:${compression}:0:0:${blocksize}:${copy_file_path}|" | tee ${LOCAL_DATA_PATH}/${client_file}.meta.out
+    echo "TAZER0.1" | tee ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "type=output" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "[server]" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "file=${copy_file_path}" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "host=${server_addr}" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "port=${server_port}" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "compress=false" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "block_size=${blocksize}" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "save_local=false" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "prefetch=false" >> ${LOCAL_DATA_PATH}/${META_FILE}
+
     ref_time=0 #debug -- calcuate a reference time (e.g. with SimplePTP if you want to use)
     echo "ref_time ${ref_time}"
     time TAZER_REF_TIME=${ref_time} TAZER_PREFETCH=0 LD_PRELOAD=${TAZER_LIB} ${TAZER_CP_PATH} ${LOCAL_DATA_PATH}/${client_file} ${LOCAL_DATA_PATH}/${client_file}.meta.out

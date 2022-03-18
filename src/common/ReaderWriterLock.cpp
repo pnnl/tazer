@@ -239,7 +239,7 @@ MultiReaderWriterLock::~MultiReaderWriterLock() {
 }
 
 void MultiReaderWriterLock::readerLock(uint64_t entry, Request* req) {
-    if(req) { req->trace()<<"rlocking: "<<entry<<std::endl;}
+    if(req) { req->trace("MultiReaderWriterLock")<<"rlocking: "<<entry<<std::endl;}
     while (1) {
         while (_writers[entry].load()) {
             std::this_thread::yield();
@@ -250,17 +250,17 @@ void MultiReaderWriterLock::readerLock(uint64_t entry, Request* req) {
         }
         _readers[entry].fetch_sub(1);
     }
-    if(req) { req->trace()<<"rlocked: "<<entry<<std::endl;}
+    if(req) { req->trace("MultiReaderWriterLock")<<"rlocked: "<<entry<<std::endl;}
 }
 
 void MultiReaderWriterLock::readerUnlock(uint64_t entry, Request* req) {
-    if(req) { req->trace()<<"runlocking: "<<entry<<std::endl; }
+    if(req) { req->trace("MultiReaderWriterLock")<<"runlocking: "<<entry<<std::endl; }
     _readers[entry].fetch_sub(1);
-    if(req) { req->trace()<<"runlocked: "<<entry<<std::endl;}
+    if(req) { req->trace("MultiReaderWriterLock")<<"runlocked: "<<entry<<std::endl;}
 }
 
 void MultiReaderWriterLock::writerLock(uint64_t entry, Request* req) {
-    if(req) { req->trace()<<"wlocking: "<<entry <<" "<<::getpid()<<std::endl; }
+    if(req) { req->trace("MultiReaderWriterLock")<<"wlocking: "<<entry <<" "<<::getpid()<<std::endl; }
     unsigned int check = 1;
     while (_writers[entry].exchange(check) == 1) {
         std::this_thread::yield();
@@ -268,7 +268,7 @@ void MultiReaderWriterLock::writerLock(uint64_t entry, Request* req) {
     while (_readers[entry].load()) {
         std::this_thread::yield();
     }
-    if(req) { req->trace()<<"wlocked: "<<entry <<" "<<::getpid()<<std::endl; }
+    if(req) { req->trace("MultiReaderWriterLock")<<"wlocked: "<<entry <<" "<<::getpid()<<std::endl; }
 }
 
 void MultiReaderWriterLock::fairWriterLock(uint64_t entry) {
@@ -283,9 +283,9 @@ void MultiReaderWriterLock::fairWriterLock(uint64_t entry) {
 }
 
 void MultiReaderWriterLock::writerUnlock(uint64_t entry, Request* req) {
-    if(req) { req->trace()<<"wunlocking: "<<entry <<" "<<::getpid()<<std::endl; }
+    if(req) { req->trace("MultiReaderWriterLock")<<"wunlocking: "<<entry <<" "<<::getpid()<<std::endl; }
     _writers[entry].store(0);
-    if(req) { req->trace()<<"wunlocked: "<<entry <<" "<<::getpid()<<std::endl; }
+    if(req) { req->trace("MultiReaderWriterLock")<<"wunlocked: "<<entry <<" "<<::getpid()<<std::endl; }
 
 }
 

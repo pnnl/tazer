@@ -97,15 +97,22 @@
 #define DPRINTF(...)
 
 LocalFileCache::LocalFileCache(std::string cacheName, CacheType type) : Cache(cacheName,type) {
-    stats.start();
+    stats.start(false,CacheStats::Metric::constructor);
+
     _lock = new ReaderWriterLock();
+
     stats.end(false,CacheStats::Metric::constructor);
     // //log(this) /*std::cout*/<<"[TAZER] " << "Constructing " << _name << " in network cache" << std::endl;
 }
 
 LocalFileCache::~LocalFileCache() {
     ////log(this) /*std::cout*/<<"[TAZER] " << "deleting " << _name << " in network cache" << std::endl;
+    stats.start(false,CacheStats::Metric::destructor);
+
     delete _lock;
+
+    stats.end(false,CacheStats::Metric::destructor);
+    stats.print(_name);
 }
 
 uint8_t *LocalFileCache::getBlockData(std::ifstream *file, uint32_t blkIndex, uint64_t blkSize,uint64_t fileSize) {
@@ -120,12 +127,17 @@ uint8_t *LocalFileCache::getBlockData(std::ifstream *file, uint32_t blkIndex, ui
     return (uint8_t *)buff;
 }
 
+void LocalFileCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<" delete data"<<std::endl;
+    delete[] data;
+}
+
 bool LocalFileCache::writeBlock(Request *req) {
     bool ret = true;
     // //log(this) /*std::cout*/<<"[TAZER] " << _name << " netcache writing: " << index << " " << (void *)originating << std::endl;
     // //log(this) /*std::cout*/<<"[TAZER] "<<_name<<" writeblock "<<std::hex<<(void*)buffer<<std::dec<<std::endl;
     if (req->originating == this) {
-        delete[] req->data;
+        // debug()<<_type<<" deleting data "<<req->id<<std::endl;
         delete req;
     }
     else if (_nextLevel) {
@@ -135,8 +147,10 @@ bool LocalFileCache::writeBlock(Request *req) {
 }
 
 void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> &reads, uint64_t priority) {
-    stats.start(); //read
-    stats.start(); //ovh
+    std::thread::id thread_id = req->threadId;
+    stats.start((priority != 0), CacheStats::Metric::read, thread_id); //read
+    stats.start((priority != 0), CacheStats::Metric::ovh, thread_id); //ovh
+    
     log(this) << _name << " entering read " << req->blkIndex << " " << req->fileIndex << " " << priority << std::endl;
     req->time = Timer::getCurrentTime();
     req->originating = this;
@@ -155,19 +169,19 @@ void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::s
     std::uint64_t memblkSize = Config::localFileBlockSize;
     if (file.first) { //we have an open file stream! (represents a hit)
         if (!prefetch) {
-            stats.addAmt(prefetch, CacheStats::Metric::hits, req->size);
+            stats.addAmt(prefetch, CacheStats::Metric::hits, req->size, thread_id);
         }
         else {
-            stats.addAmt(prefetch, CacheStats::Metric::prefetches, 1);
+            stats.addAmt(prefetch, CacheStats::Metric::prefetches, 1, thread_id);
         }
         // uint64_t htime = Timer::getCurrentTime();
-        stats.end(prefetch, CacheStats::Metric::ovh);
-        stats.start(); //hits
+        stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
+        stats.start(prefetch, CacheStats::Metric::hits, thread_id); //hits
         file.second->writerLock();
         uint8_t *buff = getBlockData(file.first, blkIndex, memblkSize,fileSize);
         file.second->writerUnlock();
-        stats.end(prefetch, CacheStats::Metric::hits);
-        stats.start(); //ovh
+        stats.end(prefetch, CacheStats::Metric::hits, thread_id);
+        stats.start(prefetch, CacheStats::Metric::ovh, thread_id); //ovh
         req->data = buff;
         req->originating = this;
         req->reservedMap[this] = 1;
@@ -175,19 +189,22 @@ void LocalFileCache::readBlock(Request *req, std::unordered_map<uint32_t, std::s
         req->time = Timer::getCurrentTime() - req->time;
         updateRequestTime(req->time);
     }
-    else {
-        stats.addAmt(prefetch, CacheStats::Metric::misses, 1);
+    else if(_nextLevel != NULL){
+        stats.addAmt(prefetch, CacheStats::Metric::misses, 1, thread_id);
         
         req->time = Timer::getCurrentTime() - req->time;
         updateRequestTime(req->time);
-        stats.end(prefetch, CacheStats::Metric::ovh);
-        stats.start(); //misses
+        stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
+        stats.start(prefetch, CacheStats::Metric::misses, thread_id); //misses
         _nextLevel->readBlock(req, reads, priority);
-        stats.end(prefetch, CacheStats::Metric::misses);
-        stats.start(); //ovh
+        stats.end(prefetch, CacheStats::Metric::misses, thread_id);
+        stats.start(prefetch, CacheStats::Metric::ovh, thread_id); //ovh
     }
-    stats.end(prefetch, CacheStats::Metric::ovh);
-    stats.end(prefetch, CacheStats::Metric::read);
+    else{
+        err() <<_name << " "<<name<<" not present and no next cache!!!!"<<std::endl;
+    }
+    stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
+    stats.end(prefetch, CacheStats::Metric::read, thread_id);
 }
 
 Cache *LocalFileCache::addNewLocalFileCache(std::string cacheName, CacheType type) {
@@ -199,7 +216,7 @@ Cache *LocalFileCache::addNewLocalFileCache(std::string cacheName, CacheType typ
 }
 
 void LocalFileCache::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
-    log(this)<<_name<<" adding file: "<<filename<<std::endl;
+    // debug()<<_name<<" adding file: "<<filename<<std::endl;
     // //log(this) /*std::cout*/<<"[TAZER] " << "adding file: " << filename << " " << (void *)this << " " << (void *)_nextLevel << std::endl;
     // //log(this) /*std::cout*/ << "[TAZER] " << _name << " " << filename << " " << fileSize << " " << blockSize << std::endl;
     _lock->writerLock();
@@ -212,8 +229,9 @@ void LocalFileCache::addFile(uint32_t index, std::string filename, uint64_t bloc
         std::ifstream *file = new std::ifstream();
         file->open(filename, std::fstream::binary);
         if (!file->is_open()) {
-            log(this) << "WARNING: " << filename << " did not open" << std::endl;
+            // debug() << "WARNING: " << filename << " did not open" << std::endl;
             _fstreamMap.emplace(index, std::make_pair((std::ifstream *)NULL, (ReaderWriterLock *)NULL));
+            delete file;
         }
         else {
             _fstreamMap.emplace(index, std::make_pair(file, new ReaderWriterLock()));
@@ -229,11 +247,15 @@ void LocalFileCache::addFile(uint32_t index, std::string filename, uint64_t bloc
 
 void LocalFileCache::removeFile(uint32_t index){
     _lock->writerLock();
-    auto file = _fstreamMap[index];
-    _fstreamMap.erase(index);
-    _fileMap.erase(index);
-    file.first->close();
-    delete file.first;
-    delete file.second;
+    if (_fstreamMap.count(index) != 0) {
+        auto file = _fstreamMap[index];
+        if (file.first) {
+            _fstreamMap.erase(index);
+            _fileMap.erase(index);
+            file.first->close();
+            delete file.first;
+            delete file.second;
+        }
+    }
     _lock->writerUnlock();
 }

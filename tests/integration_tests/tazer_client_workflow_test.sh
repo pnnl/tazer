@@ -44,11 +44,24 @@ cd ${workspace}/test_${test_id}
     mkdir -p $LOCAL_DATA_PATH
 
     echo "### Creating tazer meta files"
+    META_FILE=tazer1GB.dat.meta.in
     compression=0
     blocksize=1048576
     infile="$SERVER_DATA_PATH/tazer1GB.dat"
 
-    echo "${server_addr}:${server_port}:${compression}:0:0:${blocksize}:${infile}|" | tee ${LOCAL_DATA_PATH}/tazer1GB.dat.meta.in
+    #echo "${server_addr}:${server_port}:${compression}:0:0:${blocksize}:${infile}|" | tee ${LOCAL_DATA_PATH}/tazer1GB.dat.meta.in
+    echo "TAZER0.1" | tee ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "type=input" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "[server]" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "file=${infile}" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "host=${server_addr}" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "port=${server_port}" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "compress=false" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "block_size=${blocksize}" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "save_local=false" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "prefetch=false" >> ${LOCAL_DATA_PATH}/${META_FILE}
+
+
     out_file=./log.out
 
     echo "python3 ${sim_dir}/File_access_pattern_gen.py $sim_params --inputFileName=${infile} --outputFileName=access_pattern.txt --plot=access_pattern.png"

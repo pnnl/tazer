@@ -14,17 +14,13 @@ set(CACHE_HEADERS
     ${TAZER_CACHE_INC_DIR}/CacheStats.h
     ${TAZER_CACHE_INC_DIR}/CacheTypes.h
 
-    ${BOUNDED_INC_DIR}/NewBoundedCache.h
-    ${BOUNDED_INC_DIR}/NewMemoryCache.h
-    ${BOUNDED_INC_DIR}/NewSharedMemoryCache.h
-    ${BOUNDED_INC_DIR}/NewBoundedFilelockCache.h
-    ${BOUNDED_INC_DIR}/NewBoundedLinkfileCache.h
+    ${BOUNDED_INC_DIR}/BoundedCache.h
+    ${BOUNDED_INC_DIR}/MemoryCache.h
+    ${BOUNDED_INC_DIR}/SharedMemoryCache.h
+    ${BOUNDED_INC_DIR}/FileCache.h
+    ${BOUNDED_INC_DIR}/BoundedFilelockCache.h
+    ${BOUNDED_INC_DIR}/BoundedLinkfileCache.h
     ${BOUNDED_INC_DIR}/FileLinkReaderWriterLock.h
-    ${BOUNDED_INC_DIR}/deprecated/BoundedCache.h
-    ${BOUNDED_INC_DIR}/deprecated/FileCache.h
-    ${BOUNDED_INC_DIR}/deprecated/BoundedFilelockCache.h
-    ${BOUNDED_INC_DIR}/deprecated/MemoryCache.h
-    ${BOUNDED_INC_DIR}/deprecated/SharedMemoryCache.h
 
     ${UNBOUNDED_INC_DIR}/UnboundedCache.h
     ${UNBOUNDED_INC_DIR}/FilelockCache.h
@@ -42,17 +38,13 @@ set(CACHE_FILES
     FcntlReaderWriterLock.cpp
     CacheStats.cpp
 
-    bounded/NewBoundedCache.cpp
-    bounded/NewMemoryCache.cpp
-    bounded/NewSharedMemoryCache.cpp
-    bounded/NewBoundedFilelockCache.cpp
-    bounded/NewBoundedLinkfileCache.cpp
+    bounded/BoundedCache.cpp
+    bounded/MemoryCache.cpp
+    bounded/FileCache.cpp
+    bounded/SharedMemoryCache.cpp
+    bounded/BoundedFilelockCache.cpp
+    bounded/BoundedLinkfileCache.cpp
     bounded/FileLinkReaderWriterLock.cpp
-    bounded/deprecated/BoundedCache.cpp
-    bounded/deprecated/FileCache.cpp
-    bounded/deprecated/BoundedFilelockCache.cpp
-    bounded/deprecated/MemoryCache.cpp
-    bounded/deprecated/SharedMemoryCache.cpp
 
     unbounded/UnboundedCache.cpp
     unbounded/FilelockCache.cpp

@@ -77,6 +77,7 @@
 #include "ReaderWriterLock.h"
 #include "Trackable.h"
 #include "Histogram.h"
+#include "Cache.h"
 #include <atomic>
 #include <deque>
 #include <vector>

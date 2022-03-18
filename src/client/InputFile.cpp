@@ -74,13 +74,10 @@
 
 #include "InputFile.h"
 #include "caches/Cache.h"
-#include "caches/bounded/NewBoundedFilelockCache.h"
-#include "caches/bounded/NewSharedMemoryCache.h"
-#include "caches/bounded/NewMemoryCache.h"
-#include "caches/bounded/deprecated/BoundedFilelockCache.h"
-#include "caches/bounded/deprecated/SharedMemoryCache.h"
-#include "caches/bounded/deprecated/MemoryCache.h"
-#include "caches/bounded/deprecated/FileCache.h"
+#include "caches/bounded/BoundedFilelockCache.h"
+#include "caches/bounded/SharedMemoryCache.h"
+#include "caches/bounded/MemoryCache.h"
+#include "caches/bounded/FileCache.h"
 #include "caches/unbounded/FilelockCache.h"
 #include "caches/unbounded/FcntlCache.h"
 #include "caches/LocalFileCache.h"
@@ -153,7 +150,7 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
             std::cerr << "[TAZER] " << "scalable cache: " << (void *)c << std::endl;
         }
         else {
-            c = NewMemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
+            c = MemoryCache::addMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);
             std::cerr << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
         }
         
@@ -161,30 +158,31 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
     }
 
     if (Config::useSharedMemoryCache && Config::enableSharedMem) {
-        c = NewSharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity, scForSM);
+        c = SharedMemoryCache::addSharedMemoryCache(SHAREDMEMORYCACHENAME,CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity, scForSM);
         if(scForSM)
             scForSM->setUMBCache(c);
+
         std::cerr << "[TAZER] "
                   << "shared mem cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }
 
     if (Config::useBurstBufferCache) {
-        c = FileCache::addNewFileCache("burstbuffer", CacheType::burstBuffer, Config::burstBufferCacheSize, Config::burstBufferCacheBlocksize, Config::burstBufferCacheAssociativity, Config::burstBufferCacheFilePath);
+        c = FileCache::addFileCache("burstbuffer", CacheType::burstBuffer, Config::burstBufferCacheSize, Config::burstBufferCacheBlocksize, Config::burstBufferCacheAssociativity, Config::burstBufferCacheFilePath);
         std::cerr << "[TAZER] "
                   << "bb cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }
 
     if (Config::useFileCache) {
-        c = FileCache::addNewFileCache(FILECACHENAME, CacheType::nodeFile, Config::fileCacheSize, Config::fileCacheBlocksize, Config::fileCacheAssociativity, Config::fileCacheFilePath);
+        c = FileCache::addFileCache(FILECACHENAME, CacheType::nodeFile, Config::fileCacheSize, Config::fileCacheBlocksize, Config::fileCacheAssociativity, Config::fileCacheFilePath);
         std::cerr << "[TAZER] "
                   << "file cache: " << (void *)c << std::endl;
         InputFile::_cache->addCacheLevel(c, ++level);
     }
 
     if (Config::useBoundedFilelockCache) {
-        c = NewBoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath, scForFC);
+        c = BoundedFilelockCache::addBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath, scForFC);
         if(scForFC)
             scForFC->setUMBCache(c);
         std::cerr << "[TAZER] "
@@ -286,8 +284,9 @@ void InputFile::open() {
             bool created;
             NetworkCache *nc = (NetworkCache *)_cache->getCacheByName(NETWORKCACHENAME);
             // std::cout << "[TAZER] init meta time: " << _initMetaTime << std::endl;
+            
             nc->stats.addTime(false, CacheStats::Metric::ovh, _initMetaTime);
-            nc->stats.start();
+            nc->stats.start(false, CacheStats::Metric::ovh);
             ConnectionPool *pool = ConnectionPool::addNewConnectionPool(_name, _compress, _connections, created);
             _fileSize = pool->openFileOnAllServers();
             nc->stats.end(false, CacheStats::Metric::ovh);
@@ -396,12 +395,13 @@ bool InputFile::trackRead(size_t count, uint32_t index, uint32_t startBlock, uin
 
 ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
     if (_active.load() && _numBlks) {
-        _cache->stats.start(); // "read" timer
-        _cache->stats.start(); // "hit"  timer
-        _cache->stats.start(); // "ovh" timer
+
+        _cache->stats.start(false, CacheStats::Metric::read); // "read" timer
+        _cache->stats.start(false, CacheStats::Metric::hits); // "hit"  timer
+        _cache->stats.start(false, CacheStats::Metric::ovh); // "ovh" timer
         //JS: Adding for UMB metric
         uint64_t requestStartTime = Timer::getCurrentTime();
-        
+
         if (_filePos[index] >= _fileSize) {
             log(this) << "[TAZER] " << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
             _eof[index] = true;
@@ -436,11 +436,13 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
         for (uint32_t blk = startBlock; blk < endBlock; blk++) {
             _cache->stats.end(false, CacheStats::Metric::ovh);
             auto request = _cache->requestBlock(blk, _blkSize, _regFileIndex, _filePos[index], reads, priority);
-            _cache->stats.start(); //ovh
+            // request->originating->stats.checkThread(request->threadId, true);
+            _cache->stats.start(false, CacheStats::Metric::ovh); //ovh
             if (request->ready) {  //the block was in a client side cache!!
                 // err(this) << "reading block "<<blk<<" from: "<<request->originating->name()<<std::endl;
                 auto amt = copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
-                request->originating->stats.addAmt(false, CacheStats::Metric::read, amt);
+                //request->originating->stats.checkThread(request->threadId, true);
+                request->originating->stats.addAmt(false, CacheStats::Metric::read, amt, request->threadId);
                 request->deliveryTime = Timer::getCurrentTime() - requestStartTime;
                 _cache->bufferWrite(request);
             }
@@ -466,33 +468,35 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
 
         for (auto it = net_reads.begin(); it != net_reads.end(); ++it) {
             uint32_t blk = (*it).first;
-
             _cache->stats.end(false, CacheStats::Metric::ovh);
             auto stallTime = Timer::getCurrentTime();
-
             auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
-
+            // request->originating->stats.checkThread(request->threadId, true);
             if(request ==NULL || request->originating == NULL){
                 err(this) <<"(net) something missing!!!!!!!! r: "<<(void*)request<<" wc: "<<request->waitingCache<<" oc: "<<(void*)request->originating<<std::endl;
             }
             if(request->waitingCache != CacheType::empty ){
-                _cache->getCacheByType(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls,  (Timer::getCurrentTime() - stallTime) - request->retryTime, 1);
+                // _cache->getCacheByType(request->waitingCache)->stats.checkThread(request->threadId, true);
+                _cache->getCacheByType(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls,  (Timer::getCurrentTime() - stallTime) - request->retryTime, request->threadId, 1);
             }
             else {
                 err(this) << "(net) waiting cache was empty" <<std::endl;
             }
-            request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
-            _cache->stats.start(); //ovh
+            //request->originating->stats.checkThread(request->threadId, true);
+            request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, request->threadId, 1);
+            _cache->stats.start(false, CacheStats::Metric::ovh); //ovh
             if (request->ready) {  // hmm what does it mean if this is NULL? do we need to catch and report this?
                 // err(this) << "reading block "<<blk<<" from: "<<request->originating->name()<<std::endl;
                 auto amt = copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
                 if(request->waitingCache != CacheType::empty ){
-                    _cache->getCacheByType(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, amt);
+                    // _cache->getCacheByType(request->waitingCache)->stats.checkThread(request->threadId, true);
+                    _cache->getCacheByType(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, amt, request->threadId);
                 }
                 else {
                     err(this) << "(net) waiting cache was empty" <<std::endl;
                 }
-                request->originating->stats.addAmt(false, CacheStats::Metric::stalled, amt);
+                //request->originating->stats.checkThread(request->threadId, true);
+                request->originating->stats.addAmt(false, CacheStats::Metric::stalled, amt, request->threadId);
                 //JS: Adding this here to capture the deliveryTime for scalable cache.
                 request->deliveryTime = Timer::getCurrentTime() - requestStartTime;
                 _cache->bufferWrite(request);
@@ -504,28 +508,34 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
             auto stallTime = Timer::getCurrentTime();
 
             auto request = (*it).second.get().get(); //need to do two gets cause we cant chain futures properly yet (c++ 2x supposedly)
+            // request->originating->stats.checkThread(request->threadId, true);
 
             if(request ==NULL  || request->originating == NULL){
                 err(this) <<"(local) something missing!!!!!!!! r: "<<(void*)request<<" wc: "<<request->waitingCache<<" oc: "<<(void*)request->originating<<std::endl;
             }
             if(request->waitingCache != CacheType::empty ){
-                _cache->getCacheByType(request->waitingCache)->stats.addTime(false, CacheStats::Metric::stalls, (Timer::getCurrentTime() - stallTime) - request->retryTime, 1);
+                // _cache->getCacheByType(request->waitingCache)->stats.checkThread(request->threadId, true);
+                _cache->getCacheByType(request->waitingCache)->stats.addTime(false, CacheStats::Metric::stalls, (Timer::getCurrentTime() - stallTime) - request->retryTime, request->threadId, 1);
             }
             else{
                 err(this) << "(local) waiting cache was empty" <<std::endl;
             }
-            request->originating->stats.addTime(false, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
-            _cache->stats.start(); //ovh
+            request->originating->stats.addTime(false, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, request->threadId, 1);
+            //request->originating->stats.checkThread(request->threadId, true);
+            _cache->stats.start(false, CacheStats::Metric::ovh); //ovh
             if (request->ready) {  // hmm what does it mean if this is NULL? do we need to catch and report this?
                 // err(this) << "reading block "<<blk<<" from: "<<request->originating->name()<<std::endl;
                 auto amt = copyBlock(localPtr, (char *)request->data, blk, startBlock, endBlock, index, count);
                 if(request->waitingCache != CacheType::empty ){
-                    _cache->getCacheByType(request->waitingCache)->stats.addAmt(false, CacheStats::Metric::stalls, amt);
+                    // _cache->getCacheByType(request->waitingCache)->stats.checkThread(request->threadId, true);
+                    _cache->getCacheByType(request->waitingCache)->stats.addAmt(false, CacheStats::Metric::stalls, amt, request->threadId);
                 }
                 else{
                     err(this) << "(local) waiting cache was empty" <<std::endl;
                 }
-                request->originating->stats.addAmt(false, CacheStats::Metric::stalled, amt);
+
+                //request->originating->stats.checkThread(request->threadId, true);
+                request->originating->stats.addAmt(false, CacheStats::Metric::stalled, amt, request->threadId);
                 //JS: Adding this here to capture the deliveryTime for scalable cache.
                 request->deliveryTime = Timer::getCurrentTime() - requestStartTime;
                 _cache->bufferWrite(request);

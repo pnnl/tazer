@@ -91,8 +91,10 @@ class LocalFileCache : public Cache {
     static Cache *addNewLocalFileCache(std::string cacheName, CacheType type);
     void addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize);
     void removeFile(uint32_t index);
+    
 
   private:
+    virtual void cleanUpBlockData(uint8_t *data);
     uint8_t *getBlockData(std::ifstream *file, uint32_t blockIndex, uint64_t blockSize,uint64_t fileSize);
     std::unordered_map<uint32_t, std::pair<std::ifstream *, ReaderWriterLock *>> _fstreamMap;
     ReaderWriterLock *_lock;

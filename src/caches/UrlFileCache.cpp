@@ -112,6 +112,10 @@ Cache *UrlFileCache::addNewUrlFileCache(std::string cacheName, CacheType type) {
         });
 }
 
+void UrlFileCache::cleanUpBlockData(uint8_t *data) {
+    // debug()<<_name<<"(not) delete data"<<std::endl;
+}
+
 void UrlFileCache::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
     std::string name = filename;
     if(checkUrlPath(filename)) {

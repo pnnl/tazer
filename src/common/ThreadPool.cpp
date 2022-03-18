@@ -76,6 +76,7 @@
 #include "Timer.h"
 #include "caches/Cache.h"
 #include <iostream>
+#include <unordered_map>
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 
@@ -100,6 +101,15 @@ ThreadPool<T>::~ThreadPool() {
     terminate(true);
     std::cout << "[TAZER] "
               << "deleting thread pool: "<<_name<<" " << _users << " " << _currentThreads << " " << std::endl;
+
+    std::unordered_map<std::thread::id, uint64_t>::iterator itor;
+
+    for(itor = _activeTime.begin(); itor != _activeTime.end(); ++itor){
+        std::cout << "[TAZER] threadPool "<<_name<<" thread "<<(*itor).first << std::endl;
+        std::cout << "[TAZER] "<<_name<<" activeTime "<<(double)(*itor).second/1000000000.0<<std::endl;
+        std::cout << "[TAZER] "<<_name<<" idleTime "<<(double)_idleTime[(*itor).first]/1000000000.0<<std::endl;
+    }
+    
 }
 
 template <class T>
@@ -113,6 +123,7 @@ unsigned int ThreadPool<T>::addThreads(unsigned int numThreads) {
         if (threadsToAdd + currentThreads > _maxThreads)
             threadsToAdd = _maxThreads - currentThreads;
 
+        // std::cout<<"adding new threads "<<threadsToAdd<<std::endl;
         _currentThreads.fetch_add(threadsToAdd);
         for (unsigned int i = 0; i < threadsToAdd; i++)
             _threads.push_back(std::thread([this] {std::cout<<"thread pool thread"<<std::endl; workLoop(); }));
@@ -173,8 +184,13 @@ void ThreadPool<T>::addTask(T f) {
 
 template <class T>
 void ThreadPool<T>::workLoop() {
+    // std::cout<<"starting workloop "<<std::this_thread::get_id()<<std::endl;
+    
+    uint64_t idleSum=0;
+    uint64_t activeSum=0;
     T task;
     while (_alive.load()) {
+        uint64_t idleStart = Timer::getCurrentTime();
         std::unique_lock<std::mutex> lock(_qMutex);
 
         //Don't make this a wait or else we will never be able to join
@@ -190,12 +206,20 @@ void ThreadPool<T>::workLoop() {
         }
 
         lock.unlock();
+        idleSum +=Timer::getCurrentTime()- idleStart;
 
         if (popped) {
+            uint64_t activeStart = Timer::getCurrentTime();
             task();
+            activeSum +=Timer::getCurrentTime()- activeStart;
             popped = false;
         }
     }
+    std::thread::id thread_id = std::this_thread::get_id();
+    std::unique_lock<std::mutex> lock(_qMutex);
+    _activeTime[thread_id]=activeSum;
+    _idleTime[thread_id]=idleSum;
+    lock.unlock();
     //This is the end counter we need to decrement
     _currentThreads.fetch_sub(1);
     if (_q.size() > _currentThreads){

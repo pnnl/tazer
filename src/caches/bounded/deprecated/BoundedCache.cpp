@@ -290,7 +290,7 @@ bool BoundedCache<Lock>::blockReserve(uint32_t index, uint32_t fileIndex, bool &
 
 template <class Lock>
 bool BoundedCache<Lock>::writeBlock(Request *req) {
-    req->trace()<<_name<<" WRITE BLOCK"<<std::endl;
+   req->trace(_name)<<_name<<" WRITE BLOCK"<<std::endl;
     // log(this) /*debug()*/<< _name << " entering write: " << index << " " << size << " " << _blockSize << " " << (void *)buffer << " " << (void *)originating << " " << (void *)_nextLevel << std::endl;
     // log(this) << "write " << _name << " fi: " << req->fileIndex << " i: " << req->blkIndex << " orig: " << req->originating->name() <<" "<<(uint32_t)req->reservedMap[this]<< std::endl;
     
@@ -300,7 +300,7 @@ bool BoundedCache<Lock>::writeBlock(Request *req) {
         auto fileIndex = req->fileIndex;
         auto binIndex = getBinIndex(index, fileIndex);
         if (req->originating == this) {
-            req->trace()<<"originating cache"<<std::endl;
+           req->trace(_name)<<"originating cache"<<std::endl;
             
             req->trace(_type == CacheType::boundedGlobalFile)<<"wlocking bin "<<binIndex<<std::endl;
             _binLock->writerLock(binIndex,req);
@@ -324,21 +324,21 @@ bool BoundedCache<Lock>::writeBlock(Request *req) {
             }
             // the "else" would trigger in the case this cache was completely filled and active when the request was initiated so we didnt have a reservation for this block
             else {
-                req->trace() << "entry not found ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
-                req->trace() << "writeblock should this even be possible?" << std::endl;
-                req->trace() << blockEntryStr(req->indexMap[this]) << std::endl;
+               req->trace(_name) << "entry not found ("<<req->blkIndex<<","<<req->fileIndex<<")"<<::getpid()<<" bi: "<<blockIndex<<std::endl;
+               req->trace(_name) << "writeblock should this even be possible?" << std::endl;
+               req->trace(_name) << blockEntryStr(req->indexMap[this]) << std::endl;
             }
             req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocking bin "<<binIndex<<std::endl;
             _binLock->writerUnlock(binIndex,req);
             req->trace(_type == CacheType::boundedGlobalFile)<<"wunlocked bin "<<binIndex<<std::endl;
             cleanUpBlockData(req->data);
-            req->trace()<<"deleting req"<<std::endl;            
+           req->trace(_name)<<"deleting req"<<std::endl;            
             delete req;
             
             ret = true;
         }
         else {
-            req->trace()<<"not originating cache"<<std::endl;
+           req->trace(_name)<<"not originating cache"<<std::endl;
             bool found = false;
 
             DPRINTF("beg wb blk: %u out: %u\n", index, _outstanding.load());
@@ -491,7 +491,7 @@ void BoundedCache<Lock>::readBlock(Request *req, std::unordered_map<uint32_t, st
     stats.start(); //read
     stats.start(); //ovh
     bool prefetch = priority != 0;
-    req->trace()<<_name<<" READ BLOCK"<<std::endl;
+   req->trace(_name)<<_name<<" READ BLOCK"<<std::endl;
     if (_type == CacheType::boundedGlobalFile){
         req->printTrace=true;
     }

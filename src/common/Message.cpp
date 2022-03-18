@@ -498,7 +498,6 @@ std::string recSendBlkMsg(Connection *connection, char **data, unsigned int &blk
         }
         *data = new char[dataBufSize];
     }
-
     if (msg.dataSize > dataBufSize){
         std::cout <<"Message size larger than expected: "<<msg.dataSize <<" "<<dataBufSize<<std::endl;
          if (created) {
@@ -518,13 +517,12 @@ std::string recSendBlkMsg(Connection *connection, char **data, unsigned int &blk
         }
         return std::string();
     }
-
     if (retMsgSize == (int64_t)sizeof(sendBlkMsg) &&
         retFileNameSize == (int64_t)msg.header.fileNameSize &&
-        retDataSize == (int64_t)msg.dataSize) {
+        retDataSize == (int64_t)msg.dataSize) { //this is the path we want to take?
         dataSize = msg.dataSize;
         blk = msg.blk;
-        return fileName;
+        return fileName; 
     }
 
     if (created) { //No memory leak here!

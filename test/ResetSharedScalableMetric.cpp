@@ -1,6 +1,6 @@
 #include "Config.h"
 #include "ReaderWriterLock.h"
-#include "../inc/tazer/caches/bounded/NewSharedMemoryCache.h"
+#include "../inc/tazer/caches/bounded/SharedMemoryCache.h"
 
 #include <chrono>
 #include <csignal>
@@ -19,7 +19,7 @@
 int main() {
     uint64_t _numBlocks = Config::sharedMemoryCacheSize / Config::sharedMemoryCacheBlocksize;
     uint32_t _numBins = _numBlocks / Config::sharedMemoryCacheAssociativity;
-    unsigned int memBlockEntrySize = NewSharedMemoryCache::getSizeOfMemBlockEntry();
+    unsigned int memBlockEntrySize = SharedMemoryCache::getSizeOfMemBlockEntry();
     unsigned int scalableSize = sizeof(ReaderWriterLock) + (sizeof(double) + sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX;
     unsigned int memSize = sizeof(uint32_t) + Config::sharedMemoryCacheSize + _numBlocks * memBlockEntrySize     + MultiReaderWriterLock::getDataSize(_numBins) + scalableSize;
                         // sizeof(uint32_t) + _cacheSize +                    _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins)

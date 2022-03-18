@@ -152,11 +152,11 @@ FileCacheRegister *FileCacheRegister::initFileCacheRegister(bool server) {
     if (Config::enableSharedMem){
         // printf("Using Register %s\n", Config::sharedMemName.c_str());
         std::string name = server ? Config::sharedMemName+"_server" : Config::sharedMemName;
-        int fd = shm_open(name.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+        int fd = shm_open(name.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
         if (fd == -1) {
             // printf("Reusing shared memory\n");
             std::cout << "resuing file cache register" << std::endl;
-            fd = shm_open(name.c_str(), O_RDWR, 0644);
+            fd = shm_open(name.c_str(), O_RDWR, 0666);
             if (fd != -1) {
                 ftruncate(fd, sizeof(FileCacheRegister));
                 void *ptr = mmap(NULL, sizeof(FileCacheRegister), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);

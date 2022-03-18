@@ -74,13 +74,11 @@
 
 #ifndef OutputFile_H_
 #define OutputFile_H_
-#include <atomic>
-#include <mutex>
-#include <string>
+#include <unordered_map>
 
 #include "TazerFile.h"
-#include "PriorityThreadPool.h"
-#include "ThreadPool.h"
+#include "OutputFileInner.h"
+#include "ReaderWriterLock.h"
 
 class OutputFile : public TazerFile {
   public:
@@ -93,40 +91,28 @@ class OutputFile : public TazerFile {
     ssize_t read(void *buf, size_t count, uint32_t index);
     ssize_t write(const void *buf, size_t count, uint32_t index);
 
+    uint32_t newFilePosIndex();
+    uint64_t filePos(uint32_t index);
+    void setFilePos(uint32_t index, uint64_t pos);
+
     off_t seek(off_t offset, int whence, uint32_t index);
     uint64_t fileSize();
+
+    bool active();
+
+    void setThreadFileDescriptor(int fd);
+    int getThreadFileDescriptor();
+    void addFileDescriptor(int fd);
+    void removeFileDescriptor(int fd);
 
     static PriorityThreadPool<std::function<void()>>* _transferPool;
     static ThreadPool<std::function<void()>>* _decompressionPool;
 
   private:
-    bool openFileOnServer();
-    bool closeFileOnServer();
-    uint64_t fileSizeFromServer();
-
-    uint64_t compress(char **buffer, uint64_t offset, uint64_t size);
-    void addTransferTask(char *buf, uint64_t size, uint64_t compSize, uint64_t fp, uint32_t seqNum);
-    void addCompressTask(char *buf, uint64_t size, uint64_t fp, uint32_t seqNum);
-
-    bool trackWrites(size_t count, uint32_t index, uint32_t startBlock, uint32_t endBlock);
-    //    void compress(CompressionWorkArgs task);
-
-    int _compLevel;
-    uint64_t _fileSize;
-    uint32_t _messageOffset; //size of header -- depends on the file name
-    std::atomic_uint _seqNum;
-    std::atomic_uint _sendNum;
-    std::mutex _openCloseLock;
-
-    char *_buffer;
-    uint64_t _bufferIndex;
-    uint64_t _bufferFp;
-    uint64_t _bufferCnt;
-
-    uint64_t _totalCnt;
-    std::mutex _bufferLock;
-
-    
+    std::unordered_map<int, TazerFile*> *_outputFiles;
+    std::unordered_map<std::thread::id, int> *_threadFileDescriptors;
+    ReaderWriterLock _outputFileLock;
+    ReaderWriterLock _threadFdLock;
 };
 
 #endif /* OutputFile_H_ */

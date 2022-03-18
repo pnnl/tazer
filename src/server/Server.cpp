@@ -96,6 +96,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <unordered_set>
+#include <unordered_map>
 
 #include "Config.h"
 //#include "CounterData.h"
@@ -107,10 +108,23 @@
 #include "lz4.h"
 #include "lz4hc.h"
 #include "xxhash.h"
+#include "Timer.h"
+#include "ReaderWriterLock.h"
 
 int sockfd = -1;
 std::atomic_bool alive(true);
 ThreadPool<std::function<void()>> threadPool(Config::numServerThreads);
+
+std::atomic<uint64_t> responseTimeSum(0);
+std::atomic<uint64_t> responseTimeCnt(0);
+
+std::unordered_map<std::thread::id, uint64_t> openTimes;
+std::unordered_map<std::thread::id, uint64_t> fileSizeTimes;
+std::unordered_map<std::thread::id, uint64_t> reqBlkFromFileTimes;
+std::unordered_map<std::thread::id, uint64_t> writeDataToFileTimes;
+std::unordered_map<std::thread::id, uint64_t> closeFileTimes;
+ReaderWriterLock lock;
+
 
 void openFile(Connection *connection, char *buff) {
     unsigned int blkSize;
@@ -119,7 +133,7 @@ void openFile(Connection *connection, char *buff) {
     std::string fileName = parseOpenFileMsg(buff, blkSize, compress, output);
     ServeFile *file = ServeFile::addNewServeFile(fileName, compress, blkSize, (compress) ? 0 : Config::numCompressTask, output, Config::removeOutput);
     // if (file){
-    //     std::cout<<"opened: "<<file->name()<<std::endl;
+    //     Loggable::debug()<<"opened: "<<file->name()<<std::endl;
     // }
     bool opened = (file != NULL);
     uint64_t size = (opened) ? file->size() : 0;
@@ -132,18 +146,18 @@ void openFile(Connection *connection, char *buff) {
         //Must remove file since the client will try to reopen...
         ServeFile::removeServeFile(file);
     }
-    //std::cout<<"[TAZER] "<<"open file"<<fileName<<" "<<connection->addr()<<":"<<connection->port()<<" "<<file<<std::endl;
+    //Loggable::debug()<<"[TAZER] "<<"open file"<<fileName<<" "<<connection->addr()<<":"<<connection->port()<<" "<<file<<std::endl;
 }
 
 void closeFile(Connection *connection, char *buff) {
     std::string fileName = parseCloseFileMsg(buff);
-    // std::cout<<"[TAZER] "<<"close file"<<fileName<<" "<<connection->addr()<<":"<<connection->port()<<std::endl;
+    // Loggable::debug()<<"[TAZER] "<<"close file"<<fileName<<" "<<connection->addr()<<":"<<connection->port()<<std::endl;
     if (!sendAckMsg(connection, CLOSE_FILE_MSG)) {
         PRINTF("Failed ack close %s\n", fileName.c_str());
     }
     ServeFile::removeServeFile(fileName);
 
-    //  std::cout<<"[TAZER] "<<"close file"<<fileName<<" "<<connection->addr()<<":"<<connection->port()<<std::endl;
+    //  Loggable::debug()<<"[TAZER] "<<"close file"<<fileName<<" "<<connection->addr()<<":"<<connection->port()<<std::endl;
 }
 
 void requestBlockFromFile(Connection *connection, char *buff) {
@@ -151,7 +165,7 @@ void requestBlockFromFile(Connection *connection, char *buff) {
     std::string fileName = parseRequestBlkMsg(buff, start, end);
     //PRINTF("Request blocks %u - %u from %s\n", start, end, fileName.c_str());
     ServeFile *file = ServeFile::getServeFile(fileName);
-    //std::cout<<"[TAZER] "<<"get block "<<fileName<<" "<<connection->addr()<<":"<<connection->port()<<" "<<file<<std::endl;
+    // Loggable::log()<<"[TAZER] "<<"get block "<<fileName<<" "<<connection->addr()<<":"<<connection->port()<<" "<<file<<std::endl;
     if (file) {
         for (unsigned int i = start; i <= end; i++) {
             if (!file->transferBlk(connection, i)) {
@@ -219,6 +233,7 @@ void shutDownServer() {
 }
 
 void pollConnection(Connection *connection) {
+    std::thread::id thread_id = std::this_thread::get_id();
     if (connection && alive.load()) {
         unsigned int closeConCount = 0;
         connection->lock();
@@ -229,25 +244,41 @@ void pollConnection(Connection *connection) {
                 printMsgHeader(buff);
 
                 msgHeader *header = (msgHeader *)buff;
+                uint64_t start = Timer::getCurrentTime();
                 switch (header->type) {
                 case OPEN_FILE_MSG: {
                     openFile(connection, buff);
+                    lock.writerLock();
+                    openTimes[thread_id] += (Timer::getCurrentTime()-start);
+                    lock.writerUnlock();
                     break;
                 }
                 case REQ_FILE_SIZE_MSG: {
                     getFileSize(connection, buff);
+                    lock.writerLock();
+                    fileSizeTimes[thread_id] += (Timer::getCurrentTime()-start);
+                    lock.writerUnlock();
                     break;
                 }
                 case REQ_BLK_MSG: {
                     requestBlockFromFile(connection, buff);
+                    lock.writerLock();
+                    reqBlkFromFileTimes[thread_id] += (Timer::getCurrentTime()-start);
+                    lock.writerUnlock();
                     break;
                 }
                 case WRITE_MSG: {
                     writeDataToFile(connection, buff);
+                    lock.writerLock();
+                    writeDataToFileTimes[thread_id] += (Timer::getCurrentTime()-start);
+                    lock.writerUnlock();
                     break;
                 }
                 case CLOSE_FILE_MSG: {
                     closeFile(connection, buff);
+                    lock.writerLock();
+                    closeFileTimes[thread_id] += (Timer::getCurrentTime()-start);
+                    lock.writerUnlock();
                     break;
                 }
                 case CLOSE_SERVER_MSG: {
@@ -307,7 +338,7 @@ int main(int argc, char *argv[]) {
     }
 
     PRINTF("Starting server on port %d socket %d\n", portno, sockfd);
-    std::cerr << "[TAZER] "
+    Loggable::err() << "[TAZER] "
               << "Starting server on port " << portno << " socket " << sockfd << std::endl;
     //    signal(SIGCHLD, SIG_IGN); //hack for now, possibly implement a child handler?
     if(rlisten(sockfd, 128) == -1) {
@@ -320,12 +351,26 @@ int main(int argc, char *argv[]) {
         int newsockfd = raccept(sockfd, (struct sockaddr *)&cli_addr, &clilen); //newsockfd is either used to create a new connection or added to existing connection.
         if (alive.load() && newsockfd > 0) {
             std::string clientAddr(inet_ntoa(cli_addr.sin_addr));
-            //std::cout<<"[TAZER] " << clientAddr << ":" << cli_addr.sin_port << " " << newsockfd << std::endl;
+            Loggable::debug()<<"[TAZER] " << clientAddr << ":" << cli_addr.sin_port << " " << newsockfd << std::endl;
+            uint64_t recv_time = Timer::getCurrentTime();
             threadPool.addThreadWithTask([=] {
+                uint64_t response_time = Timer::getCurrentTime()-recv_time;
+                responseTimeSum.fetch_add(response_time,std::memory_order_relaxed);
+                responseTimeCnt.fetch_add(1,std::memory_order_relaxed);
+                std::thread::id thread_id = std::this_thread::get_id();
                 bool created = false;
+                lock.writerLock();
+                if (openTimes.find(thread_id) == openTimes.end()){
+                    openTimes[thread_id] = 0;
+                    fileSizeTimes[thread_id] = 0;
+                    reqBlkFromFileTimes[thread_id] = 0;
+                    writeDataToFileTimes[thread_id] = 0;
+                    closeFileTimes[thread_id] = 0;
+                }
+                lock.writerUnlock();
                 Connection *newCon = Connection::addNewHostConnection(clientAddr, cli_addr.sin_port, newsockfd, created);
                 if (newCon) {
-                    std::cout << "[TAZER] " << clientAddr << ":" << cli_addr.sin_port << " " << newsockfd << " " << created << std::endl;
+                    Loggable::debug() << "[TAZER] " << clientAddr << ":" << cli_addr.sin_port << " " << newsockfd << " " << created << std::endl;
                     if (created) {
                         pollConnection(newCon);
                     }
@@ -338,6 +383,19 @@ int main(int argc, char *argv[]) {
     }
     threadPool.terminate(true);
     Connection::closeAllConnections();
+    std::unordered_map<std::thread::id, uint64_t>::iterator itor;
+    std::cout<<std::endl;
+    for(itor = openTimes.begin(); itor != openTimes.end(); ++itor){
+        std::cout << "[TAZER] server stats thread "<<(*itor).first << std::endl;
+        std::cout << "[TAZER] openTimes "<<(double)(*itor).second/1000000000.0<<std::endl;
+        std::cout << "[TAZER] fileSizeTimes "<<(double)fileSizeTimes[(*itor).first]/1000000000.0<<std::endl;
+        std::cout << "[TAZER] reqBlkFromFileTimes "<<(double)reqBlkFromFileTimes[(*itor).first]/1000000000.0<<std::endl;
+        std::cout << "[TAZER] writeDataToFileTimes "<<(double)writeDataToFileTimes[(*itor).first]/1000000000.0<<std::endl;
+        std::cout << "[TAZER] closeFileTimes "<<(double)closeFileTimes[(*itor).first]/1000000000.0<<std::endl;
+        std::cout<<std::endl;
+    }
+    std::cout << "[TAZER] server avg response time "<<((double)responseTimeSum/(double)responseTimeCnt)/1000000000.0<<std::endl;
+    std::cout << "[TAZER] server requests serviced "<<responseTimeCnt<<std::endl;
     PRINTF("Exiting Server\n");
     return 0;
 }

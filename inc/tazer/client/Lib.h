@@ -77,6 +77,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <fcntl.h>
+#include <linux/limits.h>
 #include <mutex>
 #include <sstream>
 #include <stdarg.h>
@@ -107,7 +108,7 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
-static Timer timer;
+static Timer* timer;
 
 std::once_flag log_flag;
 bool init = false;
@@ -155,35 +156,53 @@ int removeStr(char *s, const char *r);
 
 /*Templating*************************************************************************************************/
 
-inline bool splitter(std::string tok, std::string full, std::string &path, std::string &file) {
-    size_t pos = full.find(tok);
-    if (pos != std::string::npos) {
-        path = full.substr(0, pos + tok.length());
-        if (path.length() < full.length())
-            file = full.substr(path.length() + 1);
-        else
-            file = full;
-        return true;
-    }
-    path = full;
-    file = full;
-    return false;
-}
-
 inline bool checkMeta(const char *pathname, std::string &path, std::string &file, TazerFile::Type &type) {
-    if (strstr(pathname, ".meta.")) {
-        std::string full(pathname);
+    int fd = (*unixopen)(pathname, O_RDONLY);
+
+    if(fd >= 0)
+    {
+        const std::string tazerVersion("TAZER0.1");
+        std::string types[3] = {"input", "output", "local"};
         TazerFile::Type tokType[3] = {TazerFile::Input, TazerFile::Output, TazerFile::Local};
-        std::string tok[3] = {".meta.in", ".meta.out", ".meta.local"};
-        for (unsigned int i = 0; i < 3; i++) {
-            if (splitter(tok[i], full, path, file)) {
+        int bufferSize = (tazerVersion.length() + 13); //need space for tazerVersion + \n + type= + (the type) + \0
+        char *meta = new char[bufferSize+1];
+
+        int ret = (*unixread)(fd, (void *)meta, bufferSize);
+        (*unixclose)(fd);
+        if (ret <= 0) {
+            delete[] meta;
+            return false;
+        }
+        meta[bufferSize] = '\0';
+
+        std::stringstream ss(meta);
+        std::string curLine;
+
+        std::getline(ss, curLine);
+        if(curLine.compare(0, tazerVersion.length(), tazerVersion) != 0) {
+            delete[] meta;
+            return false;
+        }
+
+        std::getline(ss, curLine);
+        if(curLine.compare(0, 5, "type=") != 0) {
+            delete[] meta;
+            return false;
+        }
+
+        std::string typeStr = curLine.substr(5, curLine.length() - 5);
+        for(int i = 0; i < 3; i++) {
+            if(typeStr.compare(types[i]) == 0) {
+                path = pathname;
+                file = pathname;
                 type = tokType[i];
                 DPRINTF("Path: %s File: %s\n", path.c_str(), file.c_str());
+                delete[] meta;
                 return true;
             }
         }
+        delete[] meta;
     }
-    DPRINTF("~ %s Path: %s File: %s\n", pathname, path.c_str(), file.c_str());
     return false;
 }
 
@@ -288,7 +307,9 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
         return posixFun(args...);
     }
 
-    timer.start();
+
+
+    timer->start();
 
     //Check if this is a special file to track (from environment variable)
     bool track = trackFile(fileId);
@@ -305,7 +326,7 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
         //Maintain the ignore_fd set
         addToSet(ignore_fd, retValue, posixFun);
         removeFromSet(ignore_fd, retValue, posixFun);
-        timer.end(Timer::MetricType::local, Timer::Metric::dummy); //to offset the call to start()
+        timer->end(Timer::MetricType::local, Timer::Metric::dummy); //to offset the call to start()
     }
     else { //End Timers!
         if (track) {
@@ -316,25 +337,26 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
             std::string("write").compare(std::string(name)) == 0){
                 ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
                 if (ret != -1) {
-                    timer.addAmt(Timer::MetricType::local, metric,ret);
+                    timer->addAmt(Timer::MetricType::local, metric, ret);
                 }
             }
-            timer.end(Timer::MetricType::local, metric);
+            timer->end(Timer::MetricType::local, metric);
         }
         else if (isTazerFile){
-            timer.end(Timer::MetricType::tazer, metric);
+            timer->end(Timer::MetricType::tazer, metric);
         }
         else{
             if (std::string("read").compare(std::string(name)) == 0 ||
             std::string("write").compare(std::string(name)) == 0){
                 ssize_t ret = *reinterpret_cast<ssize_t*> (&retValue);
                 if (ret != -1) {
-                    timer.addAmt(Timer::MetricType::system, metric,ret);
+                    timer->addAmt(Timer::MetricType::system, metric, ret);
                 }
             }
-            timer.end(Timer::MetricType::system, metric);
+            timer->end(Timer::MetricType::system, metric);
         }
     }
+
     return retValue;
 }
 

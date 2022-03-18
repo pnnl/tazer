@@ -110,7 +110,7 @@ bool UnboundedCache::writeBlock(Request* req) {
     auto fileIndex = req->blkIndex;
     bool ret = false;
     if (req->originating == this) {
-        cleanUpBlockData(req->data);
+        // debug()<<_type<<" deleting data "<<req->id<<std::endl;
         delete req;
         ret = true;
     }
@@ -237,6 +237,7 @@ void UnboundedCache::readBlock(Request* req, std::unordered_map<uint32_t, std::s
     else {
         std::cerr << "[TAZER] "
                   << "shouldnt be here yet... need to handle" << std::endl;
+        debug()<<"EXITING!!!!"<<__FILE__<<" "<<__LINE__<<std::endl;
         raise(SIGSEGV);
     }
     // if (!prefetch) {

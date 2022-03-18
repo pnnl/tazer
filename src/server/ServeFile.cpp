@@ -83,9 +83,10 @@
 #include <thread>
 #include <unistd.h>
 
-#include "caches/bounded/deprecated/BoundedFilelockCache.h"
-#include "caches/bounded/deprecated/MemoryCache.h"
-#include "caches/bounded/deprecated/SharedMemoryCache.h"
+#include "caches/Cache.h"
+#include "caches/bounded/BoundedFilelockCache.h"
+#include "caches/bounded/MemoryCache.h"
+#include "caches/bounded/SharedMemoryCache.h"
 #include "caches/unbounded/UrlCache.h"
 #include "caches/LocalFileCache.h"
 #include "caches/NetworkCache.h"
@@ -100,11 +101,15 @@
 #include "UnixIO.h"
 #include "lz4.h"
 #include "lz4hc.h"
+#include "ServeFileStats.h"
+//#include "MetaFileParser.h"
+
 
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 //#define DPRINTF(...)
 Cache ServeFile::_cache(BASECACHENAME,CacheType::base);
+ServeFileStats ServeFile::_stats;
 
 ThreadPool<std::function<void()>> ServeFile::_pool(Config::numServerCompThreads);
 std::vector<Connection *> ServeFile::_connections;
@@ -118,7 +123,7 @@ bool ServeFile::addConnections() {
 
     // std::cout << fd << std::endl;
     uint32_t numServers = 0;
-    if (fd != -1) {
+    if (fd !=  -1) {
         int64_t fileSize = lseek(fd, 0L, SEEK_END);
         lseek(fd, 0L, SEEK_SET);
         char *meta = new char[fileSize + 1];
@@ -129,96 +134,131 @@ bool ServeFile::addConnections() {
             return 0;
         }
         meta[fileSize] = '\0';
-        std::string metaStr(meta);
+        
+        std::string tazerVersion = "TAZER0.1";
+        std::string expectedType = "forwarding";
+        std::stringstream ss(meta);
+        std::string curLine;
+        std::string hostAddr;
+        std::string type = "\0";
+        int port;
+        typedef enum {
+            DEFAULT,
+            SERVER,
+            //OPTIONS,
+            DONE
+        } State;
 
-        size_t cur = 0;
-        size_t l = metaStr.find("|");
-        while (l != std::string::npos) {
-            std::string line = metaStr.substr(cur, l - cur);
-            // std::cout << cur << " " << line << std::endl;
-
-            uint32_t lcur = 0;
-            uint32_t next = line.find(":", lcur);
-            if (next == std::string::npos) {
+        //first line must be TAZER0.1
+        std::getline(ss, curLine);
+        if(curLine.compare(0, tazerVersion.length(), tazerVersion) != 0) {
                 std::cout << "0:improperly formatted meta file" << std::endl;
-                break;
-            }
-            std::string hostAddr = line.substr(lcur, next - lcur);
-
-            // std::cout << "hostaddr: " << hostAddr << std::endl;
-            lcur = next + 1;
-            next = line.size();
-            if (next == std::string::npos) {
+                return (numServers > 0);
+        }
+        //second line must be type=forwarding
+        std::getline(ss, curLine);
+        if(curLine.compare(0, 5, "type=") != 0 || curLine.compare(5, expectedType.length(), expectedType) != 0) {
                 std::cout << "1:improperly formatted meta file" << std::endl;
-                break;
-            }
-            int port = atoi(line.substr(lcur, next - lcur).c_str());
-            // std::cout << "port: " << port << std::endl;
+                return (numServers > 0);
+        }
 
-            Connection *connection = Connection::addNewClientConnection(hostAddr, port);
-            // std::cout << hostAddr << " " << port << " " << connection << std::endl;
-            if (connection) {
-                if (ConnectionPool::useCnt->count(connection->addrport()) == 0) {
-                    ConnectionPool::useCnt->emplace(connection->addrport(), 0);
-                    ConnectionPool::consecCnt->emplace(connection->addrport(), 0);
+        State state = DEFAULT;
+        std::getline(ss, curLine);
+        while(state != DONE) {
+            if(state == SERVER) {
+                //found [server]
+                hostAddr = "\0";
+                port = 0;
+                while(std::getline(ss, curLine)) {
+                    if(curLine.compare(0, 5, "host=") == 0) {
+                        hostAddr = curLine.substr(5, (curLine.length() - 5));
+                        std::cout << "hostaddr: " << hostAddr << std::endl;
+                    }
+                    else if(curLine.compare(0, 5, "port=") == 0) {
+                        port = atoi(curLine.substr(5, (curLine.length() - 5)).c_str());
+                        std::cout << "port: " << port << std::endl;
+                    }
+                    else {
+                        break;
+                    }
                 }
-                _connections.push_back(connection);
-                numServers++;
+                //make sure the host and port were given
+                if(hostAddr == "\0" || port == 0) {
+                    std::cout << "2:improperly formatted meta file" << std::endl;
+                    return (numServers > 0);
+                }
+
+                Connection *connection = Connection::addNewClientConnection(hostAddr, port);
+                if (connection) {
+                    if (ConnectionPool::useCnt->count(connection->addrport()) == 0) {
+                        ConnectionPool::useCnt->emplace(connection->addrport(), 0);
+                        ConnectionPool::consecCnt->emplace(connection->addrport(), 0);
+                    }
+                    _connections.push_back(connection);
+                    numServers++;
+                }
+
+                state = DEFAULT;
             }
-            cur = l + 1;
-            l = metaStr.find("|", cur);
+            else {
+                //DEFAULT
+                if(curLine.compare(0, 8, "[server]") == 0) {
+                    state = SERVER;
+                }
+                else if(!std::getline(ss, curLine)) {
+                    state = DONE;
+                }
+            }  
         }
         close(fd);
         delete[] meta;
     }
-
     return (numServers > 0);
 }
 
 void ServeFile::cache_init(void) {
     uint64_t level = 0;
-    Cache *c = MemoryCache::addNewMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::serverCacheSize, Config::serverCacheBlocksize, Config::serverCacheAssociativity);
-    std::cerr << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
+    Cache *c = MemoryCache::addMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::serverCacheSize, Config::serverCacheBlocksize, Config::serverCacheAssociativity);
+    err() << "[TAZER] " << "mem cache: " << (void *)c << std::endl;
     ServeFile::_cache.addCacheLevel(c, ++level);
 
     if (Config::useSharedMemoryCache) {
-        c = SharedMemoryCache::addNewSharedMemoryCache(SHAREDMEMORYCACHENAME, CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity);
-        std::cerr << "[TAZER] " << "shared mem  cache: " << (void *)c << std::endl;
+        c = SharedMemoryCache::addSharedMemoryCache(SHAREDMEMORYCACHENAME, CacheType::sharedMemory, Config::sharedMemoryCacheSize, Config::sharedMemoryCacheBlocksize, Config::sharedMemoryCacheAssociativity,NULL);
+        err() << "[TAZER] " << "shared mem  cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }
 
     #ifdef USE_CURL
         if(Config::urlFileCacheOn) {
              c = UrlFileCache::addNewUrlFileCache(URLFILECACHENAME, CacheType::local);
-            std::cerr << "[TAZER] " << "Url file cache: " << (void *)c << std::endl;
+            err() << "[TAZER] " << "Url file cache: " << (void *)c << std::endl;
             ServeFile::_cache.addCacheLevel(c, ++level);
         }
         else {
             c = UrlCache::addNewUrlCache(URLCACHENAME, CacheType::urlCache, Config::sharedMemoryCacheBlocksize);
-            std::cerr << "[TAZER] " << "Url cache: " << (void *)c << std::endl;
+            err() << "[TAZER] " << "Url cache: " << (void *)c << std::endl;
             ServeFile::_cache.addCacheLevel(c, ++level);
 
             c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME, CacheType::local);
-            std::cerr << "[TAZER] " << "Local file cache: " << (void *)c << std::endl;
+            err() << "[TAZER] " << "Local file cache: " << (void *)c << std::endl;
             ServeFile::_cache.addCacheLevel(c, ++level);
         }
     #else
         c = LocalFileCache::addNewLocalFileCache(LOCALFILECACHENAME, CacheType::local);
-        std::cerr << "[TAZER] " << "Local file cache: " << (void *)c << std::endl;
+        err() << "[TAZER] " << "Local file cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     #endif
 
     
 
     if (Config::useBoundedFilelockCache) {
-        c = BoundedFilelockCache::addNewBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath);
-        std::cerr << "[TAZER] " << "bounded filelock cache: " << (void *)c << std::endl;
+        c = BoundedFilelockCache::addBoundedFilelockCache(BOUNDEDFILELOCKCACHENAME, CacheType::boundedGlobalFile, Config::boundedFilelockCacheSize, Config::boundedFilelockCacheBlocksize, Config::boundedFilelockCacheAssociativity, Config::boundedFilelockCacheFilePath, NULL);
+        err() << "[TAZER] " << "bounded filelock cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
     }
-
     if (Config::useServerNetworkCache) {
         c = NetworkCache::addNewNetworkCache(NETWORKCACHENAME, CacheType::network, ServeFile::_transferPool, ServeFile::_decompressionPool);
-        std::cerr << "[TAZER] " << "net cache: " << (void *)c << std::endl;
+        err() << "[TAZER] " << "net cache: " << (void *)c << std::endl;
         ServeFile::_cache.addCacheLevel(c, ++level);
         addConnections();
         ServeFile::_transferPool.initiate();
@@ -240,6 +280,8 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
                                                                                                                                    _open(false),
                                                                                                                                    _outstandingWrites(0),
                                                                                                                                    _url(supportedUrlType(name)) {
+    _stats.start(ServeFileStats::Metric::constructor);
+    
     _pool.initiate();
     ConnectionPool * pool = NULL;
 
@@ -308,16 +350,21 @@ ServeFile::ServeFile(std::string name, bool compress, uint64_t blkSize, uint64_t
                 addCompressTask(i);
             }
         }
-        std::cout << "Opened " << _name << " " << output << " size: " << _size << std::endl;
+        // debug()<< "Opened " << _name << " " << output << " size: " << _size << std::endl;
         _open = true;
     }
 
     else {
-        std::cout << "ERROR: file " << _name << " does not exists" << std::endl;
+        err() << "ERROR: file " << _name << " does not exists" << std::endl;
     }
+
+    _stats.end(ServeFileStats::Metric::constructor);
 }
 
 ServeFile::~ServeFile() {
+    
+    _stats.start(ServeFileStats::Metric::destructor);
+
     //Make sure outstanding prefetches are done first!!!
     _prefetchLock.writerLock();
 
@@ -346,6 +393,8 @@ ServeFile::~ServeFile() {
     #endif 
     }
     log(this) << _name << " closed" << std::endl;
+
+    _stats.end(ServeFileStats::Metric::destructor);
 }
 
 void ServeFile::addCompressTask(uint32_t blk) {
@@ -389,6 +438,8 @@ uint64_t ServeFile::compress(uint64_t blk, uint8_t *blkData, uint8_t *&msgData) 
 }
 
 bool ServeFile::sendData(Connection *connection, uint64_t blk, Request *request) {
+    _stats.start(ServeFileStats::Metric::send);
+
     uint8_t *msgData;
     uint64_t msgSize = request->size;
     if (_compress) {
@@ -408,6 +459,9 @@ bool ServeFile::sendData(Connection *connection, uint64_t blk, Request *request)
     }
     ServeFile::_cache.bufferWrite(request);
     log(this) << "sending: " << blk << " size: " << msgSize << " " << ret << std::endl;
+
+    _stats.end(ServeFileStats::Metric::send);
+    _stats.addAmt(ServeFileStats::Metric::send, msgSize);
     return ret;
 }
 
@@ -416,13 +470,12 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
         log(this) << "Transfer blk " << blk << " of " << _numBlks << std::endl;
         while (1) {
             //See if it is in the cache or someone is in the process of loading it
-
             std::unordered_map<uint32_t, std::shared_future<std::shared_future<Request *>>> reads;
 
             auto request = _cache.requestBlock(blk, _blkSize, _regFileIndex, 0, reads, 0);
             if (request->ready) {
                 request->originating->stats.addAmt(false, CacheStats::Metric::read, _blkSize);
-                // std::cout << "cache: " << _name << " " << blk << std::endl;
+                // Loggable::log() << "cache: " << request->originating->name() << " " << blk << std::endl;
                 return sendData(connection, blk, request);
             }
             else {
@@ -430,26 +483,26 @@ bool ServeFile::transferBlk(Connection *connection, uint32_t blk) {
                 auto stallTime = Timer::getCurrentTime();
                 auto request = pending.get().get();
                 if (request->waitingCache != CacheType::empty){
-                    _cache.getCacheByType(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls, Timer::getCurrentTime() - stallTime, 1);
+                    _cache.getCacheByType(request->waitingCache)->stats.addTime(0, CacheStats::Metric::stalls, Timer::getCurrentTime() - stallTime,request->threadId, 1);
                 }
                 else{
                     err(this) << "waiting cache is empty"<<std::endl;
                 }
-                request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime, 1);
+                request->originating->stats.addTime(0, CacheStats::Metric::stalled, Timer::getCurrentTime() - stallTime,request->threadId, 1);
                 if (request->ready) {
-                    // std::cout << "net: " << _name << " " << blk << std::endl;
+                    
                     if (request->waitingCache != CacheType::empty){
-                        _cache.getCacheByType(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, _blkSize);
+                        _cache.getCacheByType(request->waitingCache)->stats.addAmt(0, CacheStats::Metric::stalls, _blkSize,request->threadId);
+                        // Loggable::log()  << "net: originating" << request->originating->name()<<" waiting: "<<_cache.getCacheByType(request->waitingCache)->name() << " " << blk << std::endl;
                     }
-                    else{
+                    else{             
                         err(this) << "waiting cache is empty"<<std::endl;
                     }
-
                     request->originating->stats.addAmt(false, CacheStats::Metric::stalled, _blkSize);
                     return sendData(connection, blk, request);
                 }
                 else {
-                    std::cout << "REQUEST failure" << std::endl;
+                   Loggable::err()  << "REQUEST failure" << std::endl;
                     return false;
                 }
             }

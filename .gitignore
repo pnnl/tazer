@@ -10,9 +10,11 @@ compile_commands.json
 CTestTestfile.cmake
 _deps
 *build*
-*install*
 *runner-test*
+*install*
+*slurm*
 *.meta.in
-slurm*.out
-utils/tazer/**
+*old_files*
+utils/tazer/*
+*target*
 .vscode

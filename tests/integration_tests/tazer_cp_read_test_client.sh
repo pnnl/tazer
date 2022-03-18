@@ -49,9 +49,19 @@ cd ${workspace}/test_${test_id}
     compression=0
     blocksize=1048576
     infile="$SERVER_DATA_PATH/tazer100MB.dat"
+    META_FILE=tazer100MB.dat.meta.in
 
-
-    echo "${server_addr}:${server_port}:${compression}:0:0:${blocksize}:${infile}|" | tee ${LOCAL_DATA_PATH}/tazer100MB.dat.meta.in
+    #echo "${server_addr}:${server_port}:${compression}:0:0:${blocksize}:${infile}|" | tee ${LOCAL_DATA_PATH}/tazer100MB.dat.meta.in
+    echo "TAZER0.1" | tee ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "type=input" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "[server]" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "file=${infile}" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "host=${server_addr}" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "port=${server_port}" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "compress=false" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "block_size=${blocksize}" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "save_local=false" >> ${LOCAL_DATA_PATH}/${META_FILE}
+    echo "prefetch=false" >> ${LOCAL_DATA_PATH}/${META_FILE}
     out_file=./log.out
 
     echo "TAZER_SHARED_MEM_CACHE=${CACHES[0]} TAZER_SHARED_MEM_CACHE_SIZE=$((${CACHE_SIZES[0]})) \
@@ -59,7 +69,7 @@ cd ${workspace}/test_${test_id}
     TAZER_BOUNDED_FILELOCK_CACHE=${CACHES[2]} TAZER_BOUNDED_FILELOCK_CACHE_SIZE=$((${CACHE_SIZES[2]}))"
     ref_time=0 #debug -- calcuate a reference time (e.g. with SimplePTP if you want to use)
     echo "ref_time ${ref_time}"
-    # time gdb --ex run --ex bt --args env  
+    #time gdb --ex run --ex bt --args env 
     time TAZER_REF_TIME=${ref_time} TAZER_SHARED_MEM_CACHE=$((${CACHES[0]})) TAZER_SHARED_MEM_CACHE_SIZE=$((${CACHE_SIZES[0]})) \
     TAZER_BB_CACHE=$((${CACHES[1]})) TAZER_BB_CACHE_SIZE=$((${CACHE_SIZES[1]})) \
     TAZER_BOUNDED_FILELOCK_CACHE=${CACHES[2]} TAZER_BOUNDED_FILELOCK_CACHE_SIZE=$((${CACHE_SIZES[2]})) \

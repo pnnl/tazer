@@ -244,10 +244,10 @@ void FcntlReaderWriterLock::writerUnlock3(int fd, uint64_t blk, std::atomic<uint
 //     std::atomic<uint16_t> temp[4096];
 //     Loggable::debug() << _numEntries << " " << 2 * _numEntries * sizeof(std::atomic<uint16_t>) << " " << sizeof(temp) << " " << 2 * sizeof(temp) << std::endl;
 
-//     int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+//     int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
 //     if (fd == -1) {
 //         // DPRINTF("Reusing shared memory\n");
-//         fd = shm_open(filePath.c_str(), O_RDWR, 0644);
+//         fd = shm_open(filePath.c_str(), O_RDWR, 0666);
 //         if (fd != -1) {
 //             if (ftruncate(fd, 2 * _numEntries * sizeof(std::atomic<uint16_t>) + sizeof(ReaderWriterLock)) != -1) {
 //                 void *ptr = mmap(NULL, 2 * _numEntries * sizeof(std::atomic<uint16_t>) + sizeof(ReaderWriterLock), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -312,9 +312,9 @@ OldLock::OldLock(uint32_t entrySize, uint32_t numEntries, std::string lockPath, 
 
         std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck."+_id);
         Loggable::debug()<<shmPath<<std::endl;
-        int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+        int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
         if (shmFd == -1) {
-            shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
+            shmFd = shm_open(shmPath.c_str(), O_RDWR, 0666);
             if (shmFd != -1) {
                 Loggable::debug() << "resusing fcntl shm lock" << std::endl;
                 ftruncate(shmFd, shmLen);
@@ -760,20 +760,32 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
     if (Config::enableSharedMem){
         std::string shmPath("/" + Config::tazer_id + "_fcntlbnded_shm.lck."+_id);
         Loggable::debug()<<shmPath<<std::endl;
-        int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
+        int shmFd = shm_open(shmPath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
         if (shmFd == -1) {
-            shmFd = shm_open(shmPath.c_str(), O_RDWR, 0644);
+            shmFd = shm_open(shmPath.c_str(), O_RDWR, 0666);
             if (shmFd != -1) {
                 Loggable::debug() << "resusing fcntl shm lock" << std::endl;
                 ftruncate(shmFd, shmLen);
                 void *ptr = mmap(NULL, shmLen, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
-                uint32_t *init = (uint32_t *)ptr;
-                while (!*init) {
-                    sched_yield();
+                Loggable::debug() << "shmLen: "<<shmLen<<" addr: "<<(void*)ptr << std::endl;
+                if (ptr != NULL){
+                    uint32_t *init = (uint32_t *)ptr;
+                    while (!*init) {
+                        sched_yield();
+                    }
+                    _shmLock = (ReaderWriterLock *)((uint8_t *)init + sizeof(uint32_t));
+                    _readers = (std::atomic<uint16_t>*)((uint8_t*)_shmLock + sizeof(ReaderWriterLock));
+                    _writers = (std::atomic<uint16_t>*)((uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries);
+                    Loggable::debug() << "init: "<<sizeof(uint32_t)<<" shmLock: "<<sizeof(ReaderWriterLock)<<" readers"<<(void*)_readers<<" writers: "<<sizeof(std::atomic<uint16_t>) * _numEntries<<" end:"<<sizeof(std::atomic<uint16_t>) * _numEntries << std::endl;
+                    Loggable::debug() << "init: "<<(void*)init<<" shmLock: "<<(void*)_shmLock<<" readers"<<(void*)_readers<<" writers: "<<(void*)_writers<<" end:"<<(void*)((uint8_t*)ptr + shmLen) << std::endl;
+                    Loggable::debug() << "init: "<<(void*)((uint8_t*)ptr)<<" shmLock: "<<(void*)((uint8_t*)ptr + sizeof(uint32_t))<<" readers"<<(void*)((uint8_t*)ptr + sizeof(uint32_t)+sizeof(ReaderWriterLock))<<" writers: "<<(void*)((uint8_t*)ptr + sizeof(uint32_t)+sizeof(ReaderWriterLock)+sizeof(std::atomic<uint16_t>) * _numEntries )<<" end:"<<(void*)((uint8_t*)ptr + sizeof(uint32_t)+sizeof(ReaderWriterLock)+sizeof(std::atomic<uint16_t>) * _numEntries +sizeof(std::atomic<uint16_t>) * _numEntries) << std::endl;
+
                 }
-                _shmLock = (ReaderWriterLock *)((uint8_t *)init + sizeof(uint32_t));
-                _readers  = (std::atomic<uint16_t>*)(uint8_t*)_shmLock + sizeof(ReaderWriterLock);
-                _writers  = (std::atomic<uint16_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
+                else{
+                    Loggable::debug()<<"unable to attach to shm segment"<<std::endl;
+                    exit(0);
+                }
+                
                 // _readerMutex = (std::atomic<uint8_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
             }
             else {
@@ -785,16 +797,27 @@ FcntlBoundedReaderWriterLock::FcntlBoundedReaderWriterLock(uint32_t entrySize, u
             Loggable::debug() << "creating fcntl shm lock" << std::endl;
             ftruncate(shmFd, shmLen);
             void *ptr = mmap(NULL, shmLen, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
+            if (ptr != NULL){
 
-            uint32_t *init = (uint32_t *)ptr;
-            _shmLock = new ((uint8_t *)init + sizeof(uint32_t)) ReaderWriterLock();
-            _readers  = (std::atomic<uint16_t>*)(uint8_t*)_shmLock + sizeof(ReaderWriterLock);
-            _writers  = (std::atomic<uint16_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
-            // _readerMutex = (std::atomic<uint8_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
-            init_atomic_array(_readers,_numEntries,(uint16_t)0);
-            init_atomic_array(_writers,_numEntries,(uint16_t)0);
-            // init_atomic_array(_readerMutex,_numEntries,(uint8_t)0);
-            *init = 1;
+                Loggable::debug() << "shmLen: "<<shmLen<<" addr: "<<(void*)ptr << std::endl;
+                uint32_t *init = (uint32_t *)ptr;
+                _shmLock = new ((uint8_t *)init + sizeof(uint32_t)) ReaderWriterLock();
+                _readers = (std::atomic<uint16_t>*)((uint8_t*)_shmLock + sizeof(ReaderWriterLock));
+                _writers = (std::atomic<uint16_t>*)((uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries);
+                // _readerMutex = (std::atomic<uint8_t>*)(uint8_t*)_readers + sizeof(std::atomic<uint16_t>) * _numEntries;
+                init_atomic_array(_readers,_numEntries,(uint16_t)0);
+                init_atomic_array(_writers,_numEntries,(uint16_t)0);
+                // init_atomic_array(_readerMutex,_numEntries,(uint8_t)0);
+                // Loggable::debug() << "init: "<<sizeof(uint32_t)<<" shmLock: "<<sizeof(ReaderWriterLock)<<" readers"<<sizeof(std::atomic<uint16_t>) * _numEntries<<" writers: "<<sizeof(std::atomic<uint16_t>) * _numEntries<<" end:"<<sizeof(std::atomic<uint16_t>) * _numEntries << std::endl;
+                // Loggable::debug() << "init: "<<(void*)init<<" shmLock: "<<(void*)_shmLock<<" readers"<<(void*)_readers<<" writers: "<<(void*)_writers<<" end:"<<(void*)((uint8_t*)ptr + shmLen) << std::endl;
+                // Loggable::debug() << "init: "<<(void*)((uint8_t*)ptr)<<" shmLock: "<<(void*)((uint8_t*)ptr + sizeof(uint32_t))<<" readers"<<(void*)((uint8_t*)ptr + sizeof(uint32_t)+sizeof(ReaderWriterLock))<<" writers: "<<(void*)((uint8_t*)ptr + sizeof(uint32_t)+sizeof(ReaderWriterLock)+sizeof(std::atomic<uint16_t>) * _numEntries )<<" end:"<<(void*)((uint8_t*)ptr + sizeof(uint32_t)+sizeof(ReaderWriterLock)+sizeof(std::atomic<uint16_t>) * _numEntries +sizeof(std::atomic<uint16_t>) * _numEntries) << std::endl;
+
+                *init = 1;
+            }
+            else{
+                Loggable::debug()<<"unable to create shm segment"<<std::endl;
+                exit(0);
+            }
         }
     }
     else{

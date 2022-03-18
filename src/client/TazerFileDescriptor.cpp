@@ -86,6 +86,10 @@ bool TazerFileDescriptor::lookupTazerFileDescriptor(int fd, TazerFile *&file, un
     if (v) {
         file = v->_file;
         index = v->_index;
+        if(file->type() == TazerFile::Output) {
+            OutputFile *outputFile = dynamic_cast<OutputFile*>(file);
+            outputFile->setThreadFileDescriptor(fd);
+        }
         return true;
     }
     return false;

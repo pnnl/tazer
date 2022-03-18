@@ -212,6 +212,8 @@ int getInSocketOnInterface(const char * port, int &socketFd, const char *addr) {
 
     }
 
+    freeaddrinfo(result);
+
    if (rp == NULL) {               /* No address succeeded */
         fprintf(stderr, "Could not bind\n");
         exit(EXIT_FAILURE);

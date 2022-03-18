@@ -103,7 +103,7 @@ class UnboundedCache : public Cache {
     virtual bool blockReserve(unsigned int index, unsigned int fileIndex) = 0;
     // virtual bool blockReserve(uint32_t index, uint32_t fileIndex, bool prefetch = false)=0;
     virtual void cleanReservation();
-
+    virtual void cleanUpBlockData(uint8_t *data) = 0;
     virtual bool blockAvailable(uint32_t index, uint32_t fileIndex, bool arg = false) = 0;
     virtual bool blockWritable(uint32_t index, uint32_t fileIndex, bool arg = false) = 0;
     virtual uint8_t *getBlockData(uint32_t blockIndex, uint32_t fileIndex) = 0;

@@ -87,6 +87,7 @@ class UrlFileCache : public LocalFileCache {
     void removeFile(uint32_t index);
     static Cache * addNewUrlFileCache(std::string cacheName, CacheType type);
   private:
+    virtual void cleanUpBlockData(uint8_t *data);
     ReaderWriterLock *_lock;
     std::unordered_map<uint32_t, std::string> _urlMap;
 };

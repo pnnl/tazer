@@ -106,7 +106,6 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
     _eof(false),
     _compress(false),
     _prefetch(false),
-    _save_local(false),
     _blkSize(1),
     _initMetaTime(0),
     _active(false),
@@ -119,13 +118,13 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
 TazerFile::~TazerFile() {
 }
 
-//meta.in format:
-//server-ip-address:server-port:compression:prefetch:localfile:blk_size:file to read(location on the server)|
-//notes:
-//"prefetch" enables prefetching for this file
-//"localfile" is currently unused right now (should be set to 0)
-//the entry for a server must end in "|"
-//multiple servers can be provided (separated by "|")
+//meta file format:
+//TAZER0.1
+//type=         (type can be input, output, or local)
+//[server]      (the info under [server] can be in any order, but the host, port, and file parts must be provided, multiple servers can be given by using multiple [server] tags)
+//host=
+//port=
+//file=
 bool TazerFile::readMetaInfo() {
     TIMEON(uint64_t t1 = Timer::getCurrentTime());
     auto start = Timer::getCurrentTime();
@@ -142,103 +141,112 @@ bool TazerFile::readMetaInfo() {
     char *meta = new char[fileSize + 1];
     int ret = (*unixRead)(_fd, (void *)meta, fileSize);
     if (ret < 0) {
-        log(this) << "ERROR: Failed to read local metafile: " << strerror(errno) << std::endl;
+        std::cout << "ERROR: Failed to read local metafile: " << strerror(errno) << std::endl;
         raise(SIGSEGV);
         return 0;
     }
     meta[fileSize] = '\0';
-    std::string metaStr(meta);
+
+    typedef enum {
+        DEFAULT,
+        SERVER,
+        //OPTIONS,
+        DONE
+    } State;
+
     uint32_t numServers = 0;
-    size_t cur = 0;
-    size_t l = metaStr.find("|");
-    while (l != std::string::npos) {
-        std::string line = metaStr.substr(cur, l - cur);
-        log(this) << cur << " " << line << std::endl;
+    std::string curLine;
+    std::string hostAddr;
+    std::string fileName;
+    int port;
+    std::stringstream ss(meta);
 
-        uint32_t lcur = 0;
-        uint32_t next = line.find(":", lcur);
-        if (next == std::string::npos) {
-            log(this) << "0:improperly formatted meta file" << std::endl;
-            break;
-        }
-        std::string hostAddr = line.substr(lcur, next - lcur);
-        log(this) << "hostaddr: " << hostAddr << std::endl;
+    State state = DEFAULT;
+    std::getline(ss, curLine);
+    while(state != DONE) {
+        switch (state)
+        {
+        case SERVER:
+            //found [server]
+            hostAddr = "\0";
+            port = 0;
+            fileName = "\0";
 
-        lcur = next + 1;
-        next = line.find(":", lcur);
-        if (next == std::string::npos) {
-            log(this) << "1:improperly formatted meta file" << std::endl;
-            break;
-        }
-        int port = atoi(line.substr(lcur, next - lcur).c_str());
-        log(this) << "port: " << port << std::endl;
-
-        lcur = next + 1;
-        next = line.find(":", lcur);
-        if (next == std::string::npos) {
-            log(this) << "2:improperly formatted meta file" << std::endl;
-            break;
-        }
-        _compress = atoi(line.substr(lcur, next - lcur).c_str());
-        log(this) << "compress: " << _compress << std::endl;
-
-        lcur = next + 1;
-        next = line.find(":", lcur);
-        if (next == std::string::npos) {
-            log(this) << "3:improperly formatted meta file" << std::endl;
-            break;
-        }
-        _prefetch = atoi(line.substr(lcur, next - lcur).c_str());
-        log(this) << "prefetch: " << _prefetch << std::endl;
-
-        lcur = next + 1;
-        next = line.find(":", lcur);
-        if (next == std::string::npos) {
-            log(this) << "4:improperly formatted meta file" << std::endl;
-            break;
-        }
-        _save_local = atoi(line.substr(lcur, next - lcur).c_str());
-        log(this) << "save_local: " << _save_local << std::endl;
-
-        lcur = next + 1;
-        next = line.find(":", lcur);
-        if (next == std::string::npos) {
-            log(this) << "5:improperly formatted meta file" << std::endl;
-            break;
-        }
-        _blkSize = atoi(line.substr(lcur, next - lcur).c_str());
-        log(this) << "blkSize: " << _blkSize << std::endl;
-
-        lcur = next + 1;
-        next = line.size();
-        std::string fileName = line.substr(lcur, next - lcur);
-        if(fileName.length()){
-            _name = fileName;
-            log(this) << "fileName: " << fileName << std::endl;
-        }
-
-        if (_type != TazerFile::Local) {
-            Connection *connection = Connection::addNewClientConnection(hostAddr, port);
-            // std::cout << hostAddr << " " << port << " " << connection << std::endl;
-            if (connection) {
-                if (ConnectionPool::useCnt->count(connection->addrport()) == 0) {
-                    ConnectionPool::useCnt->emplace(connection->addrport(), 0);
-                    ConnectionPool::consecCnt->emplace(connection->addrport(), 0);
+            while(std::getline(ss, curLine)) {
+                if(curLine.compare(0, 5, "host=") == 0) {
+                    hostAddr = curLine.substr(5, (curLine.length() - 5));
+                    log(this) << "hostaddr: " << hostAddr << std::endl;
                 }
-                _connections.push_back(connection);
-                numServers++;
+                else if(curLine.compare(0, 5, "port=") == 0) {
+                    port = atoi(curLine.substr(5, (curLine.length() - 5)).c_str());
+                    log(this) << "port: " << port << std::endl;
+                }
+                else if(curLine.compare(0, 5, "file=") == 0) {
+                    fileName = curLine.substr(5, (curLine.length() - 5));
+                    _name = fileName;
+                    log(this) << "fileName: " << fileName << std::endl;
+                }
+                else if(curLine.compare(0, 13, "compress=true") == 0) {
+                    _compress = true;
+                    log(this) << "compress: " << _compress << std::endl;
+                }
+                else if(curLine.compare(0, 14, "compress=false") == 0) {
+                    _compress = false;
+                    log(this) << "compress: " << _compress << std::endl;
+                }
+                else if(curLine.compare(0, 13, "prefetch=true") == 0) {
+                    _prefetch = true;
+                    log(this) << "prefetch: " << _prefetch << std::endl;
+                }
+                else if(curLine.compare(0, 14, "prefetch=false") == 0) {
+                    _prefetch = false;
+                    log(this) << "prefetch: " << _prefetch << std::endl;
+                }
+                else if(curLine.compare(0, 11, "block_size=") == 0) {
+                    _blkSize = atoi(curLine.substr(11, (curLine.length() - 11)).c_str());
+                    log(this) << "blkSize: " << _blkSize << std::endl;
+                }
+                else {
+                    break;
+                }
             }
+            //make sure the host port and file name were given
+            if(hostAddr == "\0" || port == 0 || fileName == "\0") {
+                log(this) << "0:improperly formatted meta file" << std::endl;
+                return 0;
+            }
+            //after collecting info for a server
+            if (_type != TazerFile::Local) {
+                Connection *connection = Connection::addNewClientConnection(hostAddr, port);
+                std::cout << hostAddr << " " << port << " " << connection << std::endl;
+                if (connection) {
+                    if (ConnectionPool::useCnt->count(connection->addrport()) == 0) {
+                        ConnectionPool::useCnt->emplace(connection->addrport(), 0);
+                        ConnectionPool::consecCnt->emplace(connection->addrport(), 0);
+                    }
+                    _connections.push_back(connection);
+                    numServers++;
+                }
+            }
+            state = DEFAULT;
+            break;
+        default:
+            if(curLine.compare(0, 8, "[server]") == 0) {
+                state = SERVER;
+            }
+            else if(!std::getline(ss, curLine)) {
+                state = DONE;
+            }
+            break;
         }
-
-        cur = l + 1;
-        l = metaStr.find("|", cur);
     }
-
+    
     delete[] meta;
     TIMEON(fprintf(stderr, "Meta Time: %lu\n", Timer::getCurrentTime() - t1));
     _initMetaTime = Timer::getCurrentTime()-start;
     return (numServers > 0);
 }
+
 
 TazerFile::Type TazerFile::type() {
     return _type;
@@ -307,16 +315,28 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
             });
     }
     else if (type == TazerFile::Output) {
+        bool dontcare;
         return Trackable<std::string, TazerFile *>::AddTrackable(
             metaName, [=]() -> TazerFile * {
                 // std::cout << "new output " <<fileName<<" "<<metaName<<" "<<std::endl;
+                //std::cout << "Create new" << std::endl;
                 TazerFile *temp = new OutputFile(fileName, metaName, fd);
-                if (temp && temp->active() == 0) {
+                if (temp) {
+                    OutputFile* out = dynamic_cast<OutputFile*>(temp);
+                    out->setThreadFileDescriptor(fd);
+                    if (temp->active() == 0) {
                     delete temp;
                     return NULL;
+                    }
                 }
                 return temp;
-            });
+            },
+            [=](TazerFile* tazerFile) -> void {
+                OutputFile* out = dynamic_cast<OutputFile*>(tazerFile);
+                out->setThreadFileDescriptor(fd);
+                //std::cout << "Reuse old" << std::endl;
+                out->addFileDescriptor(fd);
+            }, dontcare);
     }
     else if (type == TazerFile::Local) {
         return Trackable<std::string, TazerFile *>::AddTrackable(
