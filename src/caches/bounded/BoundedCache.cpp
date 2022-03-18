@@ -91,8 +91,8 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
-#define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
-// #define PPRINTF(...)
+// #define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+#define PPRINTF(...)
 
 template <class Lock>
 BoundedCache<Lock>::BoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, Cache * scalableCache) : Cache(cacheName,type),
@@ -446,7 +446,7 @@ bool BoundedCache<Lock>::writeBlock(Request *req) {
             ret = true;
         }
         if (_nextLevel) {
-            ret &= _nextLevel->writeBlock(req);
+            ret |= _nextLevel->writeBlock(req); //or = here because this was an orphan request so we werent on the hook to actually write the block, but we do want to report if the above level fails
         }
         else{
             req->trace(_name)<<"not sure how I got here"<<std::endl;

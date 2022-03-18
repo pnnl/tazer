@@ -93,8 +93,8 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-//#define MeMPRINTF(...)
+// #define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define MeMPRINTF(...)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -218,7 +218,7 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
     //PPRINTF("calling check pattern, fileindex: %lu numblocks:%d\n",fileIndex, meta->getNumBlocks());
     auto doAlloc = meta->checkPattern(this, fileIndex);
 
-    while(!dest) {
+    while(!dest && !_terminating) {
         //Ask for a new block from allocator
         MeMPRINTF("ASKING FOR NEW BLOCK:%d:%d:%lu\n", fileIndex, meta->getNumBlocks(),Timer::getCurrentTime());
         auto must = (meta->getNumBlocks()>0 ? false : true );
@@ -237,7 +237,6 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
             stats.addAmt(false, CacheStats::Metric::backout, 1);
             break;
         }
-
     }
     
     if(dest) {
@@ -247,8 +246,11 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
         meta->setBlock(blockIndex, dest);
         trackBlock(_name, "[BLOCK_WRITE]", fileIndex, blockIndex, 0);
     }
-    else {
+    else if (!_terminating){
         DPRINTF("[Tazer] Allocation failed, potential race condition!\n");
+    }
+    else{
+        DPRINTF("[Tazer] Allocation failed due to termination!\n");
     }
     _cacheLock->readerUnlock();
 }
@@ -310,15 +312,17 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
     if (req->size <= _blockSize) {
         bool reserve;
         //JS: Fill in the data if we have it
-        stats.end(prefetch, CacheStats::Metric::ovh, thread_id); //read
-        stats.start(prefetch, CacheStats::Metric::hits, thread_id); //ovh
+        //with respect to stat keeping this is inconsistent with the other caches because here we are attributing both 
+        //the overhead of finding a block + the time it takes to read that block from its backing medium to the "ovh" stat
+        //in the other the other caches, the cost of reading the data is attributed to the "hit" stat
         buff = getBlockDataOrReserve(fileIndex, index, fileOffset, reserve);
-        stats.end(prefetch, CacheStats::Metric::hits, thread_id);
-        stats.start(prefetch, CacheStats::Metric::ovh, thread_id);
+        
         access.fetch_add(1);
 
         // std::cerr << " [JS] readBlock " << buff << " " << reserve << std::endl;
         if(buff) {
+            stats.end(prefetch, CacheStats::Metric::ovh, thread_id); //read
+            stats.start(prefetch, CacheStats::Metric::hits, thread_id); //ovh
             DPRINTF("[JS] ScalableCache::readBlock hit\n");
             //JS: Update the req, block is currently held by count
             req->data=buff;
@@ -330,6 +334,8 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
 
             trackBlock(_name, "[BLOCK_READ_HIT]", fileIndex, index, priority);
             stats.addAmt(prefetch, CacheStats::Metric::hits, req->size, thread_id);
+            stats.end(prefetch, CacheStats::Metric::hits, thread_id);
+            stats.start(prefetch, CacheStats::Metric::ovh, thread_id);
         }
         else { //JS: Data not currently present
             trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
@@ -368,7 +374,10 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
                     req->reservedMap[this]=1;
                     req->ready = true;
 
-                    //JS TODO: Check if this is right and add to unbounded cache
+                    //JS TODO: Check if this is right and add to unbounded cache--
+                    //RF it likely isnt because it can be waiting on any level of cache, in bounded caches,
+                    // the cache entrys contain the originating cache which read to set the waitingCache
+                    // this doesn't looked to be stored in the ScalableMetaData::BlockEntry data structure (we can reference BoundedCache::BlockEntry)
                     req->waitingCache = _lastLevel->type();
                     req->time = Timer::getCurrentTime()-req->time;
                     updateRequestTime(req->time);
@@ -390,6 +399,8 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
         raise(SIGSEGV);
     }
     DPRINTF("[JS] ScalableCache::readBlock done\n");
+    stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
+    stats.end(prefetch, CacheStats::Metric::read, thread_id);
 }
 
 ScalableMetaData * ScalableCache::oldestFile(uint32_t &oldestFileIndex) {

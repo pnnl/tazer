@@ -188,13 +188,27 @@ Cache::Cache(std::string name,  CacheType type) : Loggable(Config::CacheLog, nam
 Cache::~Cache() {
     log(this) << "deleting " << _name << " in cache" << std::endl;
     stats.start(false, CacheStats::Metric::destructor);
+    std::cout<<"deleting "<<_name<<" num writes: "<<_outstandingWrites.load()<<std::endl;
+
+    //RF: this is a hack to bypass getting stuck in a loop in scalable cache when termination
+    //TODO: figure out what the cause of the loop is
+    auto temp = _nextLevel;
+    while(temp){
+        if (temp->name() == "scalable"){
+            temp->_terminating=true;
+            break;
+        }
+        temp = temp->_nextLevel;
+    }
+    //RF end of hack
+
     while (_outstandingWrites.load()) {
         std::this_thread::yield();
     }
     void* ptr = ((uint8_t*)_curIoTime) - sizeof(uint32_t);
     free(ptr);
 
-    _terminating = true;
+    // _terminating = true;
 
     if (_name == BASECACHENAME) {
         log(this) << std::endl;
@@ -340,7 +354,7 @@ bool Cache::bufferWrite(Request *req) {
         _writePool->addTask([this, req] {
             //std::cout<<"[TAZER] " << "buffered write: " << (void *)originating << std::endl;
             if (!writeBlock(req)) {
-                DPRINTF("FAILED WRITE...\n");
+                DPRINTF("BASE FAILED WRITE... %s\n",req->originating->name());
             }
             _outstandingWrites.fetch_sub(1);
         });
@@ -353,7 +367,7 @@ bool Cache::bufferWrite(Request *req) {
     }
 
     if (!writeBlock(req)) {
-        DPRINTF("FAILED WRITE...\n");
+        DPRINTF("BASE FAILED WRITE...%s\n",req->originating->name());
     }
 
     return true;

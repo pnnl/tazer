@@ -732,7 +732,7 @@ bool BoundedFilelockCache::writeBlock(Request *req) {
         _writePool->addTask([this, req] {
             //debug()<<"[TAZER] " << "buffered write: " << (void *)originating << std::endl;
             if (!BoundedCache::writeBlock(req)) {
-                DPRINTF("FAILED WRITE...\n");
+                DPRINTF("BOUNDED FILE LOCK FAILED WRITE...\n");
             }
             _myOutstandingWrites.fetch_sub(1);
         });
@@ -797,8 +797,8 @@ void BoundedFilelockCache::setLastUMB(std::vector<std::tuple<uint32_t, double>> 
         _UMBLock->writerLock();
         _scalableLock->writerLock(0,NULL,false);
         //JS: Read
-        preadFromFile(_scalableFd, sizeof(double)      *SCALEABLE_METRIC_FILE_MAX, (uint8_t*)&_UMB, 0);
-        preadFromFile(_scalableFd, sizeof(unsigned int)*SCALEABLE_METRIC_FILE_MAX, (uint8_t*)&_UMBC, sizeof(double)*SCALEABLE_METRIC_FILE_MAX);
+        preadFromFile(_scalableFd, sizeof(double)      *SCALEABLE_METRIC_FILE_MAX, (uint8_t*)_UMB, 0);
+        preadFromFile(_scalableFd, sizeof(unsigned int)*SCALEABLE_METRIC_FILE_MAX, (uint8_t*)_UMBC, sizeof(double)*SCALEABLE_METRIC_FILE_MAX);
 
         for(const auto &UMB : UMBList) {
             uint32_t index = std::get<0>(UMB);
@@ -808,8 +808,8 @@ void BoundedFilelockCache::setLastUMB(std::vector<std::tuple<uint32_t, double>> 
                 _UMBC[index] ++;
             }
         }
-        pwriteToFile(_scalableFd, sizeof(double)      *SCALEABLE_METRIC_FILE_MAX, (uint8_t*)&_UMB, 0);
-        pwriteToFile(_scalableFd, sizeof(unsigned int)*SCALEABLE_METRIC_FILE_MAX, (uint8_t*)&_UMBC, sizeof(double)*SCALEABLE_METRIC_FILE_MAX);
+        pwriteToFile(_scalableFd, sizeof(double)      *SCALEABLE_METRIC_FILE_MAX, (uint8_t*)_UMB, 0);
+        pwriteToFile(_scalableFd, sizeof(unsigned int)*SCALEABLE_METRIC_FILE_MAX, (uint8_t*)_UMBC, sizeof(double)*SCALEABLE_METRIC_FILE_MAX);
         (*_fsync)(_scalableFd);
         _scalableLock->writerUnlock(0,NULL,false);
         _UMBLock->writerUnlock();
