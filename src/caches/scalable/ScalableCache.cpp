@@ -101,12 +101,16 @@ Cache(cacheName, type),
 evictHisto(100),
 access(0), 
 misses(0),
-startTimeStamp((uint64_t)Timer::getCurrentTime()) {
+startTimeStamp((uint64_t)Timer::getCurrentTime()),
+oustandingBlocksRequested(0),
+maxOutstandingBlocks(0),
+maxBlocksInUse(0) {
     stats.start(false, CacheStats::Metric::constructor);
     log(this) << _name << std::endl;
     _lastVictimFileIndexLock = new ReaderWriterLock();
     _cacheLock = new ReaderWriterLock();
     _blockSize = blockSize;
+    _numBlocks = maxCacheSize / blockSize;
 
     if(Config::scalableCacheAllocator == 0) {
         PPRINTF("[JS] AdaptiveAllocator::addAdaptiveAllocator\n");
@@ -131,6 +135,14 @@ startTimeStamp((uint64_t)Timer::getCurrentTime()) {
     else if(Config::scalableCacheAllocator == 5) {
         PPRINTF("[JS] StealingAllocator::addFirstTouchAllocator\n");
         _allocator = FirstTouchAllocator::addFirstTouchAllocator(blockSize, maxCacheSize);
+    }
+    else if(Config::scalableCacheAllocator == 6){
+        PPRINTF("[JS] AdaptiveForceWithUMBAllocator::addAdaptiveForceWithUMBAllocator\n");
+        _allocator = AdaptiveForceWithUMBAllocator::addAdaptiveForceWithUMBAllocator(blockSize, maxCacheSize, this);
+    }
+    else if(Config::scalableCacheAllocator == 7){
+        PPRINTF("[JS] AdaptiveForceWithOldestAllocator::addAdaptiveForceWithOldestAllocator\n");
+        _allocator = AdaptiveForceWithOldestAllocator::addAdaptiveForceWithOldestAllocator(blockSize, maxCacheSize, this);
     }
     else {
         PPRINTF("[JS] SimpleAllocator::addSimpleAllocator\n");
@@ -188,25 +200,75 @@ void ScalableCache::closeFile(uint32_t fileIndex) {
     _cacheLock->readerUnlock();
 }
 
-uint8_t * ScalableCache::getBlockDataOrReserve(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset, bool &reserve) {
+void ScalableCache::checkMaxBlockInUse(std::string msg, bool die) {
     _cacheLock->readerLock();
+
+    uint64_t sum = 0;
+    for (auto const &x : _metaMap) {
+        auto meta = x.second;
+        sum+=meta->getNumBlocks();
+    }
+
+    while(1) {
+        auto dirty = maxBlocksInUse.load();
+        if(sum < dirty) {
+            PPRINTF("LOST BLOCKS: %s %lu vs %lu\n", msg.c_str(), dirty, sum);
+            if(die)
+                raise(SIGSEGV);
+            break;
+        }
+        else if(dirty < sum) {
+            if(maxBlocksInUse.compare_exchange_weak(dirty, sum)) {
+                PPRINTF("NEW MAXBLOCKSINUSE: %lu\n", sum);
+                break;
+            }
+        }
+        else
+            break;
+    }
+
+    _cacheLock->readerUnlock();
+}
+
+uint8_t * ScalableCache::getBlockDataOrReserve(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool &full) {
+    _cacheLock->readerLock();
+    //JS: We only care about it being full if we are requesting a new block
+    auto index = oustandingBlocksRequested.fetch_add(1);
+    full = (index >= _numBlocks);
     auto ret = _metaMap[fileIndex]->getBlockData(blockIndex, fileOffset, reserve, true);
+    if(!reserve) {
+        index = oustandingBlocksRequested.fetch_sub(1);
+        //JS: This is a hit thus we don't care if it is full or not so we set it to false
+        full = false;
+    }
+    //JS: FOR TESTING...
+    full = false;
+    while(1) {
+        auto dirty = maxOutstandingBlocks.load();
+        if(dirty < index) {
+            if(maxOutstandingBlocks.compare_exchange_weak(dirty, index+1)) {
+                PPRINTF("NEW OUTSTANDING MAX: %lu\n", index + 1);
+                break;
+            }
+        }
+        else
+            break;
+    }
+    
     _cacheLock->readerUnlock();
     DPRINTF("[JS] ScalableCache::getBlockDataOrReserve %u\n", reserve);
     return ret;
-    // reserve = true;
-    // return NULL;
 }
 
 uint8_t * ScalableCache::getBlockData(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset) {
-    bool dontCare;
+    bool reserve = false;
     _cacheLock->readerLock();
-    auto ret = _metaMap[fileIndex]->getBlockData(blockIndex, fileOffset, dontCare, false);
+    auto ret = _metaMap[fileIndex]->getBlockData(blockIndex, fileOffset, reserve, false);
     _cacheLock->readerUnlock();
     return ret;
 }
 
-void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * data, uint64_t dataSize) {
+void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * data, uint64_t dataSize, bool writeOptional) {
     //JS: For trackBlock
     uint64_t sourceBlockIndex;
     uint32_t sourceFileIndex;
@@ -214,44 +276,91 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
     _cacheLock->readerLock();
 
     auto meta = _metaMap[fileIndex];
+    bool backout = false;
     uint8_t * dest = NULL;
+
     //PPRINTF("calling check pattern, fileindex: %lu numblocks:%d\n",fileIndex, meta->getNumBlocks());
-    auto doAlloc = meta->checkPattern(this, fileIndex);
-
-    while(!dest && !_terminating) {
-        //Ask for a new block from allocator
+    // auto doAlloc = meta->checkPattern(this, fileIndex);
+    unsigned int count = 0;
+    while(!dest && !_terminating && count < 10) {
+        //JS: Ask for a new block from allocator
         MeMPRINTF("ASKING FOR NEW BLOCK:%d:%d:%lu\n", fileIndex, meta->getNumBlocks(),Timer::getCurrentTime());
-        auto must = (meta->getNumBlocks()>0 ? false : true );
-        dest = _allocator->allocateBlock(fileIndex, must);
+        dest = _allocator->allocateBlock(fileIndex, (meta->getNumBlocks() == 0));
+        checkMaxBlockInUse(std::string("ALLOC"), false);
 
+        //JS: Try to reuse my oldest block
         if(!dest) {
             DPRINTF("[JS] ScalableCache::setBlock Reusing block\n");
             dest = meta->oldestBlock(sourceBlockIndex);
             if(dest)
                 trackBlockEviction(fileIndex, sourceBlockIndex);
+            checkMaxBlockInUse(std::string("LRU"), false);
         }
 
         //JS: Try to backout
         if(!dest && meta->backOutOfReservation(blockIndex)) {
             DPRINTF("[JS] ScalableCache::setBlock Backing out\n");
             stats.addAmt(false, CacheStats::Metric::backout, 1);
+            backout = true;
+            checkMaxBlockInUse(std::string("BACKOUT"), false);
             break;
         }
+
+        //JS: Last resort
+        if(!dest) {
+            //JS: This is an orphan write
+            if(writeOptional) {
+                break;
+            }
+            else {
+                //JS: Someone should have a free block.
+                //We will search all files looking for it!
+                PPRINTF("LOOKING %lu ---- \n", fileIndex);
+                dest = findBlockFromOldestFile(fileIndex, sourceFileIndex, sourceBlockIndex);
+                checkMaxBlockInUse(std::string("LAST RESORT"), false);
+                if(dest) {
+                    trackBlockEviction(sourceFileIndex, sourceBlockIndex);
+                    break;
+                }
+            }
+        }
+        count++;
     }
-    
     if(dest) {
         DPRINTF("[JS] ScalableCache::setBlock got dest\n");
         //JS: Copy the block back to our cache
         memcpy(dest, data, dataSize);
         meta->setBlock(blockIndex, dest);
+        if(!writeOptional) {
+            auto temp = oustandingBlocksRequested.fetch_sub(1);
+            DPRINTF("DEC OUTSTANDING: %lu\n", temp);
+        }
         trackBlock(_name, "[BLOCK_WRITE]", fileIndex, blockIndex, 0);
+        checkMaxBlockInUse(std::string("SHOULD BE OK HERE"), true);
     }
-    else if (!_terminating){
-        DPRINTF("[Tazer] Allocation failed, potential race condition!\n");
+    else if(writeOptional){
+        meta->decBlockUsage(blockIndex);
+        PPRINTF("[Tazer] FULL CONDITION MET!\n");
+        checkMaxBlockInUse(std::string("SHOULD BE OK HERE"), true);
     }
-    else{
-        DPRINTF("[Tazer] Allocation failed due to termination!\n");
+    else if(backout) {
+        if(!writeOptional) {
+            auto temp = oustandingBlocksRequested.fetch_sub(1);
+            DPRINTF("DEC OUTSTANDING BACKOUT: %lu\n", temp);
+        }
+        checkMaxBlockInUse(std::string("SHOULD BE OK HERE"), true);
     }
+    else {
+        if (!_terminating) {
+            PPRINTF("[Tazer] Allocation failed, potential race condition!\n");
+            raise(SIGSEGV);
+        }
+        else {
+            DPRINTF("[Tazer] Allocation failed due to termination! Total: %lu Outstanding: %lu\n", _numBlocks, oustandingBlocksRequested.load());
+            raise(SIGSEGV);
+        }
+    }
+    checkMaxBlockInUse(std::string("END FN"), true);
     _cacheLock->readerUnlock();
 }
 
@@ -274,7 +383,7 @@ bool ScalableCache::writeBlock(Request *req){
     else {
         DPRINTF("[JS] ScalableCache::writeBlock pass cleanup\n");
         //JS: Write block to cache
-        setBlock(req->fileIndex, req->blkIndex, req->data, req->size);
+        setBlock(req->fileIndex, req->blkIndex, req->data, req->size, req->skipWrite);
         if (_nextLevel) {
             ret &= _nextLevel->writeBlock(req);
         }
@@ -311,11 +420,12 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
 
     if (req->size <= _blockSize) {
         bool reserve;
+        bool full;
         //JS: Fill in the data if we have it
         //with respect to stat keeping this is inconsistent with the other caches because here we are attributing both 
         //the overhead of finding a block + the time it takes to read that block from its backing medium to the "ovh" stat
         //in the other the other caches, the cost of reading the data is attributed to the "hit" stat
-        buff = getBlockDataOrReserve(fileIndex, index, fileOffset, reserve);
+        buff = getBlockDataOrReserve(fileIndex, index, fileOffset, reserve, full);
         
         access.fetch_add(1);
 
@@ -344,8 +454,9 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
             misses.fetch_add(1);
             stats.addAmt(prefetch, CacheStats::Metric::misses, 1, thread_id);
             
-            if (reserve) { //JS: We reserved block
+            if (reserve || full) { //JS: We reserved block
                 DPRINTF("[JS] ScalableCache::readBlock reseved\n");
+                req->skipWrite = full;
                 stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
                 stats.start(prefetch, CacheStats::Metric::misses, thread_id); //miss
                 _nextLevel->readBlock(req, reads, priority);
@@ -463,7 +574,8 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
             sourceFileRank = meta->calcRank(timestamp-startTimeStamp, localMisses);
             DPRINTF("-------Source Index: %u %lf\n", fileIndex, sourceFileRank);
             MeMPRINTF("-------Source Index: %u %lf\n", fileIndex, sourceFileRank);
-        }else{
+        }
+        else{
             sourceFileRank = std::numeric_limits<double>::max();
         }
     }
@@ -484,6 +596,11 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
         }
     }
 
+    sort(UMBList.begin(), UMBList.end(), 
+        [](std::tuple<uint32_t, double> &lhs, std::tuple<uint32_t, double> &rhs) -> bool {
+                return (std::get<1>(lhs) < std::get<1>(rhs));
+        });
+
     //JS: Updated _UMBList
     _lastVictimFileIndexLock->writerLock();
     _UMBList = UMBList;
@@ -494,6 +611,74 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     _lastVictimFileIndexLock->writerUnlock();
     _cacheLock->readerUnlock();
     return ret;
+}
+
+//JS: This will basically search through every block starting from the lowest UMB.
+//Here we use the cached UMB since this will be called by the adaptive allocator
+//who just ran the findVictim.  This will succeed as long as there exists a block
+//that is free to steal!
+uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex) {
+    uint8_t * block = NULL;
+    _cacheLock->readerLock();
+    _lastVictimFileIndexLock->readerLock();
+    for(const auto &UMB : _UMBList) {
+        uint32_t index = std::get<0>(UMB);
+        block = _metaMap[index]->oldestBlock(sourceBlockIndex);
+        if(block) {
+            if(index != allocateForFileIndex) {
+                _metaMap[index]->updateRank(true);
+                _metaMap[allocateForFileIndex]->updateRank(false);
+                sourceFileIndex = index;
+            }
+            break;
+        }     
+    }
+    _lastVictimFileIndexLock->readerUnlock();
+    _cacheLock->readerUnlock();
+    PPRINTF("[JS] findBlockFromCachedUMB %p outstanding: %lu\n", block, oustandingBlocksRequested.load());
+    return block;
+}
+
+//JS: This will basically search through every block starting from the oldest file.
+//Here we use the cached UMB since this will be called by the adaptive allocator
+//who just ran the findVictim.  This will succeed as long as there exists a block
+//that is free to steal!
+uint8_t * ScalableCache::findBlockFromOldestFile(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex) {
+    std::vector<std::tuple<uint32_t, uint64_t>> fileList;
+    
+    //JS: Build list of file index and access times
+    _cacheLock->readerLock();
+    for (auto const &x : _metaMap) {
+        auto fileIndex = x.first;
+        auto meta = x.second;
+        uint64_t temp = meta->getLastTimeStamp();
+        fileList.push_back(std::tuple<uint32_t, uint64_t>(fileIndex, temp));
+    }
+
+    //JS: Sort list
+    sort(fileList.begin(), fileList.end(), 
+        [](std::tuple<uint32_t, uint64_t> &lhs, std::tuple<uint32_t, uint64_t> &rhs) -> bool {
+                return (std::get<1>(lhs) < std::get<1>(rhs));
+        });
+
+    //JS: Look until we find a block
+    uint8_t * block = NULL;
+    for(const auto &entry : fileList) {
+        uint32_t index = std::get<0>(entry);
+        PPRINTF("Checking file index: %u numBlocks: %lu\n", index, _metaMap[index]->getNumBlocks());
+        block = _metaMap[index]->oldestBlock(sourceBlockIndex);
+        if(block) {
+            if(index != allocateForFileIndex) {
+                _metaMap[index]->updateRank(true);
+                _metaMap[allocateForFileIndex]->updateRank(false);
+                sourceFileIndex = index;
+            }
+            break;
+        }     
+    }
+    _cacheLock->readerUnlock();
+    PPRINTF("[JS] findBlockFromOldestFile %p\n", block);
+    return block;
 }
 
 ScalableMetaData * ScalableCache::randomFile(uint32_t &sourceFileIndex) {

@@ -185,4 +185,52 @@ class AdaptiveAllocator : public StealingAllocator
         }
 };
 
+class AdaptiveForceWithUMBAllocator : public StealingAllocator
+{
+    protected:
+        //JS: This is a more iteresting one!
+        virtual uint8_t * stealBlock(uint32_t allocateForFileIndex, uint64_t &sourceBlockIndex, uint32_t &sourceFileIndex, bool must) {
+            auto meta = scalableCache->findVictim(allocateForFileIndex, sourceFileIndex, must);
+            if(meta)
+                return meta->oldestBlock(sourceBlockIndex);
+            else
+                return scalableCache->findBlockFromCachedUMB(allocateForFileIndex, sourceFileIndex, sourceBlockIndex);
+            return NULL;
+        }
+
+    public:
+        AdaptiveForceWithUMBAllocator(uint64_t blockSize, uint64_t maxSize):
+            StealingAllocator(blockSize, maxSize) { }
+
+        static TazerAllocator * addAdaptiveForceWithUMBAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache) {
+            AdaptiveForceWithUMBAllocator * ret = (AdaptiveForceWithUMBAllocator*) addAllocator<AdaptiveForceWithUMBAllocator>(std::string("AdaptiveForceWithUMBAllocator"), blockSize, maxSize);
+            ret->setCache(cache);
+            return ret;
+        }
+};
+
+class AdaptiveForceWithOldestAllocator : public StealingAllocator
+{
+    protected:
+        //JS: This is a more iteresting one!
+        virtual uint8_t * stealBlock(uint32_t allocateForFileIndex, uint64_t &sourceBlockIndex, uint32_t &sourceFileIndex, bool must) {
+            auto meta = scalableCache->findVictim(allocateForFileIndex, sourceFileIndex, must);
+            if(meta)
+                return meta->oldestBlock(sourceBlockIndex);
+            else
+                return scalableCache->findBlockFromOldestFile(allocateForFileIndex, sourceFileIndex, sourceBlockIndex);
+            return NULL;
+        }
+
+    public:
+        AdaptiveForceWithOldestAllocator(uint64_t blockSize, uint64_t maxSize):
+            StealingAllocator(blockSize, maxSize) { }
+
+        static TazerAllocator * addAdaptiveForceWithOldestAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache) {
+            AdaptiveForceWithOldestAllocator * ret = (AdaptiveForceWithOldestAllocator*) addAllocator<AdaptiveForceWithOldestAllocator>(std::string("AdaptiveForceWithOldestAllocator"), blockSize, maxSize);
+            ret->setCache(cache);
+            return ret;
+        }
+};
+
 #endif // STEALINGALLOCATOR_H

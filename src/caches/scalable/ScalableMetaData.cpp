@@ -79,42 +79,50 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define DPRINTF(...)
-#define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+// #define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 //#define PRINTF(...)
+#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
-    bool toReserve = true;
     auto blockEntry = &blocks[blockIndex];
     uint64_t timeStamp = trackAccess(blockIndex, fileOffset);
     //JS: This is for the first call from readBlock, which sets the read lock until blockset
     if(track) {
         auto old = blockEntry->blkLock.readerLock();
+        //JS: This means it is the first but we still need to see if the data is there
+        reserve = old == 0;
         blockEntry->timeStamp.store(timeStamp);
     }
 
     //JS: Look to see if the data is avail, notice this is after a reader lock
     uint8_t * ret = blockEntry->data.load();
-    if(ret)
-        toReserve = false;
+    //JS: We &= because we only want to reserve if we are the first and its empty
+    reserve &= (!ret);
     if(track) 
-        updateStats(toReserve, timeStamp);
-    reserve = toReserve;
+        updateStats(reserve, timeStamp);
     return ret;
 }
 
 void ScalableMetaData::setBlock(uint64_t blockIndex, uint8_t * data) {
+    if(!data)
+        PPRINTF("HERE IS THE BAD SET: %p\n", data);
     auto blockEntry = &blocks[blockIndex];
 
     //JS: Inc our total number of blocks
     numBlocks.fetch_add(1);
     blockEntry->data.store(data);
 
-    //JS: Dec our usage. It was inc'ed in getBlock
-    auto temp = blockEntry->blkLock.readerUnlock();
-    DPRINTF("ScalableMetaData::setBlock unlock: %lu\n", temp);
-
     metaLock.writerLock();
+    for(auto it = currentBlocks.begin(); it != currentBlocks.end(); it++) {
+        auto bi = (*it)->blockIndex;
+        if(bi == blockIndex) {
+            PPRINTF("DUPLICATE PROBLEM %lu %lu size: %u\n", bi, blockIndex, currentBlocks.size());
+        }
+    }
     currentBlocks.push_back(blockEntry);
     metaLock.writerUnlock();
+
+    //JS: Dec our usage. It was inc'ed in getBlock
+    blockEntry->blkLock.readerUnlock();
 }
 
 void ScalableMetaData::decBlockUsage(uint64_t blockIndex) {
@@ -249,12 +257,26 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex) {
             DPRINTF("block: %lu timestamp: %lu\n", blockIndex, (*it)->timeStamp.load());
             //JS: Take its memory!!!
             ret = (*it)->data;
+            if(!ret) {
+                PPRINTF("THIS IS BAD: %p %lu\n", ret, blockIndex);
+            }
+            else {
+                PPRINTF("TAKING: %p %lu size: %u\n", ret, blockIndex, currentBlocks.size());
+            }
             (*it)->data.store(NULL);
             (*it)->blkLock.writerUnlock();
             numBlocks.fetch_sub(1);
             //JS: And remove its existence...
             currentBlocks.erase(it);
             break;
+        }
+    }
+
+    for(auto it = currentBlocks.begin(); it != currentBlocks.end(); it++) {
+        auto temp = (*it)->data.load();
+        auto bi = (*it)->blockIndex;
+        if(temp == NULL) {
+            PPRINTF("CAN WE SEE IT HERE: %p %lu size: %u\n", temp, bi, currentBlocks.size());
         }
     }
 
@@ -279,7 +301,7 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 costHistogram.addData(i, (lastDeliveryTime / (double) accessPerInterval) );
             }
             else{
-                PRINTF("BM: We have a second miss but no deliverytime yet! \n");
+                PPRINTF("BM: We have a second miss but no deliverytime yet! \n");
             }
             accessPerInterval = 0;
             recalc = true;
@@ -304,7 +326,7 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks.load());
         DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
         if(isnan(unitMarginalBenefit)){
-            PRINTF("* nan! i: %f, misses: %d, ch: %lf Mp: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Mp , marginalBenefit, unitMarginalBenefit,numBlocks.load());
+            PPRINTF("* nan! i: %f, misses: %d, ch: %lf Mp: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Mp , marginalBenefit, unitMarginalBenefit,numBlocks.load());
         }
         recalc = false;
     }

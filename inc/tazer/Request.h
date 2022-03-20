@@ -136,6 +136,7 @@ struct Request {
     bool ready;
     bool printTrace;
     bool globalTrigger;
+    bool skipWrite;
     CacheType waitingCache;
     std::unordered_map<Cache *, uint64_t> indexMap;
     std::unordered_map<Cache *, uint64_t> blkIndexMap;
@@ -145,11 +146,11 @@ struct Request {
     std::thread::id threadId;
     std::stringstream ss;
 
-
-    Request() : data(NULL),originating(NULL),blkIndex(0),fileIndex(0), offset(0), size(0), deliveryTime(0), globalTrigger(false), threadId(std::this_thread::get_id()){ }
+    Request() : data(NULL),originating(NULL),blkIndex(0),fileIndex(0), offset(0), size(0), deliveryTime(0), globalTrigger(false), skipWrite(false), threadId(std::this_thread::get_id()){ }
     Request(uint32_t blk, uint32_t fileIndex, uint64_t size, uint64_t offset, Cache *orig, uint8_t *data) : data(data), originating(orig), blkIndex(blk), fileIndex(fileIndex), 
                                                                                            offset(offset), size(size), time(Timer::getCurrentTime()), retryTime(0), deliveryTime(0), ready(false), 
-                                                                                           printTrace(false),globalTrigger(false), waitingCache(CacheType::empty),id(Request::ID_CNT.fetch_add(1)), threadId(std::this_thread::get_id()) {
+                                                                                           printTrace(false), globalTrigger(false), skipWrite(false),
+                                                                                           waitingCache(CacheType::empty),id(Request::ID_CNT.fetch_add(1)), threadId(std::this_thread::get_id()) {
 
     }
     ~Request();

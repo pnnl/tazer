@@ -79,7 +79,7 @@
 #include <string.h>
 
 #define DPRINTF(...)
-// #define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 void StealingAllocator::setCache(ScalableCache * cache) {
     scalableCache = cache;
@@ -95,13 +95,13 @@ uint8_t * StealingAllocator::allocateBlock(uint32_t allocateForFileIndex, bool m
     //JS: For trackBlock
     uint64_t sourceBlockIndex;
     uint32_t sourceFileIndex;
-
     //JS: Can we allocate new blocks
     if(_availBlocks.fetch_sub(1)) {
-        DPRINTF("[JS] StealingAllocator::allocateBlock new block\n");
+        DPRINTF("[JS] StealingAllocator::allocateBlock new block %u\n", allocateForFileIndex);
         return new uint8_t[_blockSize];
     }
     _availBlocks.fetch_add(1);
+    DPRINTF("[JS] StealingAllocator::allocateBlock MUST STEAL %lu\n", _availBlocks.load());
 
     //JS: Try to take from closed files first
     uint8_t * ret = NULL;

@@ -103,6 +103,11 @@ class ScalableCache : public Cache {
     ScalableMetaData * randomFile(uint32_t &sourceFileIndex);
     ScalableMetaData * largestFile(uint32_t &largestFileIndex);
     
+    //JS: These hueristics are built mainly for scalable cache fallback use.  They walk through all files/blocks
+    //looking for blocks.
+    uint8_t * findBlockFromCachedUMB(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex);
+    uint8_t * findBlockFromOldestFile(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex);
+
     //JS: For tracking
     void trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex);
     void trackPattern(uint32_t fileIndex, std::string pattern);
@@ -117,6 +122,7 @@ class ScalableCache : public Cache {
     ReaderWriterLock *_cacheLock;
     std::unordered_map<uint32_t, ScalableMetaData*> _metaMap;
     uint64_t _blockSize;
+    uint64_t _numBlocks;
     TazerAllocator * _allocator;
     
     //JS: This is just temp for checking which files had blocks evicted
@@ -127,12 +133,17 @@ class ScalableCache : public Cache {
     std::atomic<uint64_t> misses;
     uint64_t startTimeStamp;
 
+    //JS: This is to make sure there will exist a block that is not requested
+    std::atomic<uint64_t> oustandingBlocksRequested;
+    std::atomic<uint64_t> maxOutstandingBlocks;
+    std::atomic<uint64_t> maxBlocksInUse;
 
 
   private:
     uint8_t * getBlockData(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset);
-    uint8_t * getBlockDataOrReserve(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset, bool &reserve);
-    void setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * data, uint64_t dataSize);
+    uint8_t * getBlockDataOrReserve(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool &full);
+    void setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * data, uint64_t dataSize, bool writeOptional);
+    void checkMaxBlockInUse(std::string msg, bool die);
 
     //JS: Metric piggybacking
     ReaderWriterLock * _lastVictimFileIndexLock;

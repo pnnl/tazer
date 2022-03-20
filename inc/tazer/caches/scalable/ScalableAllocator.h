@@ -78,7 +78,7 @@
 #include <vector>
 #include <atomic>
 
-#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+// #define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 class TazerAllocator : public Trackable<std::string, TazerAllocator *>
 {
@@ -140,7 +140,7 @@ class FirstTouchAllocator : public TazerAllocator
             TazerAllocator(blockSize, maxSize),
             _numBlocks(0),
             _maxBlocks(maxSize / blockSize) { 
-                PPRINTF("NUMBER OF BLOCKS: %lu\n", _maxBlocks);
+                // PPRINTF("NUMBER OF BLOCKS: %lu\n", _maxBlocks);
             }
 
         uint8_t * allocateBlock(uint32_t allocateForFileIndex, bool must = false) {
