@@ -144,6 +144,7 @@ class ScalableCache : public Cache {
     uint8_t * getBlockDataOrReserve(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool &full);
     void setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * data, uint64_t dataSize, bool writeOptional);
     void checkMaxBlockInUse(std::string msg, bool die);
+    void checkMaxInFlightRequests(uint64_t index);
 
     //JS: Metric piggybacking
     ReaderWriterLock * _lastVictimFileIndexLock;

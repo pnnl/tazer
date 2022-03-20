@@ -77,11 +77,12 @@
 #include <cmath>
 #include <cfloat>
 
-//#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define DPRINTF(...)
-// #define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+
 //#define PRINTF(...)
 #define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
     auto blockEntry = &blocks[blockIndex];
     uint64_t timeStamp = trackAccess(blockIndex, fileOffset);
@@ -95,7 +96,7 @@ uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffse
 
     //JS: Look to see if the data is avail, notice this is after a reader lock
     uint8_t * ret = blockEntry->data.load();
-    //JS: We &= because we only want to reserve if we are the first and its empty
+    //JS: We &= because we only want to reserve if we are the first and the data is empty
     reserve &= (!ret);
     if(track) 
         updateStats(reserve, timeStamp);
@@ -103,8 +104,6 @@ uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffse
 }
 
 void ScalableMetaData::setBlock(uint64_t blockIndex, uint8_t * data) {
-    if(!data)
-        PPRINTF("HERE IS THE BAD SET: %p\n", data);
     auto blockEntry = &blocks[blockIndex];
 
     //JS: Inc our total number of blocks
@@ -112,12 +111,6 @@ void ScalableMetaData::setBlock(uint64_t blockIndex, uint8_t * data) {
     blockEntry->data.store(data);
 
     metaLock.writerLock();
-    for(auto it = currentBlocks.begin(); it != currentBlocks.end(); it++) {
-        auto bi = (*it)->blockIndex;
-        if(bi == blockIndex) {
-            PPRINTF("DUPLICATE PROBLEM %lu %lu size: %u\n", bi, blockIndex, currentBlocks.size());
-        }
-    }
     currentBlocks.push_back(blockEntry);
     metaLock.writerUnlock();
 
@@ -257,26 +250,12 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex) {
             DPRINTF("block: %lu timestamp: %lu\n", blockIndex, (*it)->timeStamp.load());
             //JS: Take its memory!!!
             ret = (*it)->data;
-            if(!ret) {
-                PPRINTF("THIS IS BAD: %p %lu\n", ret, blockIndex);
-            }
-            else {
-                PPRINTF("TAKING: %p %lu size: %u\n", ret, blockIndex, currentBlocks.size());
-            }
             (*it)->data.store(NULL);
             (*it)->blkLock.writerUnlock();
             numBlocks.fetch_sub(1);
             //JS: And remove its existence...
             currentBlocks.erase(it);
             break;
-        }
-    }
-
-    for(auto it = currentBlocks.begin(); it != currentBlocks.end(); it++) {
-        auto temp = (*it)->data.load();
-        auto bi = (*it)->blockIndex;
-        if(temp == NULL) {
-            PPRINTF("CAN WE SEE IT HERE: %p %lu size: %u\n", temp, bi, currentBlocks.size());
         }
     }
 

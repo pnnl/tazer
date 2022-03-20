@@ -79,7 +79,7 @@
 #include <string.h>
 
 #define DPRINTF(...)
-#define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 void StealingAllocator::setCache(ScalableCache * cache) {
     scalableCache = cache;
@@ -134,7 +134,6 @@ void StealingAllocator::closeFile(ScalableMetaData * meta) {
         allocLock.writerUnlock();
     }
 }
-
 
 void StealingAllocator::openFile(ScalableMetaData * meta) {
     //remove from priority victims list if it's there

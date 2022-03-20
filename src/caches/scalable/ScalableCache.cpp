@@ -89,12 +89,13 @@
 #include <cmath>
 #include <cfloat>
 
-#define DPRINTF(...)
+#define DEADLOCK_SAFEGUARD 100
 
+#define DPRINTF(...)
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-// #define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+
 #define MeMPRINTF(...)
+// #define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -113,39 +114,39 @@ maxBlocksInUse(0) {
     _numBlocks = maxCacheSize / blockSize;
 
     if(Config::scalableCacheAllocator == 0) {
-        PPRINTF("[JS] AdaptiveAllocator::addAdaptiveAllocator\n");
+        DPRINTF("[JS] AdaptiveAllocator::addAdaptiveAllocator\n");
         _allocator = AdaptiveAllocator::addAdaptiveAllocator(blockSize, maxCacheSize, this);
     }
     else if(Config::scalableCacheAllocator == 1) {
-        PPRINTF("[JS] StealingAllocator::addStealingAllocator\n");
+        DPRINTF("[JS] StealingAllocator::addStealingAllocator\n");
         _allocator = StealingAllocator::addStealingAllocator(blockSize, maxCacheSize, this);
     }
     else if(Config::scalableCacheAllocator == 2) {
-        PPRINTF("[JS] StealingAllocator::addRandomStealingAllocator false\n");
+        DPRINTF("[JS] StealingAllocator::addRandomStealingAllocator false\n");
         _allocator = RandomStealingAllocator::addRandomStealingAllocator(blockSize, maxCacheSize, this, false);
     }
     else if(Config::scalableCacheAllocator == 3) {
-        PPRINTF("[JS] StealingAllocator::addRandomStealingAllocator true\n");
+        DPRINTF("[JS] StealingAllocator::addRandomStealingAllocator true\n");
         _allocator = RandomStealingAllocator::addRandomStealingAllocator(blockSize, maxCacheSize, this, true);
     }
     else if(Config::scalableCacheAllocator == 4) {
-        PPRINTF("[JS] StealingAllocator::addLargestStealingAllocator\n");
+        DPRINTF("[JS] StealingAllocator::addLargestStealingAllocator\n");
         _allocator = LargestStealingAllocator::addLargestStealingAllocator(blockSize, maxCacheSize, this);
     }
     else if(Config::scalableCacheAllocator == 5) {
-        PPRINTF("[JS] StealingAllocator::addFirstTouchAllocator\n");
+        DPRINTF("[JS] StealingAllocator::addFirstTouchAllocator\n");
         _allocator = FirstTouchAllocator::addFirstTouchAllocator(blockSize, maxCacheSize);
     }
     else if(Config::scalableCacheAllocator == 6){
-        PPRINTF("[JS] AdaptiveForceWithUMBAllocator::addAdaptiveForceWithUMBAllocator\n");
+        DPRINTF("[JS] AdaptiveForceWithUMBAllocator::addAdaptiveForceWithUMBAllocator\n");
         _allocator = AdaptiveForceWithUMBAllocator::addAdaptiveForceWithUMBAllocator(blockSize, maxCacheSize, this);
     }
     else if(Config::scalableCacheAllocator == 7){
-        PPRINTF("[JS] AdaptiveForceWithOldestAllocator::addAdaptiveForceWithOldestAllocator\n");
+        DPRINTF("[JS] AdaptiveForceWithOldestAllocator::addAdaptiveForceWithOldestAllocator\n");
         _allocator = AdaptiveForceWithOldestAllocator::addAdaptiveForceWithOldestAllocator(blockSize, maxCacheSize, this);
     }
     else {
-        PPRINTF("[JS] SimpleAllocator::addSimpleAllocator\n");
+        DPRINTF("[JS] SimpleAllocator::addSimpleAllocator\n");
         _allocator = SimpleAllocator::addSimpleAllocator(blockSize, maxCacheSize);
     }
 
@@ -181,7 +182,6 @@ void ScalableCache::addFile(uint32_t fileIndex, std::string filename, uint64_t b
         uint64_t hash = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
         _fileMap.emplace(fileIndex, FileEntry{filename, blockSize, fileSize, hash});
         _metaMap[fileIndex] = new ScalableMetaData(blockSize, fileSize);
-        DPRINTF("[JS] ScalableCache::addFile %s %u %p size: %u\n", filename.c_str(), fileIndex, _metaMap[fileIndex], _metaMap.size());
     }
     _allocator->openFile(_metaMap[fileIndex]);
     _cacheLock->writerUnlock();
@@ -192,41 +192,10 @@ void ScalableCache::addFile(uint32_t fileIndex, std::string filename, uint64_t b
 }
 
 void ScalableCache::closeFile(uint32_t fileIndex) {
-    DPRINTF("[JS] ScalableCache::closeFile start %u %u\n", fileIndex, _metaMap.size());
     MeMPRINTF("ScalableCache::closeFile %u\n", fileIndex);
     _cacheLock->readerLock();
     if(_metaMap.count(fileIndex))
         _allocator->closeFile(_metaMap[fileIndex]);
-    _cacheLock->readerUnlock();
-}
-
-void ScalableCache::checkMaxBlockInUse(std::string msg, bool die) {
-    _cacheLock->readerLock();
-
-    uint64_t sum = 0;
-    for (auto const &x : _metaMap) {
-        auto meta = x.second;
-        sum+=meta->getNumBlocks();
-    }
-
-    while(1) {
-        auto dirty = maxBlocksInUse.load();
-        if(sum < dirty) {
-            PPRINTF("LOST BLOCKS: %s %lu vs %lu\n", msg.c_str(), dirty, sum);
-            if(die)
-                raise(SIGSEGV);
-            break;
-        }
-        else if(dirty < sum) {
-            if(maxBlocksInUse.compare_exchange_weak(dirty, sum)) {
-                PPRINTF("NEW MAXBLOCKSINUSE: %lu\n", sum);
-                break;
-            }
-        }
-        else
-            break;
-    }
-
     _cacheLock->readerUnlock();
 }
 
@@ -241,22 +210,8 @@ uint8_t * ScalableCache::getBlockDataOrReserve(uint32_t fileIndex, uint64_t bloc
         //JS: This is a hit thus we don't care if it is full or not so we set it to false
         full = false;
     }
-    //JS: FOR TESTING...
-    full = false;
-    while(1) {
-        auto dirty = maxOutstandingBlocks.load();
-        if(dirty < index) {
-            if(maxOutstandingBlocks.compare_exchange_weak(dirty, index+1)) {
-                PPRINTF("NEW OUTSTANDING MAX: %lu\n", index + 1);
-                break;
-            }
-        }
-        else
-            break;
-    }
-    
+    // checkMaxInFlightRequests(index);
     _cacheLock->readerUnlock();
-    DPRINTF("[JS] ScalableCache::getBlockDataOrReserve %u\n", reserve);
     return ret;
 }
 
@@ -278,23 +233,20 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
     auto meta = _metaMap[fileIndex];
     bool backout = false;
     uint8_t * dest = NULL;
-
-    //PPRINTF("calling check pattern, fileindex: %lu numblocks:%d\n",fileIndex, meta->getNumBlocks());
-    // auto doAlloc = meta->checkPattern(this, fileIndex);
     unsigned int count = 0;
-    while(!dest && !_terminating && count < 10) {
+    while(!dest && !_terminating && count < DEADLOCK_SAFEGUARD) {
+        
         //JS: Ask for a new block from allocator
         MeMPRINTF("ASKING FOR NEW BLOCK:%d:%d:%lu\n", fileIndex, meta->getNumBlocks(),Timer::getCurrentTime());
         dest = _allocator->allocateBlock(fileIndex, (meta->getNumBlocks() == 0));
-        checkMaxBlockInUse(std::string("ALLOC"), false);
 
         //JS: Try to reuse my oldest block
         if(!dest) {
-            DPRINTF("[JS] ScalableCache::setBlock Reusing block\n");
             dest = meta->oldestBlock(sourceBlockIndex);
-            if(dest)
+            if(dest) {
+                DPRINTF("[JS] ScalableCache::setBlock Reusing block\n");
                 trackBlockEviction(fileIndex, sourceBlockIndex);
-            checkMaxBlockInUse(std::string("LRU"), false);
+            }
         }
 
         //JS: Try to backout
@@ -302,7 +254,6 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
             DPRINTF("[JS] ScalableCache::setBlock Backing out\n");
             stats.addAmt(false, CacheStats::Metric::backout, 1);
             backout = true;
-            checkMaxBlockInUse(std::string("BACKOUT"), false);
             break;
         }
 
@@ -313,11 +264,8 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
                 break;
             }
             else {
-                //JS: Someone should have a free block.
-                //We will search all files looking for it!
-                PPRINTF("LOOKING %lu ---- \n", fileIndex);
+                //JS: Someone should have a free block. We will search all files looking for it!
                 dest = findBlockFromOldestFile(fileIndex, sourceFileIndex, sourceBlockIndex);
-                checkMaxBlockInUse(std::string("LAST RESORT"), false);
                 if(dest) {
                     trackBlockEviction(sourceFileIndex, sourceBlockIndex);
                     break;
@@ -326,33 +274,28 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
         }
         count++;
     }
+
     if(dest) {
-        DPRINTF("[JS] ScalableCache::setBlock got dest\n");
         //JS: Copy the block back to our cache
         memcpy(dest, data, dataSize);
         meta->setBlock(blockIndex, dest);
-        if(!writeOptional) {
-            auto temp = oustandingBlocksRequested.fetch_sub(1);
-            DPRINTF("DEC OUTSTANDING: %lu\n", temp);
-        }
+        if(!writeOptional)
+            oustandingBlocksRequested.fetch_sub(1);
         trackBlock(_name, "[BLOCK_WRITE]", fileIndex, blockIndex, 0);
-        checkMaxBlockInUse(std::string("SHOULD BE OK HERE"), true);
     }
     else if(writeOptional){
+        //JS: We still locked the block even though there was no data there
+        //which is why we are dec in the overlyfull situation
         meta->decBlockUsage(blockIndex);
-        PPRINTF("[Tazer] FULL CONDITION MET!\n");
-        checkMaxBlockInUse(std::string("SHOULD BE OK HERE"), true);
     }
     else if(backout) {
         if(!writeOptional) {
-            auto temp = oustandingBlocksRequested.fetch_sub(1);
-            DPRINTF("DEC OUTSTANDING BACKOUT: %lu\n", temp);
+            oustandingBlocksRequested.fetch_sub(1);
         }
-        checkMaxBlockInUse(std::string("SHOULD BE OK HERE"), true);
     }
     else {
         if (!_terminating) {
-            PPRINTF("[Tazer] Allocation failed, potential race condition!\n");
+            DPRINTF("[Tazer] Allocation failed, potential race condition! Total: %lu Outstanding: %lu\n", _numBlocks, oustandingBlocksRequested.load());
             raise(SIGSEGV);
         }
         else {
@@ -360,7 +303,6 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
             raise(SIGSEGV);
         }
     }
-    checkMaxBlockInUse(std::string("END FN"), true);
     _cacheLock->readerUnlock();
 }
 
@@ -538,7 +480,6 @@ ScalableMetaData * ScalableCache::oldestFile(uint32_t &oldestFileIndex) {
 
 ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, bool mustSucceed) {
     _cacheLock->readerLock();
-    DPRINTF("---------- %u of %u ----------\n", allocateForFileIndex, _metaMap.size());
     MeMPRINTF("---------- %u of %u ----------\n", allocateForFileIndex, _metaMap.size());
     
     //JS: Making a local copy of UMBList
@@ -562,7 +503,6 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
             auto temp = meta->calcRank(timestamp-startTimeStamp, localMisses);
             //JS: This is for recording the unit marginal benifit and making it available to other caches
             UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,temp));
-            DPRINTF("-------Index: %u %lf\n", fileIndex, temp);
             MeMPRINTF("-------Index: %u %lf\n", fileIndex, temp);
             if(!std::isnan(temp) && temp > 0 && temp < minRank) {
                 minRank = temp;
@@ -572,7 +512,6 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
         }
         else if (allocateForFileIndex == fileIndex){
             sourceFileRank = meta->calcRank(timestamp-startTimeStamp, localMisses);
-            DPRINTF("-------Source Index: %u %lf\n", fileIndex, sourceFileRank);
             MeMPRINTF("-------Source Index: %u %lf\n", fileIndex, sourceFileRank);
         }
         else{
@@ -587,7 +526,6 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
         if(mustSucceed || std::isnan(sourceFileRank) || sourceFileRank > minRank) {
             ret = _metaMap[minFileIndex];
             //JS: Do update rank here
-            DPRINTF("**************SOURCE: %u DEST: %u\n", minFileIndex, allocateForFileIndex);
             MeMPRINTF("-----------SOURCE: %u DEST: %u\n", minFileIndex, allocateForFileIndex);
             _metaMap[minFileIndex]->updateRank(true);
             _metaMap[allocateForFileIndex]->updateRank(false);
@@ -611,74 +549,6 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     _lastVictimFileIndexLock->writerUnlock();
     _cacheLock->readerUnlock();
     return ret;
-}
-
-//JS: This will basically search through every block starting from the lowest UMB.
-//Here we use the cached UMB since this will be called by the adaptive allocator
-//who just ran the findVictim.  This will succeed as long as there exists a block
-//that is free to steal!
-uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex) {
-    uint8_t * block = NULL;
-    _cacheLock->readerLock();
-    _lastVictimFileIndexLock->readerLock();
-    for(const auto &UMB : _UMBList) {
-        uint32_t index = std::get<0>(UMB);
-        block = _metaMap[index]->oldestBlock(sourceBlockIndex);
-        if(block) {
-            if(index != allocateForFileIndex) {
-                _metaMap[index]->updateRank(true);
-                _metaMap[allocateForFileIndex]->updateRank(false);
-                sourceFileIndex = index;
-            }
-            break;
-        }     
-    }
-    _lastVictimFileIndexLock->readerUnlock();
-    _cacheLock->readerUnlock();
-    PPRINTF("[JS] findBlockFromCachedUMB %p outstanding: %lu\n", block, oustandingBlocksRequested.load());
-    return block;
-}
-
-//JS: This will basically search through every block starting from the oldest file.
-//Here we use the cached UMB since this will be called by the adaptive allocator
-//who just ran the findVictim.  This will succeed as long as there exists a block
-//that is free to steal!
-uint8_t * ScalableCache::findBlockFromOldestFile(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex) {
-    std::vector<std::tuple<uint32_t, uint64_t>> fileList;
-    
-    //JS: Build list of file index and access times
-    _cacheLock->readerLock();
-    for (auto const &x : _metaMap) {
-        auto fileIndex = x.first;
-        auto meta = x.second;
-        uint64_t temp = meta->getLastTimeStamp();
-        fileList.push_back(std::tuple<uint32_t, uint64_t>(fileIndex, temp));
-    }
-
-    //JS: Sort list
-    sort(fileList.begin(), fileList.end(), 
-        [](std::tuple<uint32_t, uint64_t> &lhs, std::tuple<uint32_t, uint64_t> &rhs) -> bool {
-                return (std::get<1>(lhs) < std::get<1>(rhs));
-        });
-
-    //JS: Look until we find a block
-    uint8_t * block = NULL;
-    for(const auto &entry : fileList) {
-        uint32_t index = std::get<0>(entry);
-        PPRINTF("Checking file index: %u numBlocks: %lu\n", index, _metaMap[index]->getNumBlocks());
-        block = _metaMap[index]->oldestBlock(sourceBlockIndex);
-        if(block) {
-            if(index != allocateForFileIndex) {
-                _metaMap[index]->updateRank(true);
-                _metaMap[allocateForFileIndex]->updateRank(false);
-                sourceFileIndex = index;
-            }
-            break;
-        }     
-    }
-    _cacheLock->readerUnlock();
-    PPRINTF("[JS] findBlockFromOldestFile %p\n", block);
-    return block;
 }
 
 ScalableMetaData * ScalableCache::randomFile(uint32_t &sourceFileIndex) {
@@ -714,6 +584,72 @@ ScalableMetaData * ScalableCache::largestFile(uint32_t &largestFileIndex) {
     return ret;
 }
 
+//JS: This will basically search through every block starting from the oldest file. 
+//This will succeed as long as there exists a block that is free to steal!
+uint8_t * ScalableCache::findBlockFromOldestFile(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex) {
+    std::vector<std::tuple<uint32_t, uint64_t>> fileList;
+    
+    //JS: Build list of file index and access times
+    _cacheLock->readerLock();
+    for (auto const &x : _metaMap) {
+        auto fileIndex = x.first;
+        auto meta = x.second;
+        uint64_t temp = meta->getLastTimeStamp();
+        fileList.push_back(std::tuple<uint32_t, uint64_t>(fileIndex, temp));
+    }
+
+    //JS: Sort list
+    sort(fileList.begin(), fileList.end(), 
+        [](std::tuple<uint32_t, uint64_t> &lhs, std::tuple<uint32_t, uint64_t> &rhs) -> bool {
+                return (std::get<1>(lhs) < std::get<1>(rhs));
+        });
+
+    //JS: Look until we find a block
+    uint8_t * block = NULL;
+    for(const auto &entry : fileList) {
+        uint32_t index = std::get<0>(entry);
+        DPRINTF("Checking file index: %u numBlocks: %lu\n", index, _metaMap[index]->getNumBlocks());
+        block = _metaMap[index]->oldestBlock(sourceBlockIndex);
+        if(block) {
+            if(index != allocateForFileIndex) {
+                _metaMap[index]->updateRank(true);
+                _metaMap[allocateForFileIndex]->updateRank(false);
+                sourceFileIndex = index;
+            }
+            break;
+        }     
+    }
+    _cacheLock->readerUnlock();
+    DPRINTF("[JS] findBlockFromOldestFile %p\n", block);
+    return block;
+}
+
+/*JS: This will basically search through every block starting from the lowest UMB.
+  Here we use the cached UMB since this will be called by the adaptive allocator
+  who just ran the findVictim.  This will succeed as long as there exists a block
+  that is free to steal!*/
+uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex) {
+    uint8_t * block = NULL;
+    _cacheLock->readerLock();
+    _lastVictimFileIndexLock->readerLock();
+    for(const auto &UMB : _UMBList) {
+        uint32_t index = std::get<0>(UMB);
+        block = _metaMap[index]->oldestBlock(sourceBlockIndex);
+        if(block) {
+            if(index != allocateForFileIndex) {
+                _metaMap[index]->updateRank(true);
+                _metaMap[allocateForFileIndex]->updateRank(false);
+                sourceFileIndex = index;
+            }
+            break;
+        }     
+    }
+    _lastVictimFileIndexLock->readerUnlock();
+    _cacheLock->readerUnlock();
+    DPRINTF("[JS] findBlockFromCachedUMB %p outstanding: %lu\n", block, oustandingBlocksRequested.load());
+    return block;
+}
+
 //JS: Wrote this function for allocator to track an eviction (trackBlock is private)
 void ScalableCache::trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex) {
     stats.addAmt(false, CacheStats::Metric::evictions, 1);
@@ -745,3 +681,51 @@ void ScalableCache::setUMBCache(Cache * cache) {
     _lastVictimFileIndexLock->writerUnlock();
 }
 
+//JS: This is helper function used in debugging.
+//Super helpful looking for lost blocks!!!
+void ScalableCache::checkMaxBlockInUse(std::string msg, bool die) {
+    _cacheLock->readerLock();
+
+    uint64_t sum = 0;
+    for (auto const &x : _metaMap) {
+        auto meta = x.second;
+        sum+=meta->getNumBlocks();
+    }
+
+    while(1) {
+        auto dirty = maxBlocksInUse.load();
+        if(sum < dirty) {
+            DPRINTF("LOST BLOCKS: %s %lu vs %lu\n", msg.c_str(), dirty, sum);
+            if(die)
+                raise(SIGSEGV);
+            break;
+        }
+        else if(dirty < sum) {
+            if(maxBlocksInUse.compare_exchange_weak(dirty, sum)) {
+                DPRINTF("NEW MAXBLOCKSINUSE: %lu\n", sum);
+                break;
+            }
+        }
+        else
+            break;
+    }
+
+    _cacheLock->readerUnlock();
+}
+
+//JS: This is useful for printing when we have a new max inflight requests!
+void ScalableCache::checkMaxInFlightRequests(uint64_t index) {
+    _cacheLock->readerLock();
+    while(1) {
+        auto dirty = maxOutstandingBlocks.load();
+        if(dirty < index) {
+            if(maxOutstandingBlocks.compare_exchange_weak(dirty, index+1)) {
+                DPRINTF("NEW OUTSTANDING MAX: %lu\n", index + 1);
+                break;
+            }
+        }
+        else
+            break;
+    }
+    _cacheLock->readerUnlock();
+}
