@@ -95,7 +95,7 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 #define MeMPRINTF(...)
-// #define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -499,7 +499,7 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     for (auto const &x : _metaMap) {
         auto fileIndex = x.first;
         auto meta = x.second;
-        if(allocateForFileIndex != fileIndex and meta->getNumBlocks()) {
+        if(allocateForFileIndex != fileIndex and meta->getNumBlocks()>1) {
             auto temp = meta->calcRank(timestamp-startTimeStamp, localMisses);
             //JS: This is for recording the unit marginal benifit and making it available to other caches
             UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,temp));
@@ -523,7 +523,7 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     ScalableMetaData * ret = NULL;
     sourceFileIndex = (uint32_t) -1;
     if(minFileIndex != (uint32_t) -1) {
-        if(mustSucceed || std::isnan(sourceFileRank) || sourceFileRank > minRank) {
+        if(mustSucceed || std::isnan(sourceFileRank) || sourceFileRank*0.95 > minRank) {
             ret = _metaMap[minFileIndex];
             //JS: Do update rank here
             MeMPRINTF("-----------SOURCE: %u DEST: %u\n", minFileIndex, allocateForFileIndex);

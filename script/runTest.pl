@@ -14,7 +14,7 @@ my $dontRun = defined $options{d} ? 1 : 0;
 my $allocator = defined $options{a} ? $options{a} : -1;
 my $maxDigit = 10;
 
-my $path = "/people/suet688/ippd_2021/build";
+my $path = "/people/mutl832/tazer-merged/build";
 my $serverPath = $path . "/src/server/server";
 my $libPath = $path . "/src/client/libclient.so";
 my $closeServerPath = $path . "/test/CloseServer";
@@ -83,15 +83,18 @@ if($#nodes >= 1)
     
     foreach my $file (@clientFiles) {
         if($file =~ /meta/) {
+            my $newText = "";
             open  my $fh, "<", $file or die "Could not open $file: $!";
-            my $text = <$fh>;
-            close $fh;
 
-            my @parts = split(':', $text);
-            $parts[0] = $serverIp;
-            $parts[1] = $port;
-            my $newText = join(':', @parts);
-            print "$newText\n";
+            while ( my $line = <$fh> ) {
+                if (index( $line, 'host' ) > -1 ){
+                    $newText .= "host=$serverIp\n";
+                }
+                else {
+                    $newText .= $line; 
+                }
+            }   
+            close $fh;
 
             open(my $fh2, '>', $file) or die "Could not open file '$file' $!";
             print $fh2 "$newText";

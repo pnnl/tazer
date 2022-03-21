@@ -3,8 +3,13 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 
+if(len(sys.argv) < 3):
+    print("Usage: PlotPartitionChange.py [input name] [output figure name]\n")
+    sys.exit()
 
-filename1 = "trace.txt"
+input_trace = sys.argv[1]
+output_figure = sys.argv[2]
+filename1 = input_trace
 # ASKING FOR NEW BLOCK:2:6:1646955999292158343
 # PARTITION INFO:2:6:1646955999292988646
 # MARGINALBENEFIT:2:0.00000000000000000000:1646955999292988646
@@ -65,7 +70,6 @@ for key in blockReqTimes.keys():
 
 
 print(len(partitionTimes))
-print(len(partitions['1']))
 
 plt.figure(figsize=(27,8))
 colorDict = {}
@@ -94,6 +98,6 @@ plt.legend(loc="upper right")
 # ax1.legend(h1+h2, l1+l2, loc=2)
 # plt.show()
 
-plt.savefig('PartitionPlot.png')
+plt.savefig(output_figure)
 
 
