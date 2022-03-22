@@ -99,7 +99,10 @@ class StealingAllocator : public TazerAllocator
 
     public:
         StealingAllocator(uint64_t blockSize, uint64_t maxSize):
-            TazerAllocator(blockSize, maxSize) { }
+            TazerAllocator(blockSize, maxSize, true) { }
+        
+        StealingAllocator(uint64_t blockSize, uint64_t maxSize, bool canFail):
+            TazerAllocator(blockSize, maxSize, canFail) { }
 
         uint8_t * allocateBlock(uint32_t allocateForFileIndex, bool must);
         virtual void closeFile(ScalableMetaData * meta);
@@ -127,7 +130,7 @@ class RandomStealingAllocator : public StealingAllocator
 
     public:
         RandomStealingAllocator(uint64_t blockSize, uint64_t maxSize):
-            StealingAllocator(blockSize, maxSize) { }
+            StealingAllocator(blockSize, maxSize, true) { }
 
         void setRandomBlock(bool randomBlock) {
             _randomBlock = randomBlock;
@@ -154,7 +157,7 @@ class LargestStealingAllocator : public StealingAllocator
 
     public:
         LargestStealingAllocator(uint64_t blockSize, uint64_t maxSize):
-            StealingAllocator(blockSize, maxSize) { }
+            StealingAllocator(blockSize, maxSize, true) { }
 
         static TazerAllocator * addLargestStealingAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache) {
             LargestStealingAllocator * ret = (LargestStealingAllocator*) addAllocator<LargestStealingAllocator>(std::string("LargestStealingAllocator"), blockSize, maxSize);
@@ -176,7 +179,7 @@ class AdaptiveAllocator : public StealingAllocator
 
     public:
         AdaptiveAllocator(uint64_t blockSize, uint64_t maxSize):
-            StealingAllocator(blockSize, maxSize) { }
+            StealingAllocator(blockSize, maxSize, true) { }
 
         static TazerAllocator * addAdaptiveAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache) {
             AdaptiveAllocator * ret = (AdaptiveAllocator*) addAllocator<AdaptiveAllocator>(std::string("AdaptiveAllocator"), blockSize, maxSize);
@@ -195,12 +198,11 @@ class AdaptiveForceWithUMBAllocator : public StealingAllocator
                 return meta->oldestBlock(sourceBlockIndex);
             else
                 return scalableCache->findBlockFromCachedUMB(allocateForFileIndex, sourceFileIndex, sourceBlockIndex);
-            return NULL;
         }
 
     public:
         AdaptiveForceWithUMBAllocator(uint64_t blockSize, uint64_t maxSize):
-            StealingAllocator(blockSize, maxSize) { }
+            StealingAllocator(blockSize, maxSize, false) { }
 
         static TazerAllocator * addAdaptiveForceWithUMBAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache) {
             AdaptiveForceWithUMBAllocator * ret = (AdaptiveForceWithUMBAllocator*) addAllocator<AdaptiveForceWithUMBAllocator>(std::string("AdaptiveForceWithUMBAllocator"), blockSize, maxSize);
@@ -219,12 +221,11 @@ class AdaptiveForceWithOldestAllocator : public StealingAllocator
                 return meta->oldestBlock(sourceBlockIndex);
             else
                 return scalableCache->findBlockFromOldestFile(allocateForFileIndex, sourceFileIndex, sourceBlockIndex);
-            return NULL;
         }
 
     public:
         AdaptiveForceWithOldestAllocator(uint64_t blockSize, uint64_t maxSize):
-            StealingAllocator(blockSize, maxSize) { }
+            StealingAllocator(blockSize, maxSize, false) { }
 
         static TazerAllocator * addAdaptiveForceWithOldestAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache) {
             AdaptiveForceWithOldestAllocator * ret = (AdaptiveForceWithOldestAllocator*) addAllocator<AdaptiveForceWithOldestAllocator>(std::string("AdaptiveForceWithOldestAllocator"), blockSize, maxSize);

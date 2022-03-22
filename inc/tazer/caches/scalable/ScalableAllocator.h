@@ -83,12 +83,15 @@
 class TazerAllocator : public Trackable<std::string, TazerAllocator *>
 {
     protected:
+        //JS: This hook will turn on and off code path to perform LRU across all blocks in ScalableCache::set_block
+        const bool _canFail;
         uint64_t _blockSize;
         uint64_t _maxSize;
 
         std::atomic<uint64_t> _availBlocks;
     
-        TazerAllocator(uint64_t blockSize, uint64_t maxSize):
+        TazerAllocator(uint64_t blockSize, uint64_t maxSize, bool canFail):
+            _canFail(canFail),
             _blockSize(blockSize),
             _maxSize(maxSize),
             _availBlocks(maxSize/blockSize) { }
@@ -110,6 +113,7 @@ class TazerAllocator : public Trackable<std::string, TazerAllocator *>
         virtual uint8_t * allocateBlock(uint32_t allocateForFileIndex, bool must = false) = 0;
         virtual void closeFile(ScalableMetaData * meta) { }
         virtual void openFile(ScalableMetaData * meta) { }
+        bool canReturnEmpty() { return _canFail; }
 };
 
 //JS: This is an example of the simplest allocator I can think of
@@ -117,7 +121,7 @@ class SimpleAllocator : public TazerAllocator
 {
     public:
         SimpleAllocator(uint64_t blockSize, uint64_t maxSize):
-            TazerAllocator(blockSize, maxSize) { }
+            TazerAllocator(blockSize, maxSize, false) { }
 
         uint8_t * allocateBlock(uint32_t allocateForFileIndex, bool must = false) {
             return new uint8_t[_blockSize];
@@ -128,7 +132,7 @@ class SimpleAllocator : public TazerAllocator
         }
 };
 
-//JS: This is an example of the simplest allocator I can think of
+//JS: This is an allocator that can run out of space
 class FirstTouchAllocator : public TazerAllocator
 {
     private:
@@ -137,7 +141,8 @@ class FirstTouchAllocator : public TazerAllocator
     
     public:
         FirstTouchAllocator(uint64_t blockSize, uint64_t maxSize):
-            TazerAllocator(blockSize, maxSize),
+            //JS: Notice we are setting the canFail to true!
+            TazerAllocator(blockSize, maxSize, true),
             _numBlocks(0),
             _maxBlocks(maxSize / blockSize) { 
                 // PPRINTF("NUMBER OF BLOCKS: %lu\n", _maxBlocks);

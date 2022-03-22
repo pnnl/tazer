@@ -92,7 +92,7 @@
 #define DEADLOCK_SAFEGUARD 100
 
 #define DPRINTF(...)
-//#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 #define MeMPRINTF(...)
 //#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
@@ -114,8 +114,8 @@ maxBlocksInUse(0) {
     _numBlocks = maxCacheSize / blockSize;
 
     if(Config::scalableCacheAllocator == 0) {
-        DPRINTF("[JS] AdaptiveAllocator::addAdaptiveAllocator\n");
-        _allocator = AdaptiveAllocator::addAdaptiveAllocator(blockSize, maxCacheSize, this);
+        DPRINTF("[JS] AdaptiveForceWithUMBAllocator::addAdaptiveForceWithUMBAllocator\n");
+        _allocator = AdaptiveForceWithUMBAllocator::addAdaptiveForceWithUMBAllocator(blockSize, maxCacheSize, this);
     }
     else if(Config::scalableCacheAllocator == 1) {
         DPRINTF("[JS] StealingAllocator::addStealingAllocator\n");
@@ -138,8 +138,8 @@ maxBlocksInUse(0) {
         _allocator = FirstTouchAllocator::addFirstTouchAllocator(blockSize, maxCacheSize);
     }
     else if(Config::scalableCacheAllocator == 6){
-        DPRINTF("[JS] AdaptiveForceWithUMBAllocator::addAdaptiveForceWithUMBAllocator\n");
-        _allocator = AdaptiveForceWithUMBAllocator::addAdaptiveForceWithUMBAllocator(blockSize, maxCacheSize, this);
+        DPRINTF("[JS] AdaptiveAllocator::addAdaptiveAllocator\n");
+        _allocator = AdaptiveAllocator::addAdaptiveAllocator(blockSize, maxCacheSize, this);
     }
     else if(Config::scalableCacheAllocator == 7){
         DPRINTF("[JS] AdaptiveForceWithOldestAllocator::addAdaptiveForceWithOldestAllocator\n");
@@ -263,7 +263,8 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
             if(writeOptional) {
                 break;
             }
-            else {
+            //JS: This is a property of the allocators!
+            else if(_allocator->canReturnEmpty()) {
                 //JS: Someone should have a free block. We will search all files looking for it!
                 dest = findBlockFromOldestFile(fileIndex, sourceFileIndex, sourceBlockIndex);
                 if(dest) {

@@ -91,8 +91,8 @@
 #include <unistd.h>
 #include <math.h>
 
-#define DPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
-// #define DPRINTF(...)
+#define DPRINTF(...)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 #define SCALEABLE_METRIC_FILE_MAX 1000
 #define MAXCOUNT 100
