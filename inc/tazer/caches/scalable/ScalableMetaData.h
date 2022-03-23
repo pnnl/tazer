@@ -123,6 +123,7 @@ struct ScalableMetaData {
         Histogram fpGrowth;
         Histogram missInterval;
         Histogram costHistogram;
+        Histogram demandHistogram;
 
         std::deque<std::array<uint64_t, 3>> window;
         std::vector<BlockEntry*> currentBlocks;
@@ -143,7 +144,8 @@ struct ScalableMetaData {
             numBlocks(0),
             fpGrowth(100),
             missInterval(100),
-            costHistogram(100) {
+            costHistogram(100),
+            demandHistogram(100) {
                 blocks = new BlockEntry[totalBlocks];
                 for(unsigned int i=0; i<totalBlocks; i++) {
                     blocks[i].data.store(NULL);

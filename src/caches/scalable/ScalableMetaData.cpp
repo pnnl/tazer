@@ -272,12 +272,19 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     if(miss) {
         if(lastMissTimeStamp) {
             double i = (double)(timestamp - lastMissTimeStamp);
-            missInterval.addData(i, 1);
+            //missInterval.addData(i, 1);
 
             if(lastDeliveryTime > 0){ //check to make sure we recorded a deliverytime
                 //PRINTF("adding to cost histogram, i: %f,accessPerInterval:%d, lastDeliveryTime:%f, val: %.10f\n", i, accessPerInterval, lastDeliveryTime, ((double)accessPerInterval)/lastDeliveryTime);
                 //costHistogram.addData(i, ((double) accessPerInterval) / lastDeliveryTime);
-                costHistogram.addData(i, (lastDeliveryTime / (double) accessPerInterval) );
+
+//                costHistogram.addData(i, (lastDeliveryTime / (double) accessPerInterval) );
+
+
+                //maxcost is 2^30  (~1 second) 
+                double cost = (lastDeliveryTime < 1073741824 ? lastDeliveryTime : 1073741824);
+                demandHistogram.addData(i, cost/1073741824.0);
+                costHistogram.addData(i, (double) accessPerInterval);
             }
             else{
                 PPRINTF("BM: We have a second miss but no deliverytime yet! \n");
@@ -298,14 +305,24 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     DPRINTF("* Timestamp: %lu recalc: %u\n", time, recalc);
     if(lastMissTimeStamp && recalc) {
         double i = ((double) time) / ((double) misses);
-        double Mp = missInterval.getValue(i);
+        //double Mp = missInterval.getValue(i);
+        //double Ch = costHistogram.getValue(i);
+        //DPRINTF("* access: %lf misses: %lf\n", (double)access, (double)misses);
+        //marginalBenefit = Ch / Mp; 
+        
+        double Dh = demandHistogram.getValue(i);
         double Ch = costHistogram.getValue(i);
-        DPRINTF("* access: %lf misses: %lf\n", (double)access, (double)misses);
-        marginalBenefit = Ch / Mp; 
+        marginalBenefit = Ch/Dh;
+
+        
         ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks.load());
         DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
         if(isnan(unitMarginalBenefit)){
-            PPRINTF("* nan! i: %f, misses: %d, ch: %lf Mp: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Mp , marginalBenefit, unitMarginalBenefit,numBlocks.load());
+           // PPRINTF("* nan! i: %f, misses: %d, ch: %lf Mp: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Mp , marginalBenefit, unitMarginalBenefit,numBlocks.load());
+            PPRINTF("* nan! i: %f, misses: %d, ch: %lf dh: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Dh , marginalBenefit, unitMarginalBenefit,numBlocks.load());
+        }
+        if(isinf(unitMarginalBenefit)){
+            PPRINTF("* inf! i: %f, misses: %d, ch: %lf dh: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Dh , marginalBenefit, unitMarginalBenefit,numBlocks.load());
         }
         recalc = false;
     }
