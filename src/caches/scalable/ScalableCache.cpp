@@ -182,6 +182,7 @@ void ScalableCache::addFile(uint32_t fileIndex, std::string filename, uint64_t b
         uint64_t hash = (uint64_t)XXH32(hashstr.c_str(), hashstr.size(), 0);
         _fileMap.emplace(fileIndex, FileEntry{filename, blockSize, fileSize, hash});
         _metaMap[fileIndex] = new ScalableMetaData(blockSize, fileSize);
+        MeMPRINTF("ADDFILE:%u:%s\n", fileIndex, filename.c_str());
     }
     _allocator->openFile(_metaMap[fileIndex]);
     _cacheLock->writerUnlock();
@@ -192,7 +193,7 @@ void ScalableCache::addFile(uint32_t fileIndex, std::string filename, uint64_t b
 }
 
 void ScalableCache::closeFile(uint32_t fileIndex) {
-    MeMPRINTF("ScalableCache::closeFile %u\n", fileIndex);
+    MeMPRINTF("ScalableCache::closeFile:%u\n", fileIndex);
     _cacheLock->readerLock();
     if(_metaMap.count(fileIndex))
         _allocator->closeFile(_metaMap[fileIndex]);

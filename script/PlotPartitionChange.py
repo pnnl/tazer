@@ -10,12 +10,14 @@ if(len(sys.argv) < 3):
 input_trace = sys.argv[1]
 output_figure = sys.argv[2]
 filename1 = input_trace
+# ADDFILE:2:tazer2.dat
 # ASKING FOR NEW BLOCK:2:6:1646955999292158343
 # PARTITION INFO:2:6:1646955999292988646
 # MARGINALBENEFIT:2:0.00000000000000000000:1646955999292988646
 # PARTITION INFO:1:1:1646955999292988646
 # MARGINALBENEFIT:1:0.00000000000000000000:1646955999292988646
 
+filenames={}
 partitionTimes=[]
 partitions = {}
 marginalBenefits={}
@@ -47,11 +49,13 @@ for line in f1:
                 blockReqTimes[p[1]] = []
             blockRequests[p[1]].append(int(p[2]))
             blockReqTimes[p[1]].append(int(p[3]))
+        elif p[0] == "ADDFILE":
+            if p[1] not in filenames.keys():
+                filenames[p[1]] = p[2]
 
 
 f1.close()
 print("File closed")
-
 
 
 #adjusting time arrays to start from 0 
@@ -74,10 +78,11 @@ print(len(partitionTimes))
 plt.figure(figsize=(27,8))
 colorDict = {}
 
-for key in partitions.keys():
-    name = "File " + key
-    p=plt.plot(partitionTimes, partitions[key], "-", label=name)
-    plt.scatter(blockReqTimes[key], blockRequests[key], c=p[-1].get_color(), alpha=0.3, label=name + " NewBlocks")
+#for key in partitions.keys():
+for key in sorted(partitions):
+    #name = "File " + key
+    p=plt.plot(partitionTimes, partitions[key], "-", label=filenames[key])
+    plt.scatter(blockReqTimes[key], blockRequests[key], c=p[-1].get_color(), alpha=0.3, label=filenames[key] + " NewBlocks")
     colorDict[key] = p[-1].get_color()
 
 plt.xlabel("Time")
@@ -89,7 +94,7 @@ ax2.set_ylabel("Unit Marginal Benefit")
 
 for key in marginalBenefits:
     name = "File " + key + " UMB"
-    ax2.plot(partitionTimes, marginalBenefits[key], linestyle='--', color=colorDict[key], label=name)
+    ax2.plot(partitionTimes, marginalBenefits[key], linestyle='--', color=colorDict[key], label=filenames[key] + " UMB")
 
 plt.legend(loc="upper right")
 
