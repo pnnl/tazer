@@ -193,11 +193,21 @@ class AdaptiveForceWithUMBAllocator : public StealingAllocator
     protected:
         //JS: This is a more iteresting one!
         virtual uint8_t * stealBlock(uint32_t allocateForFileIndex, uint64_t &sourceBlockIndex, uint32_t &sourceFileIndex, bool must) {
-            auto meta = scalableCache->findVictim(allocateForFileIndex, sourceFileIndex, must);
-            if(meta)
-                return meta->oldestBlock(sourceBlockIndex);
-            else
-                return scalableCache->findBlockFromCachedUMB(allocateForFileIndex, sourceFileIndex, sourceBlockIndex);
+            // auto meta = scalableCache->findVictim(allocateForFileIndex, sourceFileIndex, must);
+            // if(meta)
+            //     return meta->oldestBlock(sourceBlockIndex);
+            // else
+            //     return scalableCache->findBlockFromCachedUMB(allocateForFileIndex, sourceFileIndex, sourceBlockIndex);
+            
+            
+            //calculates UMBs for each file in cache
+            double allocateForFileRank;
+            scalableCache->updateRanks(allocateForFileIndex, allocateForFileRank);
+            //looks for a victim cache starting from the lowest UMB
+            //if must is set, we try to steal from everyone, if must isn't set we can steal from ones that have lower UMB 
+            allocateForFileRank = must ? std::numeric_limits<double>::max() : allocateForFileRank;
+            return scalableCache->findBlockFromCachedUMB(allocateForFileIndex, sourceFileIndex, sourceBlockIndex, allocateForFileRank);
+
         }
 
     public:

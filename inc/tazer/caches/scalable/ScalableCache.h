@@ -102,10 +102,11 @@ class ScalableCache : public Cache {
     ScalableMetaData * findVictim(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, bool mustSucceed=false);
     ScalableMetaData * randomFile(uint32_t &sourceFileIndex);
     ScalableMetaData * largestFile(uint32_t &largestFileIndex);
+    void updateRanks (uint32_t allocateForFileIndex, double& allocateForFileRank); 
     
     //JS: These hueristics are built mainly for scalable cache fallback use.  They walk through all files/blocks
     //looking for blocks.
-    uint8_t * findBlockFromCachedUMB(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex);
+    uint8_t * findBlockFromCachedUMB(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex, double allocateForFileRank);
     uint8_t * findBlockFromOldestFile(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex);
 
     //JS: For tracking

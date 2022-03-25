@@ -107,6 +107,7 @@ uint8_t * StealingAllocator::allocateBlock(uint32_t allocateForFileIndex, bool m
     uint8_t * ret = NULL;
     allocLock.writerLock();
     if(priorityVictims.size()) {
+        //TODO: as an optimization we can change this to take from the file that's been closed the longest (first victim in vector not last)
         auto meta = priorityVictims.back();
         ret = meta->oldestBlock(sourceBlockIndex);
         //if no blocks left, remove it from victims list

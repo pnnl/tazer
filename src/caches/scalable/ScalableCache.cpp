@@ -94,8 +94,8 @@
 #define DPRINTF(...)
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
-#define MeMPRINTF(...)
-//#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define MeMPRINTF(...)
+#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -205,6 +205,7 @@ uint8_t * ScalableCache::getBlockDataOrReserve(uint32_t fileIndex, uint64_t bloc
     //JS: We only care about it being full if we are requesting a new block
     auto index = oustandingBlocksRequested.fetch_add(1);
     full = (index >= _numBlocks);
+    //MeMPRINTF("updating stats for file %d \n", fileIndex);
     auto ret = _metaMap[fileIndex]->getBlockData(blockIndex, fileOffset, reserve, true);
     if(!reserve) {
         index = oustandingBlocksRequested.fetch_sub(1);
@@ -480,6 +481,50 @@ ScalableMetaData * ScalableCache::oldestFile(uint32_t &oldestFileIndex) {
     return ret;
 }
 
+//BM: calculates UMBs for all files and updates UMBList
+void ScalableCache::updateRanks(uint32_t allocateForFileIndex, double & allocateForFileRank) {
+    _cacheLock->readerLock();
+    
+    //JS: Making a local copy of UMBList
+    std::vector<std::tuple<uint32_t, double>> UMBList;
+
+    //JS: For calcRank
+    auto localMisses = misses.load();
+    uint64_t timestamp = Timer::getCurrentTime();
+    
+    for (auto const &x : _metaMap) {
+        auto fileIndex = x.first;
+        auto meta = x.second;
+
+        if(allocateForFileIndex != fileIndex and meta->getNumBlocks()>1) {
+            auto temp = meta->calcRank(timestamp-startTimeStamp, localMisses);
+            //JS: This is for recording the unit marginal benefit and making it available to other caches
+            UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,temp));
+            MeMPRINTF("-------Index: %u %lf\n", fileIndex, temp);
+        }
+        else if (allocateForFileIndex == fileIndex){
+            allocateForFileRank = meta->calcRank(timestamp-startTimeStamp, localMisses);
+            UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,allocateForFileRank));
+            MeMPRINTF("-------Source Index: %u %lf\n", fileIndex, allocateForFileRank);
+        }
+    }
+    sort(UMBList.begin(), UMBList.end(), 
+        [](std::tuple<uint32_t, double> &lhs, std::tuple<uint32_t, double> &rhs) -> bool {
+                return (std::get<1>(lhs) < std::get<1>(rhs));
+        });
+
+    //JS: Updated _UMBList
+    _lastVictimFileIndexLock->writerLock();
+    _UMBList = UMBList;
+    //JS: Update dirty flags to true
+    for (auto &x : _UMBDirty) {
+        x.second = true;
+    }
+    _lastVictimFileIndexLock->writerUnlock();
+    _cacheLock->readerUnlock();
+}
+
+
 ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, bool mustSucceed) {
     _cacheLock->readerLock();
     MeMPRINTF("---------- %u of %u ----------\n", allocateForFileIndex, _metaMap.size());
@@ -503,7 +548,7 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
         auto meta = x.second;
         if(allocateForFileIndex != fileIndex and meta->getNumBlocks()>1) {
             auto temp = meta->calcRank(timestamp-startTimeStamp, localMisses);
-            //JS: This is for recording the unit marginal benifit and making it available to other caches
+            //JS: This is for recording the unit marginal benefit and making it available to other caches
             UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,temp));
             MeMPRINTF("-------Index: %u %lf\n", fileIndex, temp);
             if(!std::isnan(temp) && temp > 0 && temp < minRank) {
@@ -630,21 +675,31 @@ uint8_t * ScalableCache::findBlockFromOldestFile(uint32_t allocateForFileIndex, 
   Here we use the cached UMB since this will be called by the adaptive allocator
   who just ran the findVictim.  This will succeed as long as there exists a block
   that is free to steal!*/
-uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex) {
+uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex, double allocateForFileRank) {
+    MeMPRINTF("STEALING FOR file:%d , UMB:%.5lf \n", allocateForFileIndex, allocateForFileRank);
     uint8_t * block = NULL;
     _cacheLock->readerLock();
     _lastVictimFileIndexLock->readerLock();
     for(const auto &UMB : _UMBList) {
         uint32_t index = std::get<0>(UMB);
-        block = _metaMap[index]->oldestBlock(sourceBlockIndex);
-        if(block) {
-            if(index != allocateForFileIndex) {
-                _metaMap[index]->updateRank(true);
-                _metaMap[allocateForFileIndex]->updateRank(false);
-                sourceFileIndex = index;
+        double value = std::get<1>(UMB);
+        if(index != allocateForFileIndex) {
+            //5% difference condition is introduced to prevent 'ping-pong'ing between files
+            if(value < allocateForFileRank*0.95) {
+                block = _metaMap[index]->oldestBlock(sourceBlockIndex);
+                if(block) {
+                    MeMPRINTF("-----------SOURCE: %u (UMB: %.5lf) DEST: %u (UMB: %.5lf\n", index, allocateForFileIndex);
+                    _metaMap[index]->updateRank(true);
+                    _metaMap[allocateForFileIndex]->updateRank(false);
+                    sourceFileIndex = index;
+                    break;
+                }
             }
-            break;
-        }     
+            else {
+                //UMBs in the rest of the list is higher than allocateForFileRank, so we shouldn't steal from them
+                break;
+            }
+        } 
     }
     _lastVictimFileIndexLock->readerUnlock();
     _cacheLock->readerUnlock();
