@@ -284,14 +284,20 @@ class Histogram {
             if(doLock)
                 lock.readerLock();
 
-            if(key > _max){
-                ret = sum(_max) - sum(_max-range);
+            //BM: temp fix, if we only have one bin, we return sum of that bin. Else we go through the if /else to calculate the sum needed
+            if(_bins.size() > 1){
+                if(key > _max){
+                    ret = sum(_max) - sum(_max-range);
+                }
+                else if(key < _min){
+                    ret = sum(_min+range) - sum(_min);
+                }
+                else{
+                    ret = sum(key+range) - sum(key-range);
+                }
             }
-            else if(key < _min){
-                ret = sum(_min+range) - sum(_min);
-            }
-            else{
-                ret = sum(key+range) - sum(key-range);
+            else {
+                ret = sum(_max);
             }
             
             if(doLock)
