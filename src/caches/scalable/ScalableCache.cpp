@@ -496,16 +496,16 @@ void ScalableCache::updateRanks(uint32_t allocateForFileIndex, double & allocate
         auto fileIndex = x.first;
         auto meta = x.second;
 
-        if(allocateForFileIndex != fileIndex and meta->getNumBlocks()>1) {
+        if(allocateForFileIndex != fileIndex) {
             auto temp = meta->calcRank(timestamp-startTimeStamp, localMisses);
             //JS: This is for recording the unit marginal benefit and making it available to other caches
             UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,temp));
-            MeMPRINTF("-------Index: %u %lf\n", fileIndex, temp);
+            //MeMPRINTF("-------Index: %u %lf\n", fileIndex, temp);
         }
         else if (allocateForFileIndex == fileIndex){
             allocateForFileRank = meta->calcRank(timestamp-startTimeStamp, localMisses);
             UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,allocateForFileRank));
-            MeMPRINTF("-------Source Index: %u %lf\n", fileIndex, allocateForFileRank);
+            //MeMPRINTF("-------Source Index: %u %lf\n", fileIndex, allocateForFileRank);
         }
     }
     sort(UMBList.begin(), UMBList.end(), 
@@ -683,16 +683,19 @@ uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, u
     for(const auto &UMB : _UMBList) {
         uint32_t index = std::get<0>(UMB);
         double value = std::get<1>(UMB);
+        //MeMPRINTF("UMB list, File: %d , UMB: %lf, blocks: %d \n",index,value, _metaMap[index]->getNumBlocks() );
         if(index != allocateForFileIndex) {
             //5% difference condition is introduced to prevent 'ping-pong'ing between files
             if(value < allocateForFileRank*0.95) {
-                block = _metaMap[index]->oldestBlock(sourceBlockIndex);
-                if(block) {
-                    MeMPRINTF("-----------SOURCE: %u (UMB: %.5lf) DEST: %u (UMB: %.5lf\n", index, allocateForFileIndex);
-                    _metaMap[index]->updateRank(true);
-                    _metaMap[allocateForFileIndex]->updateRank(false);
-                    sourceFileIndex = index;
-                    break;
+                if( _metaMap[index]->getNumBlocks()>1 ){
+                    block = _metaMap[index]->oldestBlock(sourceBlockIndex);
+                    if(block) {
+                        MeMPRINTF("-----------SOURCE: %u (UMB: %.5lf) DEST: %u (UMB: %.5lf\n", index, allocateForFileIndex);
+                        _metaMap[index]->updateRank(true);
+                        _metaMap[allocateForFileIndex]->updateRank(false);
+                        sourceFileIndex = index;
+                        break;
+                    }
                 }
             }
             else {

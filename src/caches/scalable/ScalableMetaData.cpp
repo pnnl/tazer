@@ -285,12 +285,12 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 double cost = (lastDeliveryTime < 1073741824 ? lastDeliveryTime : 1073741824);
                 demandHistogram.addData(i, cost/1073741824.0);
                 costHistogram.addData(i, (double) accessPerInterval);
+                recalc = true;
             }
             else{
                 PPRINTF("BM: We have a second miss but no deliverytime yet! \n");
             }
             accessPerInterval = 0;
-            recalc = true;
         }
         DPRINTF("SETTING: %lu = %lu\n", lastMissTimeStamp, timestamp);
         lastMissTimeStamp = timestamp;
@@ -319,7 +319,9 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
         if(isnan(unitMarginalBenefit)){
            // PPRINTF("* nan! i: %f, misses: %d, ch: %lf Mp: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Mp , marginalBenefit, unitMarginalBenefit,numBlocks.load());
-            PPRINTF("* nan! i: %f, misses: %d, ch: %lf dh: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Dh , marginalBenefit, unitMarginalBenefit,numBlocks.load());
+            PPRINTF("** nan! i: %f, misses: %d, ch: %lf dh: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Dh , marginalBenefit, unitMarginalBenefit,numBlocks.load());
+            demandHistogram.printBins();
+            costHistogram.printBins();
         }
         if(isinf(unitMarginalBenefit)){
             PPRINTF("* inf! i: %f, misses: %d, ch: %lf dh: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Dh , marginalBenefit, unitMarginalBenefit,numBlocks.load());

@@ -79,6 +79,8 @@
 #include <string.h>
 
 #define DPRINTF(...)
+#define CALC_UMBS 1
+
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 void StealingAllocator::setCache(ScalableCache * cache) {
@@ -92,6 +94,12 @@ TazerAllocator * StealingAllocator::addStealingAllocator(uint64_t blockSize, uin
 }
 
 uint8_t * StealingAllocator::allocateBlock(uint32_t allocateForFileIndex, bool must) {
+
+    #ifdef CALC_UMBS
+    double temp;
+    scalableCache->updateRanks(allocateForFileIndex, temp);
+    #endif //CALC_UMBS
+
     //JS: For trackBlock
     uint64_t sourceBlockIndex;
     uint32_t sourceFileIndex;

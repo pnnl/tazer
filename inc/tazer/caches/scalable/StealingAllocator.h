@@ -212,7 +212,7 @@ class AdaptiveForceWithUMBAllocator : public StealingAllocator
 
     public:
         AdaptiveForceWithUMBAllocator(uint64_t blockSize, uint64_t maxSize):
-            StealingAllocator(blockSize, maxSize, false) { }
+            StealingAllocator(blockSize, maxSize, true) { }
 
         static TazerAllocator * addAdaptiveForceWithUMBAllocator(uint64_t blockSize, uint64_t maxSize, ScalableCache * cache) {
             AdaptiveForceWithUMBAllocator * ret = (AdaptiveForceWithUMBAllocator*) addAllocator<AdaptiveForceWithUMBAllocator>(std::string("AdaptiveForceWithUMBAllocator"), blockSize, maxSize);

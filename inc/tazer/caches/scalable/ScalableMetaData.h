@@ -134,7 +134,7 @@ struct ScalableMetaData {
             blockSize(bSize),
             totalBlocks(fSize / bSize + ((fSize % bSize) ? 1 : 0)),
             pattern(UNKNOWN),
-            recalc(true),
+            recalc(false),
             access(0),
             accessPerInterval(0),
             lastMissTimeStamp(0),
