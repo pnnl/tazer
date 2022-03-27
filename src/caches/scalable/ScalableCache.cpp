@@ -690,7 +690,7 @@ uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, u
                 if( _metaMap[index]->getNumBlocks()>1 ){
                     block = _metaMap[index]->oldestBlock(sourceBlockIndex);
                     if(block) {
-                        MeMPRINTF("-----------SOURCE: %u (UMB: %.5lf) DEST: %u (UMB: %.5lf\n", index, allocateForFileIndex);
+                        MeMPRINTF("-----------SOURCE: %u (UMB: %.5lf) DEST: %u (UMB: %.5lf\n", index, value, allocateForFileIndex, allocateForFileRank );
                         _metaMap[index]->updateRank(true);
                         _metaMap[allocateForFileIndex]->updateRank(false);
                         sourceFileIndex = index;
