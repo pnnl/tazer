@@ -39,7 +39,7 @@ for line in f1:
             if len(partitionTimes) == 0 or int(p[3]) != partitionTimes[-1]:
                 partitionTimes.append(int(p[3]))
             
-        elif p[0] == "MARGINALBENEFIT":
+        elif p[0] == "UNITBENEFIT":
             if p[1] not in marginalBenefits.keys():
                 marginalBenefits[p[1]] = []
             marginalBenefits[p[1]].append(float(p[2]))
@@ -90,7 +90,7 @@ plt.ylabel("Number of Blocks")
 plt.legend(loc="upper left")
 ax1 = plt.gca()
 ax2 = ax1.twinx()
-ax2.set_ylabel("Unit Marginal Benefit")
+ax2.set_ylabel("Unit Benefit")
 
 for key in marginalBenefits:
     name = "File " + key + " UMB"

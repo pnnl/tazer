@@ -98,8 +98,8 @@ uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffse
     uint8_t * ret = blockEntry->data.load();
     //JS: We &= because we only want to reserve if we are the first and the data is empty
     reserve &= (!ret);
-    if(track) 
-        updateStats(reserve, timeStamp);
+    // if(track) 
+    //     updateStats(reserve, timeStamp);
     return ret;
 }
 
@@ -253,6 +253,8 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex) {
             (*it)->data.store(NULL);
             (*it)->blkLock.writerUnlock();
             numBlocks.fetch_sub(1);
+            //turn recalc true
+            recalc=true;
             //JS: And remove its existence...
             currentBlocks.erase(it);
             break;
@@ -275,16 +277,11 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
             //missInterval.addData(i, 1);
 
             if(lastDeliveryTime > 0){ //check to make sure we recorded a deliverytime
-                //PRINTF("adding to cost histogram, i: %f,accessPerInterval:%d, lastDeliveryTime:%f, val: %.10f\n", i, accessPerInterval, lastDeliveryTime, ((double)accessPerInterval)/lastDeliveryTime);
-                //costHistogram.addData(i, ((double) accessPerInterval) / lastDeliveryTime);
-
-//                costHistogram.addData(i, (lastDeliveryTime / (double) accessPerInterval) );
-
-
                 //maxcost is 2^30  (~1 second) 
                 double cost = (lastDeliveryTime < 1073741824 ? lastDeliveryTime : 1073741824);
                 demandHistogram.addData(i, cost/1073741824.0);
                 costHistogram.addData(i, (double) accessPerInterval);
+                //here we are guaranteed to have at least two misses, and data in the histograms, so we can call recalc marginal benefit for the partition
                 recalc = true;
             }
             else{
@@ -304,27 +301,53 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     metaLock.writerLock();
     DPRINTF("* Timestamp: %lu recalc: %u\n", time, recalc);
     if(lastMissTimeStamp && recalc) {
-        double i = ((double) time) / ((double) misses);
-        //double Mp = missInterval.getValue(i);
-        //double Ch = costHistogram.getValue(i);
-        //DPRINTF("* access: %lf misses: %lf\n", (double)access, (double)misses);
-        //marginalBenefit = Ch / Mp; 
-        
-        double Dh = demandHistogram.getValue(i);
-        double Ch = costHistogram.getValue(i);
-        marginalBenefit = Ch/Dh;
+        double t = ((double) time) / ((double) misses);
+        double Dh = demandHistogram.getValue(t);
+        double Ch = costHistogram.getValue(t);
 
+        // //B(t) = Ch/Dh
+        // //B1(t,s) = B(t)/s = Ch/Dh/numblocks
+        // //B1(t, s-1) =  B(t)/(s-1) = ch/dh/(numblocks-1)
+        // //umb = B1(t,s) - B1(t, s-1)
+
+        // double Bt = Ch/Dh;
+        // double B1t_s = Bt / (double)numBlocks.load();
+        // double B1t_s1 = Bt / (double)(numBlocks.load()-1);
+
+        // ret = unitMarginalBenefit = B1t_s - B1t_s1;
+
+
+
+        unitBenefit = (Ch/Dh)/(double)numBlocks.load();
         
-        ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks.load());
-        DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
+        auto curBlocks = numBlocks.load();
+        if(curBlocks > prevSize){
+            unitMarginalBenefit = unitBenefit - prevUnitBenefit;
+            prevUnitBenefit = unitBenefit;
+            prevSize = curBlocks;
+        }
+
+        else if(prevSize > curBlocks) {
+            unitMarginalBenefit = prevUnitBenefit - unitBenefit;
+            prevUnitBenefit = unitBenefit;
+            prevSize = curBlocks;
+        }
+        else{
+            //we haven't changed the number of blocks yet, we might get a new block or reuse. we don't know yet 
+            PRINTF("prevsize and current size is the same! \n");
+        }
+
+        //ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks.load());
+        //DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
         if(isnan(unitMarginalBenefit)){
-           // PPRINTF("* nan! i: %f, misses: %d, ch: %lf Mp: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Mp , marginalBenefit, unitMarginalBenefit,numBlocks.load());
-            PPRINTF("** nan! i: %f, misses: %d, ch: %lf dh: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Dh , marginalBenefit, unitMarginalBenefit,numBlocks.load());
+            PPRINTF("** nan! t: %f, misses: %d, ch: %lf dh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Ch, Dh , unitBenefit, unitMarginalBenefit,numBlocks.load());
             demandHistogram.printBins();
             costHistogram.printBins();
         }
         if(isinf(unitMarginalBenefit)){
-            PPRINTF("* inf! i: %f, misses: %d, ch: %lf dh: %lf marginalBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",i, misses, Ch, Dh , marginalBenefit, unitMarginalBenefit,numBlocks.load());
+            PPRINTF("* inf! t: %f, misses: %d, ch: %lf dh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Ch, Dh , unitBenefit, unitMarginalBenefit,numBlocks.load());
+            demandHistogram.printBins();
+            costHistogram.printBins();
         }
         recalc = false;
     }
@@ -336,19 +359,19 @@ void ScalableMetaData::updateRank(bool dec) {
     metaLock.writerLock();
     if(lastMissTimeStamp) {
         DPRINTF("ScalableMetaData::updateRank Before marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
-        if(!std::isnan(marginalBenefit) && !std::isnan(unitMarginalBenefit)) {
+        if(!std::isnan(unitBenefit) && !std::isnan(unitMarginalBenefit)) {
             if(dec) {
-                marginalBenefit-=unitMarginalBenefit;
+                unitBenefit-=unitMarginalBenefit;
                 //JS: This checks if marginalBenefit == 0
                 // The check marginalBenefit == 0 seems to fail
-                if(marginalBenefit - unitMarginalBenefit < 0) {
+                if(unitBenefit - unitMarginalBenefit < 0) {
                     unitMarginalBenefit = 0;
-                    marginalBenefit = 0;
+                    unitBenefit = 0;
                 }
             }
             else
-                marginalBenefit+=unitMarginalBenefit;
-            DPRINTF("ScalableMetaData::updateRank After marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
+                unitBenefit+=unitMarginalBenefit;
+            DPRINTF("ScalableMetaData::updateRank After marginalBenefit: %lf unitMarginalBenefit: %lf\n", unitBenefit, unitMarginalBenefit);
         }
     }
     metaLock.writerUnlock();
@@ -364,6 +387,14 @@ double ScalableMetaData::getUnitMarginalBenefit() {
     double ret = 0;
     metaLock.readerLock();
     ret = unitMarginalBenefit;
+    metaLock.readerUnlock();
+    return ret;
+}
+
+double ScalableMetaData::getUnitBenefit() {
+    double ret = 0;
+    metaLock.readerLock();
+    ret = unitBenefit;
     metaLock.readerUnlock();
     return ret;
 }

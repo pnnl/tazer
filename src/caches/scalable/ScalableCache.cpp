@@ -348,10 +348,10 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
     auto fileOffset = req->offset;
     //MeMPRINTF("PARTITION INFO:%d:%d:%lu\n", fileIndex, _metaMap[fileIndex]->getNumBlocks(),Timer::getCurrentTime());
     
-    auto nowVal = Timer::getCurrentTime();
+    auto timeStamp = Timer::getCurrentTime();
     for ( auto met : _metaMap ){
-        MeMPRINTF("PARTITION INFO:%d:%d:%lu\n", met.first, met.second->getNumBlocks(), nowVal);
-        MeMPRINTF("MARGINALBENEFIT:%d:%.20lf:%lu\n", met.first, met.second->getUnitMarginalBenefit(), nowVal);
+        MeMPRINTF("PARTITION INFO:%d:%d:%lu\n", met.first, met.second->getNumBlocks(), timeStamp);
+        MeMPRINTF("UNITBENEFIT:%d:%.20lf:%lu\n", met.first, met.second->getUnitBenefit(), timeStamp);
     }
 
     if (!req->size) { //JS: This get the blockSize from the file
@@ -373,7 +373,7 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
         buff = getBlockDataOrReserve(fileIndex, index, fileOffset, reserve, full);
         
         access.fetch_add(1);
-
+        
         // std::cerr << " [JS] readBlock " << buff << " " << reserve << std::endl;
         if(buff) {
             stats.end(prefetch, CacheStats::Metric::ovh, thread_id); //read
@@ -388,6 +388,7 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
             updateRequestTime(req->time);
 
             trackBlock(_name, "[BLOCK_READ_HIT]", fileIndex, index, priority);
+            _metaMap[fileIndex]->updateStats(false, timeStamp);
             stats.addAmt(prefetch, CacheStats::Metric::hits, req->size, thread_id);
             stats.end(prefetch, CacheStats::Metric::hits, thread_id);
             stats.start(prefetch, CacheStats::Metric::ovh, thread_id);
@@ -399,6 +400,13 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
             misses.fetch_add(1);
             stats.addAmt(prefetch, CacheStats::Metric::misses, 1, thread_id);
             
+            //calcrank on this partition after the miss
+             //JS: For calcRank
+            auto localMisses = misses.load();
+            uint64_t timeStamp = Timer::getCurrentTime();
+            _metaMap[fileIndex]->updateStats(true, timeStamp);
+            _metaMap[fileIndex]->calcRank(timeStamp-startTimeStamp, localMisses);
+
             if (reserve || full) { //JS: We reserved block
                 DPRINTF("[JS] ScalableCache::readBlock reseved\n");
                 req->skipWrite = full;
@@ -691,8 +699,13 @@ uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, u
                     block = _metaMap[index]->oldestBlock(sourceBlockIndex);
                     if(block) {
                         MeMPRINTF("-----------SOURCE: %u (UMB: %.5lf) DEST: %u (UMB: %.5lf\n", index, value, allocateForFileIndex, allocateForFileRank );
-                        _metaMap[index]->updateRank(true);
-                        _metaMap[allocateForFileIndex]->updateRank(false);
+                        
+                        auto localMisses = misses.load();
+                        uint64_t timestamp = Timer::getCurrentTime();
+                        _metaMap[index]->calcRank(timestamp-startTimeStamp, localMisses);
+
+                        //_metaMap[index]->updateRank(true);
+                        //_metaMap[allocateForFileIndex]->updateRank(false);
                         sourceFileIndex = index;
                         break;
                     }

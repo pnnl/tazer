@@ -112,8 +112,10 @@ struct ScalableMetaData {
         uint64_t access;
         uint64_t accessPerInterval;
         uint64_t lastMissTimeStamp;
-        double marginalBenefit;
+        double unitBenefit;
         double unitMarginalBenefit;
+        double prevUnitBenefit;
+        int prevSize;
         //BM: for algorithm calculations
         double lastDeliveryTime;
 
@@ -138,7 +140,9 @@ struct ScalableMetaData {
             access(0),
             accessPerInterval(0),
             lastMissTimeStamp(0),
-            marginalBenefit(0),
+            unitBenefit(0),
+            prevUnitBenefit(0),
+            prevSize(0),
             unitMarginalBenefit(0),
             lastDeliveryTime(-1.0),
             numBlocks(0),
@@ -176,6 +180,7 @@ struct ScalableMetaData {
         void updateDeliveryTime(uint64_t deliveryTime);
         //BM: for plots
         double getUnitMarginalBenefit();
+        double getUnitBenefit();
 
     private:
         uint64_t trackAccess(uint64_t blockIndex, uint64_t readIndex);
