@@ -108,7 +108,7 @@ SharedMemoryCache::SharedMemoryCache(std::string cacheName, CacheType type, uint
     // std::cout<<"[TAZER] " << "Constructing " << _name << " in shared memory cache" << std::endl;
     stats.start(false, CacheStats::Metric::constructor);
     std::string filePath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
-    unsigned int memSize = sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins) + sizeof(ReaderWriterLock) + (sizeof(double) + sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX;
+    uint64_t memSize = sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins) + sizeof(ReaderWriterLock) + (sizeof(double) + sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX;
 
     bool created = true;
     int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666); //try to create file (O_EXCL)
