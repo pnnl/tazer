@@ -300,7 +300,13 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     double ret = unitMarginalBenefit;
     metaLock.writerLock();
     DPRINTF("* Timestamp: %lu recalc: %u\n", time, recalc);
-    if(lastMissTimeStamp && recalc) {
+    if(numBlocks.load() < 1){
+        unitBenefit=0;
+        prevUnitBenefit=0;
+        prevSize=0;
+        ret = unitMarginalBenefit = 0;
+    }
+    else if(lastMissTimeStamp && recalc) {
         double t = ((double) time) / ((double) misses);
         double Dh = demandHistogram.getValue(t);
         double Ch = costHistogram.getValue(t);
@@ -315,8 +321,6 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         // double B1t_s1 = Bt / (double)(numBlocks.load()-1);
 
         // ret = unitMarginalBenefit = B1t_s - B1t_s1;
-
-
 
         unitBenefit = (Ch/Dh)/(double)numBlocks.load();
         
@@ -336,7 +340,7 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
             //we haven't changed the number of blocks yet, we might get a new block or reuse. we don't know yet 
             PRINTF("prevsize and current size is the same! \n");
         }
-
+        ret = unitMarginalBenefit;
         //ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks.load());
         //DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
         if(isnan(unitMarginalBenefit)){

@@ -79,7 +79,7 @@
 #include <string.h>
 
 #define DPRINTF(...)
-#define CALC_UMBS 1
+//#define CALC_UMBS 1
 
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 

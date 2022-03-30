@@ -94,8 +94,8 @@
 #define DPRINTF(...)
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
-//#define MeMPRINTF(...)
 #define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define MeMPRINTF(...)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -244,6 +244,7 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
 
         //JS: Try to reuse my oldest block
         if(!dest) {
+            MeMPRINTF("REUSE for file: %d\n", fileIndex);
             dest = meta->oldestBlock(sourceBlockIndex);
             if(dest) {
                 DPRINTF("[JS] ScalableCache::setBlock Reusing block\n");
@@ -346,12 +347,12 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
     auto index = req->blkIndex;
     auto fileIndex = req->fileIndex;
     auto fileOffset = req->offset;
-    //MeMPRINTF("PARTITION INFO:%d:%d:%lu\n", fileIndex, _metaMap[fileIndex]->getNumBlocks(),Timer::getCurrentTime());
     
     auto timeStamp = Timer::getCurrentTime();
     for ( auto met : _metaMap ){
         MeMPRINTF("PARTITION INFO:%d:%d:%lu\n", met.first, met.second->getNumBlocks(), timeStamp);
         MeMPRINTF("UNITBENEFIT:%d:%.20lf:%lu\n", met.first, met.second->getUnitBenefit(), timeStamp);
+        MeMPRINTF("UNITMARGINALBENEFIT:%d:%.20lf:%lu\n", met.first, met.second->getUnitMarginalBenefit(), timeStamp);
     }
 
     if (!req->size) { //JS: This get the blockSize from the file
@@ -400,14 +401,14 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
             misses.fetch_add(1);
             stats.addAmt(prefetch, CacheStats::Metric::misses, 1, thread_id);
             
-            //calcrank on this partition after the miss
-             //JS: For calcRank
-            auto localMisses = misses.load();
-            uint64_t timeStamp = Timer::getCurrentTime();
-            _metaMap[fileIndex]->updateStats(true, timeStamp);
-            _metaMap[fileIndex]->calcRank(timeStamp-startTimeStamp, localMisses);
 
             if (reserve || full) { //JS: We reserved block
+                //calcrank on this partition after the miss
+             //JS: For calcRank
+                auto localMisses = misses.load();
+                uint64_t timeStamp = Timer::getCurrentTime();
+                _metaMap[fileIndex]->updateStats(true, timeStamp);
+                _metaMap[fileIndex]->calcRank(timeStamp-startTimeStamp, localMisses);
                 DPRINTF("[JS] ScalableCache::readBlock reseved\n");
                 req->skipWrite = full;
                 stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
@@ -431,6 +432,12 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
                         sched_yield();
                         buff = getBlockData(fileIndex, blockIndex, offset);
                     }
+
+                    //calcrank on this partition after the miss
+                    //JS: For calcRank
+                    auto localMisses = misses.load();
+                    uint64_t timeStamp = Timer::getCurrentTime();
+                    _metaMap[fileIndex]->updateStats(false, timeStamp);
 
                     //JS: Update the req
                     req->data=buff;
@@ -684,7 +691,7 @@ uint8_t * ScalableCache::findBlockFromOldestFile(uint32_t allocateForFileIndex, 
   who just ran the findVictim.  This will succeed as long as there exists a block
   that is free to steal!*/
 uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex, double allocateForFileRank) {
-    MeMPRINTF("STEALING FOR file:%d , UMB:%.5lf \n", allocateForFileIndex, allocateForFileRank);
+    MeMPRINTF("STEALING FOR file:%d , UMB:%.5lf, blocks:%d\n", allocateForFileIndex, allocateForFileRank,_metaMap[allocateForFileIndex]->getNumBlocks());
     uint8_t * block = NULL;
     _cacheLock->readerLock();
     _lastVictimFileIndexLock->readerLock();
@@ -696,9 +703,10 @@ uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, u
             //5% difference condition is introduced to prevent 'ping-pong'ing between files
             if(value < allocateForFileRank*0.95) {
                 if( _metaMap[index]->getNumBlocks()>1 ){
+                    //MeMPRINTF("victim Index: %d has %d blocks, and umb is %f\n", index, _metaMap[index]->getNumBlocks(), value);
                     block = _metaMap[index]->oldestBlock(sourceBlockIndex);
                     if(block) {
-                        MeMPRINTF("-----------SOURCE: %u (UMB: %.5lf) DEST: %u (UMB: %.5lf\n", index, value, allocateForFileIndex, allocateForFileRank );
+                        MeMPRINTF("-----------SOURCE: %u (UMB: %.5lf, blocks: %d) DEST: %u (UMB: %.5lf)\n", index, value, _metaMap[index]->getNumBlocks(), allocateForFileIndex, allocateForFileRank );
                         
                         auto localMisses = misses.load();
                         uint64_t timestamp = Timer::getCurrentTime();
