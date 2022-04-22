@@ -94,8 +94,8 @@
 #define DPRINTF(...)
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
-#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-//#define MeMPRINTF(...)
+//#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define MeMPRINTF(...)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -161,6 +161,11 @@ ScalableCache::~ScalableCache() {
     delete _cacheLock;
     evictHisto.printBins();
     stats.print(_name);
+    if(Config::TraceHistogram){
+        for ( auto met : _metaMap ){
+            met.second->printHistLogs(met.first);
+        }
+    }
 }
 
 Cache* ScalableCache::addScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) {

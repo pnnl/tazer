@@ -81,6 +81,10 @@
 #include <vector>
 #include <algorithm>
 #include "ReaderWriterLock.h"
+#include <string>
+#include "UnixIO.h"
+#include <fcntl.h>
+#include <sstream>
 
 #define PRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
@@ -93,6 +97,12 @@ class Histogram {
         double _max;
         unsigned int _maxBuckets;
         std::vector<std::tuple<double, double>> _bins;
+
+        //BM: for extrapolation trace
+        int numGetVals;
+        int numExtrapolation;
+        std::string extrapolationInfo;
+        bool _trace;
 
         //JS: Must find exact match
         int findBinMatch(double key) {
@@ -266,12 +276,18 @@ class Histogram {
 
     public:
 
-        Histogram(unsigned int maxBuckets, bool absMin=false, bool search=true) :
+        Histogram(unsigned int maxBuckets, bool trace=false, bool absMin=false, bool search=true) :
             _search(search),
             _absMin(absMin),
             _min(std::numeric_limits<double>::max()), 
             _max(std::numeric_limits<double>::min()),
-            _maxBuckets(maxBuckets) { }
+            _maxBuckets(maxBuckets),
+            numExtrapolation(0),
+            extrapolationInfo(""),
+            numGetVals(0),
+            _trace(trace) { 
+                std::cerr<<"Trace?:"<<_trace<<std::endl;
+            }
 
         void addData(double key, double value) {
             lock.writerLock();
@@ -283,8 +299,20 @@ class Histogram {
             double ret = 0;
             if(doLock)
                 lock.readerLock();
-
-            //BM: temp fix, if we only have one bin, we return sum of that bin. Else we go through the if /else to calculate the sum needed
+            if(_trace){
+                numGetVals++;
+                 if(key > _max){    
+                        numExtrapolation++;
+                        std::string tempLine = "HighExtrapolation Max:" + std::to_string(_max) + " distance(%):" + std::to_string((key-_max)/_max*100) + " value:"+ std::to_string(key) + "\n";
+                        extrapolationInfo += tempLine;
+                }
+                else if(key < _min){
+                        numExtrapolation++;
+                        std::string tempLine = "LowExtrapolation Min:" + std::to_string(_min) + " distance(%):" + std::to_string((_min-key)/_min*100) + " value:"+ std::to_string(key) + "\n";
+                        extrapolationInfo += tempLine; 
+                }
+            }
+            
             if(_bins.size() > 1){
                 if(key > _max){
                     ret = sum(_max) - sum(_max-range);
@@ -297,6 +325,7 @@ class Histogram {
                 }
             }
             else {
+                //BM: temp fix, if we only have one bin, we return sum of that bin. Else we go through the if /else to calculate the sum needed
                 ret = sum(_max);
             }
             
@@ -326,6 +355,25 @@ class Histogram {
             lock.readerLock();
             for(size_t i = 0; i < _bins.size(); ++i)
                 PRINTF("histo i: %u %lf %lf\n", i, std::get<0>(_bins[i]), std::get<1>(_bins[i]));
+            lock.readerUnlock();
+        }
+        void printLog(int id){
+            lock.readerLock();
+            if(_trace){
+            unixopen_t unixopen = (unixopen_t)dlsym(RTLD_NEXT, "open");
+            unixclose_t unixclose = (unixclose_t)dlsym(RTLD_NEXT, "close");
+            unixwrite_t unixwrite = (unixwrite_t)dlsym(RTLD_NEXT, "write");
+            std::string fname = "histogram_stats_"+ std::to_string(id) +".txt";
+            int fd = (*unixopen)(fname.c_str(), O_WRONLY | O_APPEND | O_CREAT, 0660);
+            if (fd != -1) {
+                std::stringstream ss;
+                ss << "number of histogram queries:" << numGetVals << std::endl;
+                ss << "number of extrapolations:" << numExtrapolation << std::endl;
+                ss << extrapolationInfo.c_str() << std::endl;
+                unixwrite(fd, ss.str().c_str(), ss.str().length());
+                unixclose(fd);
+            }
+            }
             lock.readerUnlock();
         }
 };

@@ -116,16 +116,14 @@ struct ScalableMetaData {
         double unitMarginalBenefit;
         double prevUnitBenefit;
         int prevSize;
-        //BM: for algorithm calculations
+        //BM: for algorithm calculations.
         double lastDeliveryTime;
 
         std::atomic<uint64_t> numBlocks;
         
         //JS: Also for Nathan (intervalTime, fpGrowth, missInverval)
-        Histogram fpGrowth;
         Histogram missInterval;
-        Histogram costHistogram;
-        Histogram demandHistogram;
+        Histogram benefitHistogram;
 
         std::deque<std::array<uint64_t, 3>> window;
         std::vector<BlockEntry*> currentBlocks;
@@ -146,10 +144,8 @@ struct ScalableMetaData {
             unitMarginalBenefit(0),
             lastDeliveryTime(-1.0),
             numBlocks(0),
-            fpGrowth(100),
             missInterval(100),
-            costHistogram(100),
-            demandHistogram(100) {
+            benefitHistogram(100,Config::TraceHistogram) {
                 blocks = new BlockEntry[totalBlocks];
                 for(unsigned int i=0; i<totalBlocks; i++) {
                     blocks[i].data.store(NULL);
@@ -176,12 +172,12 @@ struct ScalableMetaData {
         double calcRank(uint64_t time, uint64_t misses);
         void updateRank(bool dec);
 
-        //BM: for deliverytime
-        void updateDeliveryTime(uint64_t deliveryTime);
-        //BM: for plots
+        //BM: for deliverytime 
+        void updateDeliveryTime(double deliveryTime);
+        //BM: for plots/tracing
         double getUnitMarginalBenefit();
         double getUnitBenefit();
-
+        void printHistLogs(int i){benefitHistogram.printLog(i);}
     private:
         uint64_t trackAccess(uint64_t blockIndex, uint64_t readIndex);
 };

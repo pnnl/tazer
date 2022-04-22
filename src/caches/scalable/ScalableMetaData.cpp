@@ -270,17 +270,16 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     metaLock.writerLock();
     access++;
     accessPerInterval++;
-
+    int blocks = numBlocks.load();
     if(miss) {
         if(lastMissTimeStamp) {
             double i = (double)(timestamp - lastMissTimeStamp);
-            //missInterval.addData(i, 1);
+            missInterval.addData(i, 1);
+            if(lastDeliveryTime > 0 && blocks ){ //check to make sure we recorded a deliverytime
 
-            if(lastDeliveryTime > 0){ //check to make sure we recorded a deliverytime
-                //maxcost is 2^30  (~1 second) 
-                double cost = (lastDeliveryTime < 1073741824 ? lastDeliveryTime : 1073741824);
-                demandHistogram.addData(i, cost/1073741824.0);
-                costHistogram.addData(i, (double) accessPerInterval);
+                double cost = log2(lastDeliveryTime);
+                benefitHistogram.addData(i, accessPerInterval/cost/blocks);
+                
                 //here we are guaranteed to have at least two misses, and data in the histograms, so we can call recalc marginal benefit for the partition
                 recalc = true;
             }
@@ -308,21 +307,10 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     }
     else if(lastMissTimeStamp && recalc) {
         double t = ((double) time) / ((double) misses);
-        double Dh = demandHistogram.getValue(t);
-        double Ch = costHistogram.getValue(t);
+        double Mh = missInterval.getValue(t);
+        double Bh = benefitHistogram.getValue(t);
 
-        // //B(t) = Ch/Dh
-        // //B1(t,s) = B(t)/s = Ch/Dh/numblocks
-        // //B1(t, s-1) =  B(t)/(s-1) = ch/dh/(numblocks-1)
-        // //umb = B1(t,s) - B1(t, s-1)
-
-        // double Bt = Ch/Dh;
-        // double B1t_s = Bt / (double)numBlocks.load();
-        // double B1t_s1 = Bt / (double)(numBlocks.load()-1);
-
-        // ret = unitMarginalBenefit = B1t_s - B1t_s1;
-
-        unitBenefit = (Ch/Dh)/(double)numBlocks.load();
+        unitBenefit = (Bh/Mh)/log2(t);
         
         auto curBlocks = numBlocks.load();
         if(curBlocks > prevSize){
@@ -344,14 +332,14 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         //ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks.load());
         //DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
         if(isnan(unitMarginalBenefit)){
-            PPRINTF("** nan! t: %f, misses: %d, ch: %lf dh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Ch, Dh , unitBenefit, unitMarginalBenefit,numBlocks.load());
-            demandHistogram.printBins();
-            costHistogram.printBins();
+            PPRINTF("** nan! t: %f, misses: %d, Bh: %lf Mh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Bh, Mh , unitBenefit, unitMarginalBenefit,numBlocks.load());
+            missInterval.printBins();
+            benefitHistogram.printBins();
         }
         if(isinf(unitMarginalBenefit)){
-            PPRINTF("* inf! t: %f, misses: %d, ch: %lf dh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Ch, Dh , unitBenefit, unitMarginalBenefit,numBlocks.load());
-            demandHistogram.printBins();
-            costHistogram.printBins();
+            PPRINTF("* inf! t: %f, misses: %d, Bh: %lf Mh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Bh, Mh , unitBenefit, unitMarginalBenefit,numBlocks.load());
+            missInterval.printBins();
+            benefitHistogram.printBins();
         }
         recalc = false;
     }
@@ -381,7 +369,7 @@ void ScalableMetaData::updateRank(bool dec) {
     metaLock.writerUnlock();
 }
 
-void ScalableMetaData::updateDeliveryTime(uint64_t deliveryTime) {
+void ScalableMetaData::updateDeliveryTime(double deliveryTime) {
     metaLock.writerLock();
     lastDeliveryTime = deliveryTime;
     metaLock.writerUnlock();

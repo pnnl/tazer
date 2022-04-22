@@ -139,13 +139,13 @@ const uint64_t maxBlockSize = getenv("TAZER_BLOCKSIZE") ? atol(getenv("TAZER_BLO
 
 //Memory Cache Parameters
 const bool useMemoryCache = true;
-static uint64_t memoryCacheSize = getenv("TAZER_PRIVATE_MEM_CACHE_SIZE") ? atol(getenv("TAZER_PRIVATE_MEM_CACHE_SIZE")) : 64 * 1024 * 1024UL;
+static uint64_t memoryCacheSize = getenv("TAZER_PRIVATE_MEM_CACHE_SIZE") ? atol(getenv("TAZER_PRIVATE_MEM_CACHE_SIZE")) : 60 * 1024 * 1024UL;
 const uint32_t memoryCacheAssociativity = 16UL;
 const uint64_t memoryCacheBlocksize = maxBlockSize;
 
 //Scalable Cache Parameters
 const bool useScalableCache = getenv("TAZER_SCALABLE_CACHE") ? atoi(getenv("TAZER_SCALABLE_CACHE")) : 1;
-const uint32_t scalableCacheNumBlocks = getenv("TAZER_SCALABLE_CACHE_NUM_BLOCKS") ? atoi(getenv("TAZER_SCALABLE_CACHE_NUM_BLOCKS")) : 16;
+const uint32_t scalableCacheNumBlocks = getenv("TAZER_SCALABLE_CACHE_NUM_BLOCKS") ? atoi(getenv("TAZER_SCALABLE_CACHE_NUM_BLOCKS")) : 60;
 //0:addAdaptiveAllocator, 1:addStealingAllocator (LRU), 2:addRandomStealingAllocator (Random File, Oldest Block), 3:addRandomStealingAllocator (Random File, Random Block), 4:LargestStealingAllocator, 5:FirstTouchAllocator, 6:addSimpleAllocator
 const uint32_t scalableCacheAllocator = getenv("TAZER_SCALABLE_CACHE_ALLOCATOR") ? atoi(getenv("TAZER_SCALABLE_CACHE_ALLOCATOR")) : 0;
 
@@ -171,7 +171,7 @@ const uint64_t fileCacheBlocksize = maxBlockSize;
 const std::string fileCacheFilePath("/tmp/" + tazer_id + "/tazer_cache/fc"); // TODO: have option to pass from environment variable
 
 //Bounded Filelock Cache Parameters
-const bool useBoundedFilelockCache = getenv("TAZER_BOUNDED_FILELOCK_CACHE") ? atoi(getenv("TAZER_BOUNDED_FILELOCK_CACHE")) : 1;
+const bool useBoundedFilelockCache = getenv("TAZER_BOUNDED_FILELOCK_CACHE") ? atoi(getenv("TAZER_BOUNDED_FILELOCK_CACHE")) : 0;
 static uint64_t boundedFilelockCacheSize = getenv("TAZER_BOUNDED_FILELOCK_CACHE_SIZE") ? atol(getenv("TAZER_BOUNDED_FILELOCK_CACHE_SIZE")) : 1 * 1024 * 1024 * 1024UL;
 const uint32_t boundedFilelockCacheAssociativity = 16UL;
 const uint64_t boundedFilelockCacheBlocksize = maxBlockSize;
@@ -258,6 +258,9 @@ const bool ServeFileLog = false;
 const bool CacheFileLog = false;
 const bool FileCacheLog = false;
 const bool PrefetcherLog = false;
+
+//BM: turn on for Histogram trace
+const bool TraceHistogram = getenv("TAZER_TRACE_HISTOGRAM") ? atoi(getenv("TAZER_TRACE_HISTOGRAM")) : 0;
 
 #define FILE_CACHE_WRITE_THROUGH 1
 
