@@ -286,7 +286,7 @@ class Histogram {
             extrapolationInfo(""),
             numGetVals(0),
             _trace(trace) { 
-                std::cerr<<"Trace?:"<<_trace<<std::endl;
+               // std::cerr<<"Trace?:"<<_trace<<std::endl;
             }
 
         void addData(double key, double value) {
