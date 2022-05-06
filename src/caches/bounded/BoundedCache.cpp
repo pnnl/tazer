@@ -91,7 +91,7 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
-// #define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+//#define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
 #define PPRINTF(...)
 
 template <class Lock>
@@ -225,30 +225,56 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
 
     //JS: Update my UMB list here
     PPRINTF("############################ oldestBlock %s %p ############################\n", _name.c_str(), _scalableCache);
+    double askingUMB;
     if(_scalableCache) {
         auto umbs = ((ScalableCache*)_scalableCache)->getLastUMB(static_cast<Cache*>(this));
         PPRINTF("%s UMB SIZE %u\n", _name.c_str(), umbs.size());
         if(umbs.size()) {
             setLastUMB(umbs);
         }
+        askingUMB = getLastUMB(fileIndex);
     }
 
     for (uint32_t i = 0; i < _associativity; i++) {
+        blkEntry = blkEntries[i];
         if (blkEntry->status == BLK_AVAIL) {// we found an available block, deterimine if we evict it
             //JS: Scalable metric piggybacking
             if(_scalableCache) {
-                if(blkEntry->fileIndex != victimFileIndex) {
+                //if(blkEntry->fileIndex != victimFileIndex) {
+
                     auto umb = getLastUMB(fileIndex);
+                    auto umbblock = getLastUMB(blkEntry->fileIndex);
+                    PPRINTF("i: %d, binindex:%d, umb: %.10lf, asking_umb: %.10lf, block_umb: %.10lf\n", i,binIndex, (umb<1000000000?umb:1000000000), (askingUMB<1000000000?askingUMB:1000000000), (umbblock<1000000000?umbblock:1000000000));
                     // auto umb = _scalableCache->getLastUMB(fileIndex);
-                    if(umb < victimMinUMB) {
-                        if (!anyUsers(blkEntry,req)) {
+
+                    // if(umb < victimMinUMB) {
+                    //     if (!anyUsers(blkEntry,req)) {
+                    //         victimTime = blkEntry->timeStamp;
+                    //         victimMinUMB = umb;
+                    //         victimEntry = blkEntry;
+                    //         PPRINTF("%s Got a UMB %lf\n", _name.c_str(), umb);
+                    //     }
+                    // }
+
+                    if(umbblock == victimMinUMB){
+                        //check if oldest
+                        if (!anyUsers(blkEntry,req) &&  (blkEntry->timeStamp < victimTime)) {
                             victimTime = blkEntry->timeStamp;
-                            victimMinUMB = umb;
+                            victimMinUMB = umbblock;
                             victimEntry = blkEntry;
-                            PPRINTF("%s Got a UMB %lf\n", _name.c_str(), umb);
+                            PPRINTF("%s Updated oldest UMB block %lf\n", _name.c_str(), umbblock);
                         }
                     }
-                }
+                    else if(umbblock < victimMinUMB){
+                        //update victim info
+                        if (!anyUsers(blkEntry,req)){
+                            victimTime = blkEntry->timeStamp;
+                            victimMinUMB = umbblock;
+                            victimEntry = blkEntry;
+                            PPRINTF("%s Got a UMB %lf\n", _name.c_str(), umbblock);
+                        }
+                    }
+                //}
             }
 
             //LRU
