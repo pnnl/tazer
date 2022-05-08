@@ -36,7 +36,7 @@ else
 fi
 
 #set up metafiles
-cd ${TAZER_ROOT}/script/Experiment3/FriResults_${exp_type}_${scalable}_${shared}_${filemem}/
+cd ${TAZER_ROOT}/script/Experiment3/Results_${exp_type}_${scalable}_${shared}_${filemem}/
 
 file_names="tazer.dat tazer2.dat tazer3.dat tazer4.dat tazer5.dat tazer6.dat tazer7.dat tazer8.dat"
 for file in $file_names; do
@@ -60,7 +60,7 @@ export TAZER_SHARED_MEM_CACHE=${shared}
 export TAZER_SHARED_MEM_CACHE_SIZE=$((shared_size*1024*1024))
 export TAZER_BOUNDED_FILELOCK_CACHE=$filemem
 mkdir ./FileCache/
-export TAZER_BOUNDED_FILELOCK_CACHE_PATH=${TAZER_ROOT}/script/Experiment3/FriResults_${exp_type}_${scalable}_${shared}_${filemem}/FileCache
+export TAZER_BOUNDED_FILELOCK_CACHE_PATH=${TAZER_ROOT}/script/Experiment3/Results_${exp_type}_${scalable}_${shared}_${filemem}/FileCache
 export TAZER_BOUNDED_FILELOCK_CACHE_SIZE=$((64*1024*1024))
 
 #using defaults for upper level cache sizes 

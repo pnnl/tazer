@@ -27,7 +27,7 @@ rm slurm*
 rm tazer_output*
 #-------------------------------------------
 
-folderprefix="FriResults_"
+folderprefix="Results_"
 mkdir ${TAZER_ROOT}/script/Experiment3/${folderprefix}${exp_type}_${scalable}_${shared}_${filemem}/
 cd ${TAZER_ROOT}/script/Experiment3/${folderprefix}${exp_type}_${scalable}_${shared}_${filemem}/
 rm ${TAZER_ROOT}/script/Experiment3/${folderprefix}${exp_type}_${scalable}_${shared}_${filemem}/*.meta.in
