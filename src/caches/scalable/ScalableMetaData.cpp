@@ -310,7 +310,7 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         double Mh = missInterval.getValue(t);
         double Bh = benefitHistogram.getValue(t);
 
-        unitBenefit = (Bh/Mh)/log2(t);
+        unitBenefit = (Bh/Mh);///log2(t);
         
         auto curBlocks = numBlocks.load();
         if(curBlocks > prevSize){
