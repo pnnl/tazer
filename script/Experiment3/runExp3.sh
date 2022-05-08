@@ -13,7 +13,7 @@ WORKLOADSIM_PATH=${HOME}/tazer-bigflowsim/workloadSim
 exp_type="C" #A: test1 , B: test2 linear, C: test2 random, D:Test1+test2random, E:test1+test2linear+test2random 
 scalable=1
 shared=1
-filemem=0
+filemem=1
 private_size=8 #in MB
 shared_size=16 #in MB
 block_size=128 #in KB
@@ -27,13 +27,15 @@ rm slurm*
 rm tazer_output*
 #-------------------------------------------
 
-mkdir ${TAZER_ROOT}/script/Experiment3/Results_${exp_type}_${scalable}_${shared}/
-cd ${TAZER_ROOT}/script/Experiment3/Results_${exp_type}_${scalable}_${shared}/
-rm ${TAZER_ROOT}/script/Experiment3/Results_${exp_type}_${scalable}_${shared}/*.meta.in
-rm ${TAZER_ROOT}/script/Experiment3/Results_${exp_type}_${scalable}_${shared}/*.sh
-rm ${TAZER_ROOT}/script/Experiment3/Results_${exp_type}_${scalable}_${shared}/*.out
-rm ${TAZER_ROOT}/script/Experiment3/Results_${exp_type}_${scalable}_${shared}/*.txt
-rm ${TAZER_ROOT}/script/Experiment3/Results_${exp_type}_${scalable}_${shared}/*.log
+folderprefix="FriResults_"
+mkdir ${TAZER_ROOT}/script/Experiment3/${folderprefix}${exp_type}_${scalable}_${shared}_${filemem}/
+cd ${TAZER_ROOT}/script/Experiment3/${folderprefix}${exp_type}_${scalable}_${shared}_${filemem}/
+rm ${TAZER_ROOT}/script/Experiment3/${folderprefix}${exp_type}_${scalable}_${shared}_${filemem}/*.meta.in
+rm ${TAZER_ROOT}/script/Experiment3/${folderprefix}${exp_type}_${scalable}_${shared}_${filemem}/*.sh
+rm ${TAZER_ROOT}/script/Experiment3/${folderprefix}${exp_type}_${scalable}_${shared}_${filemem}/*.out
+rm ${TAZER_ROOT}/script/Experiment3/${folderprefix}${exp_type}_${scalable}_${shared}_${filemem}/*.txt
+rm ${TAZER_ROOT}/script/Experiment3/${folderprefix}${exp_type}_${scalable}_${shared}_${filemem}/*.log
+rm -rf ./FileCache/
 
 cp ${TAZER_ROOT}/script/Experiment3/launch_server.sh ./
 cp ${TAZER_ROOT}/script/Experiment3/launch_exp.sh ./
@@ -43,14 +45,14 @@ SERVER_PATH=${TAZER_BUILD_DIR}src/server/server
 SERVER_PORT=6024
 CLOSE_SERVER=${TAZER_BUILD_DIR}test/CloseServer
 
-server_command="sbatch -A ippd -N1 --parsable ./launch_server.sh"
+server_command="sbatch -A ippd -N1 -x node42,node12 --parsable ./launch_server.sh"
 tazer_server_task_id=$(${server_command})
 sleep 10
 
 tazer_server_nodes=`squeue -j ${tazer_server_task_id} -h -o "%N"`
 echo "server node: "$tazer_server_nodes
 
-client_command="sbatch -A ippd -N1 --parsable ./launch_exp.sh ${exp_type} ${tazer_server_nodes} ${TAZER_ROOT} ${TAZER_BUILD_DIR} ${WORKLOADSIM_PATH} ${scalable} ${shared} ${filemem} ${private_size} ${shared_size} ${block_size}"
+client_command="sbatch -A ippd -N1 --exclude=node42 --parsable ./launch_exp.sh ${exp_type} ${tazer_server_nodes} ${TAZER_ROOT} ${TAZER_BUILD_DIR} ${WORKLOADSIM_PATH} ${scalable} ${shared} ${filemem} ${private_size} ${shared_size} ${block_size}"
 # echo $client_command
 client_task_id=$(${client_command}) 
 sleep 2
