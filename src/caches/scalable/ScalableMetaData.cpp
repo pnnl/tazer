@@ -301,6 +301,7 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     DPRINTF("* Timestamp: %lu recalc: %u\n", time, recalc);
     if(numBlocks.load() < 1){
         unitBenefit=0;
+        upperLevelMetric = 100000000; //temp big value
         prevUnitBenefit=0;
         prevSize=0;
         ret = unitMarginalBenefit = 0;
@@ -311,7 +312,7 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         double Bh = benefitHistogram.getValue(t);
 
         unitBenefit = (Bh/Mh);///log2(t);
-        
+        upperLevelMetric = Mh;
         auto curBlocks = numBlocks.load();
         if(curBlocks > prevSize){
             unitMarginalBenefit = unitBenefit - prevUnitBenefit;
@@ -343,9 +344,13 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         }
         recalc = false;
     }
+    // else{
+    //     PPRINTF("we have blocks but no misstime yet \n");
+    // }
     metaLock.writerUnlock();
     return ret;
 }
+
 
 void ScalableMetaData::updateRank(bool dec) {
     metaLock.writerLock();
@@ -387,6 +392,14 @@ double ScalableMetaData::getUnitBenefit() {
     double ret = 0;
     metaLock.readerLock();
     ret = unitBenefit;
+    metaLock.readerUnlock();
+    return ret;
+}
+
+double ScalableMetaData::getUpperMetric(){
+    double ret;
+    metaLock.readerLock();
+    ret = upperLevelMetric;
     metaLock.readerUnlock();
     return ret;
 }

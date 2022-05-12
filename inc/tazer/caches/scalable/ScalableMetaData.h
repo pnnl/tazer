@@ -114,6 +114,7 @@ struct ScalableMetaData {
         uint64_t lastMissTimeStamp;
         double unitBenefit;
         double unitMarginalBenefit;
+        double upperLevelMetric;
         double prevUnitBenefit;
         int prevSize;
         //BM: for algorithm calculations.
@@ -142,6 +143,7 @@ struct ScalableMetaData {
             prevUnitBenefit(0),
             prevSize(0),
             unitMarginalBenefit(0),
+            upperLevelMetric(100000000),//a temp big value
             lastDeliveryTime(-1.0),
             numBlocks(0),
             missInterval(100),
@@ -177,6 +179,7 @@ struct ScalableMetaData {
         //BM: for plots/tracing
         double getUnitMarginalBenefit();
         double getUnitBenefit();
+        double getUpperMetric();
         void printHistLogs(int i){benefitHistogram.printLog(i);}
     private:
         uint64_t trackAccess(uint64_t blockIndex, uint64_t readIndex);

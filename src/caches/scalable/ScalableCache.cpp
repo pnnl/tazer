@@ -96,7 +96,6 @@
 
 //#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define MeMPRINTF(...)
-
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
 evictHisto(100),
@@ -149,7 +148,7 @@ maxBlocksInUse(0) {
         DPRINTF("[JS] SimpleAllocator::addSimpleAllocator\n");
         _allocator = SimpleAllocator::addSimpleAllocator(blockSize, maxCacheSize);
     }
-
+    debug()<< cacheName << " " << _blockSize << " " << maxCacheSize << std::endl;
     srand(time(NULL));
     stats.end(false, CacheStats::Metric::constructor);
 }
@@ -519,12 +518,13 @@ void ScalableCache::updateRanks(uint32_t allocateForFileIndex, double & allocate
         if(allocateForFileIndex != fileIndex) {
             auto temp = meta->calcRank(timestamp-startTimeStamp, localMisses);
             //JS: This is for recording the unit marginal benefit and making it available to other caches
-            UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,temp));
+            //UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,temp));
+            UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,meta->getUpperMetric()));
             //MeMPRINTF("-------Index: %u %lf\n", fileIndex, temp);
         }
         else if (allocateForFileIndex == fileIndex){
             allocateForFileRank = meta->calcRank(timestamp-startTimeStamp, localMisses);
-            UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,allocateForFileRank));
+            UMBList.push_back(std::tuple<uint32_t, double>(fileIndex,meta->getUpperMetric()));
             //MeMPRINTF("-------Source Index: %u %lf\n", fileIndex, allocateForFileRank);
         }
     }
