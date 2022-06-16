@@ -119,7 +119,8 @@ struct ScalableMetaData {
         int prevSize;
         //BM: for algorithm calculations.
         double lastDeliveryTime;
-
+        double average_cost = 0; 
+        double average_miss = 0;
         std::atomic<uint64_t> numBlocks;
         
         //JS: Also for Nathan (intervalTime, fpGrowth, missInverval)

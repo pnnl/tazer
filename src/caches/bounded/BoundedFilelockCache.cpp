@@ -605,13 +605,13 @@ bool BoundedFilelockCache::blockAvailable(unsigned int index, unsigned int fileI
 
         int fd = _binFd;
         FileBlockEntry * entry = &_cacheEntries[index];
-        auto start = Timer::getCurrentTime();
+        //auto start = Timer::getCurrentTime();
         preadFromFile(fd, sizeof(FileBlockEntry), (uint8_t *)entry, entry->id * sizeof(FileBlockEntry));
-        auto elapsed = Timer::getCurrentTime() - start;
-        if (cnt % 200000 == 0) {
-            log(this) << "going to wait for " << elapsed / 1000000000.0 << " fi: " << fileIndex << " i:" << index << " wait status: " << entry->status << " " << std::string(entry->fileName) << " " << entry->blockIndex << " " << cnt << std::endl;
-            log(this) << _name << "rate: " << getRequestTime() << " " << _nextLevel->name() << " rate: " << _nextLevel->getRequestTime() << std::endl;
-        }
+        //auto elapsed = Timer::getCurrentTime() - start;
+        //if (cnt % 200000 == 0) {
+            //log(this) << "going to wait for " << elapsed / 1000000000.0 << " fi: " << fileIndex << " i:" << index << " wait status: " << entry->status << " " << std::string(entry->fileName) << " " << entry->blockIndex << " " << cnt << std::endl;
+            //log(this) << _name << "rate: " << getRequestTime() << " " << _nextLevel->name() << " rate: " << _nextLevel->getRequestTime() << std::endl;
+        //}
 
         if (entry->status == BLK_AVAIL) {
             avail = true;
@@ -621,17 +621,17 @@ bool BoundedFilelockCache::blockAvailable(unsigned int index, unsigned int fileI
                 // for better or for worse we allow unlocked access to check if a block avail, 
                 // there is potential for a race here when some over thread updates the block (not changing the data, just the metadata)
                 while(*origCache == CacheType::empty){ 
-                    start = Timer::getCurrentTime();
-                    preadFromFile(fd, sizeof(FileBlockEntry), (uint8_t *)&entry, index * sizeof(FileBlockEntry));
-                    elapsed += Timer::getCurrentTime() - start;
+                    //start = Timer::getCurrentTime();
+                    //preadFromFile(fd, sizeof(FileBlockEntry), (uint8_t *)&entry, index * sizeof(FileBlockEntry));
+                    //elapsed += Timer::getCurrentTime() - start;
                     *origCache = entry->origCache.load();
                 }
             }
         }
 
-        if (!avail) {
-            std::this_thread::sleep_for(std::chrono::nanoseconds(elapsed));
-        }
+        //if (!avail) {
+        //    std::this_thread::sleep_for(std::chrono::nanoseconds(elapsed));
+        //}
     }
     return avail;
 }

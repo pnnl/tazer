@@ -95,7 +95,7 @@
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
-// #define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+//#define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
 #define PPRINTF(...)
 
 #define SCALEABLE_METRIC_FILE_MAX 1000
@@ -111,15 +111,17 @@ SharedMemoryCache::SharedMemoryCache(std::string cacheName, CacheType type, uint
     uint64_t memSize = sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins) + sizeof(ReaderWriterLock) + (sizeof(double) + sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX;
 
     bool created = true;
+    //std::this_thread::sleep_for(std::chrono::seconds(1));
     int fd = shm_open(filePath.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666); //try to create file (O_EXCL)
     PPRINTF("Trying to open %s %d\n", filePath.c_str(), fd);
     if (fd == -1) {
         log(this) << "Reusing shared memory" << std::endl;
+        //std::this_thread::sleep_for(std::chrono::seconds(2));
         fd = shm_open(filePath.c_str(), O_RDWR, 0666);
         PPRINTF("2nd try to open %s %d\n", filePath.c_str(), fd);
         created = false;
     }
-
+    
     if(fd != -1){
         ftruncate(fd, memSize);
         void *ptr = mmap(NULL, memSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);

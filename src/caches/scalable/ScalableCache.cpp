@@ -392,11 +392,15 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
             req->time = Timer::getCurrentTime() - req->time;
             updateRequestTime(req->time);
 
+            //uint64_t timeStamp = Timer::getCurrentTime();
+            //_metaMap[fileIndex]->updateStats(false, timeStamp);
             trackBlock(_name, "[BLOCK_READ_HIT]", fileIndex, index, priority);
-            _metaMap[fileIndex]->updateStats(false, timeStamp);
+          
             stats.addAmt(prefetch, CacheStats::Metric::hits, req->size, thread_id);
             stats.end(prefetch, CacheStats::Metric::hits, thread_id);
             stats.start(prefetch, CacheStats::Metric::ovh, thread_id);
+            //uint64_t timeStamp = Timer::getCurrentTime();
+            _metaMap[fileIndex]->updateStats(false, timeStamp);
         }
         else { //JS: Data not currently present
             trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
@@ -409,17 +413,30 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
             if (reserve || full) { //JS: We reserved block
                 //calcrank on this partition after the miss
              //JS: For calcRank
+                DPRINTF("[JS] ScalableCache::readBlock reseved\n");
+
                 auto localMisses = misses.load();
-                uint64_t timeStamp = Timer::getCurrentTime();
+                uint64_t timeStamp = Timer::getCurrentTime(); 
                 _metaMap[fileIndex]->updateStats(true, timeStamp);
                 _metaMap[fileIndex]->calcRank(timeStamp-startTimeStamp, localMisses);
-                DPRINTF("[JS] ScalableCache::readBlock reseved\n");
+                
+
                 req->skipWrite = full;
                 stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
                 stats.start(prefetch, CacheStats::Metric::misses, thread_id); //miss
                 _nextLevel->readBlock(req, reads, priority);
+                //stats.end(prefetch, CacheStats::Metric::misses, thread_id);
+                //stats.start(prefetch, CacheStats::Metric::ovh, thread_id); 
+
+                /*auto localMisses = misses.load();
+                uint64_t timeStamp = Timer::getCurrentTime();
+                _metaMap[fileIndex]->updateStats(true, timeStamp);
+                _metaMap[fileIndex]->calcRank(timeStamp-startTimeStamp, localMisses);
+                */
+
                 stats.end(prefetch, CacheStats::Metric::misses, thread_id);
                 stats.start(prefetch, CacheStats::Metric::ovh, thread_id); //ovh
+                
             } ///continue from here
             else { //JS: Someone else will fullfill request
                 stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
@@ -439,9 +456,10 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
 
                     //calcrank on this partition after the miss
                     //JS: For calcRank
-                    auto localMisses = misses.load();
+                    //auto localMisses = misses.load();
                     uint64_t timeStamp = Timer::getCurrentTime();
                     _metaMap[fileIndex]->updateStats(false, timeStamp);
+                    //_metaMap[fileIndex]->calcRank(timeStamp-startTimeStamp, localMisses);
 
                     //JS: Update the req
                     req->data=buff;
@@ -457,6 +475,9 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
                     req->time = Timer::getCurrentTime()-req->time;
                     updateRequestTime(req->time);
 
+                    //uint64_t timeStamp = Timer::getCurrentTime();
+                    //_metaMap[fileIndex]->updateStats(false, timeStamp);
+
                     //JS: Future of a future required by network cache impl
                     std::promise<Request*> prom;
                     auto innerFuture = prom.get_future();
@@ -465,7 +486,9 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
                 });
                 reads[index] = fut.share();
                 stats.end(prefetch, CacheStats::Metric::misses, thread_id);
-                stats.start(prefetch, CacheStats::Metric::ovh, thread_id); 
+                stats.start(prefetch, CacheStats::Metric::ovh, thread_id);
+                //uint64_t timeStamp = Timer::getCurrentTime(); 
+                //_metaMap[fileIndex]->updateStats(true, timeStamp);
             }
         }
     }
@@ -590,7 +613,7 @@ ScalableMetaData * ScalableCache::findVictim(uint32_t allocateForFileIndex, uint
     ScalableMetaData * ret = NULL;
     sourceFileIndex = (uint32_t) -1;
     if(minFileIndex != (uint32_t) -1) {
-        if(mustSucceed || std::isnan(sourceFileRank) || sourceFileRank*0.95 > minRank) {
+        if(mustSucceed || std::isnan(sourceFileRank) || sourceFileRank > minRank) {
             ret = _metaMap[minFileIndex];
             //JS: Do update rank here
             MeMPRINTF("-----------SOURCE: %u DEST: %u\n", minFileIndex, allocateForFileIndex);
@@ -706,7 +729,7 @@ uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, u
         //MeMPRINTF("UMB list, File: %d , UMB: %lf, blocks: %d \n",index,value, _metaMap[index]->getNumBlocks() );
         if(index != allocateForFileIndex) {
             //5% difference condition is introduced to prevent 'ping-pong'ing between files
-            if(value < allocateForFileRank*0.95) {
+            if(value < allocateForFileRank) {
                 if( _metaMap[index]->getNumBlocks()>1 ){
                     //MeMPRINTF("victim Index: %d has %d blocks, and umb is %f\n", index, _metaMap[index]->getNumBlocks(), value);
                     block = _metaMap[index]->oldestBlock(sourceBlockIndex);
