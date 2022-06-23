@@ -272,17 +272,15 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     accessPerInterval++;
     int blocks = numBlocks.load();
     if(miss) {
-        if (average_miss == 0){
-          average_miss += 1;
-        }
+        average_miss += 1;
+        average_cost += lastDeliveryTime;
         if(lastMissTimeStamp) {
             double i = (double)(timestamp - lastMissTimeStamp);
             missInterval.addData(i, 1);
-            if(lastDeliveryTime>0 && blocks){ //check to make sure we recorded a deliverytime
-                average_cost += lastDeliveryTime;
-                double cost = log2(average_cost/average_miss);///Mh);//Mh*i;//(double)timestamp/(access/accessPerInterval));//(double)timestamp/access); //(double)timestamp*Mh;//log2(i);//log2(i); //average_cost; //lastMissTimeStamp;
-                benefitHistogram.addData(i, accessPerInterval/cost/blocks/log2(i));//log2(i));//log2(i));///log2(i));//accessPerInterval/cost); // /cost); ///blocks);
-                
+            if(average_cost>0){ //check to make sure we recorded a deliverytime
+                //double Mh = missInterval.getValue(i);
+                double cost = log2(average_cost/average_miss);//log2(i); //average_cost; //lastMissTimeStamp;
+                benefitHistogram.addData(i, accessPerInterval/cost/blocks/log2(i));// /cost); ///blocks);
                 //here we are guaranteed to have at least two misses, and data in the histograms, so we can call recalc marginal benefit for the partition
                 recalc = true;
             }
@@ -313,9 +311,9 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         double t = ((double) time) / ((double) misses);
         double Mh = missInterval.getValue(t);
         double Bh = benefitHistogram.getValue(t);
-        average_miss = (double) misses;
+        //average_miss = (double) misses;
         unitBenefit = Bh / Mh; /// ((double) numBlocks.load());//*log2(t); //(Bh/Mh);///log2(t);
-        upperLevelMetric = Mh*log2(average_cost/((double)misses));///Mh);//Mh);//average_cost;//Mh*log2(average_cost/Mh);//((double)time)/access;//(double) time;//Mh*t; //(double)misses); //(double) time;//((double) numBlocks.load());//(double)time; //Mh;  // ((double) numBlocks.load()); //Mh; ///((double) numBlocks.load()) ; //unitBenefit/((double) numBlocks.load());//Mh; //*log2(t);
+        upperLevelMetric = Mh*log2(average_cost/average_miss);///Mh);//Mh);//average_cost;
         auto curBlocks = numBlocks.load();
         if(curBlocks > prevSize){
             unitMarginalBenefit = unitBenefit - prevUnitBenefit;

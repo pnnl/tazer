@@ -94,7 +94,7 @@
 #define DPRINTF(...)
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
-//#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+// #define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define MeMPRINTF(...)
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -381,6 +381,9 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
         
         // std::cerr << " [JS] readBlock " << buff << " " << reserve << std::endl;
         if(buff) {
+            //uint64_t timeStamp = Timer::getCurrentTime();
+            //_metaMap[fileIndex]->updateStats(false, timeStamp);
+
             stats.end(prefetch, CacheStats::Metric::ovh, thread_id); //read
             stats.start(prefetch, CacheStats::Metric::hits, thread_id); //ovh
             DPRINTF("[JS] ScalableCache::readBlock hit\n");
@@ -392,15 +395,15 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
             req->time = Timer::getCurrentTime() - req->time;
             updateRequestTime(req->time);
 
-            //uint64_t timeStamp = Timer::getCurrentTime();
-            //_metaMap[fileIndex]->updateStats(false, timeStamp);
             trackBlock(_name, "[BLOCK_READ_HIT]", fileIndex, index, priority);
+            //uint64_t timeStamp = Timer::getCurrentTime();
+            _metaMap[fileIndex]->updateStats(false, timeStamp);
           
             stats.addAmt(prefetch, CacheStats::Metric::hits, req->size, thread_id);
             stats.end(prefetch, CacheStats::Metric::hits, thread_id);
             stats.start(prefetch, CacheStats::Metric::ovh, thread_id);
             //uint64_t timeStamp = Timer::getCurrentTime();
-            _metaMap[fileIndex]->updateStats(false, timeStamp);
+            //_metaMap[fileIndex]->updateStats(false, timeStamp);
         }
         else { //JS: Data not currently present
             trackBlock(_name, "[BLOCK_READ_MISS_CLIENT]", fileIndex, index, priority);
@@ -420,22 +423,22 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
                 _metaMap[fileIndex]->updateStats(true, timeStamp);
                 _metaMap[fileIndex]->calcRank(timeStamp-startTimeStamp, localMisses);
                 
-
+ 
                 req->skipWrite = full;
                 stats.end(prefetch, CacheStats::Metric::ovh, thread_id);
                 stats.start(prefetch, CacheStats::Metric::misses, thread_id); //miss
                 _nextLevel->readBlock(req, reads, priority);
-                //stats.end(prefetch, CacheStats::Metric::misses, thread_id);
-                //stats.start(prefetch, CacheStats::Metric::ovh, thread_id); 
-
-                /*auto localMisses = misses.load();
-                uint64_t timeStamp = Timer::getCurrentTime();
-                _metaMap[fileIndex]->updateStats(true, timeStamp);
-                _metaMap[fileIndex]->calcRank(timeStamp-startTimeStamp, localMisses);
-                */
-
                 stats.end(prefetch, CacheStats::Metric::misses, thread_id);
-                stats.start(prefetch, CacheStats::Metric::ovh, thread_id); //ovh
+                stats.start(prefetch, CacheStats::Metric::ovh, thread_id); 
+
+                //auto localMisses = misses.load();
+                //uint64_t timeStamp = Timer::getCurrentTime();
+                //_metaMap[fileIndex]->updateStats(true, timeStamp);
+                //_metaMap[fileIndex]->calcRank(timeStamp-startTimeStamp, localMisses);
+                
+
+                //stats.end(prefetch, CacheStats::Metric::misses, thread_id);
+                //stats.start(prefetch, CacheStats::Metric::ovh, thread_id); //ovh
                 
             } ///continue from here
             else { //JS: Someone else will fullfill request
@@ -490,6 +493,7 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
                 //uint64_t timeStamp = Timer::getCurrentTime(); 
                 //_metaMap[fileIndex]->updateStats(true, timeStamp);
             }
+            //_metaMap[req->fileIndex]->updateDeliveryTime(req->deliveryTime);
         }
     }
     else {
