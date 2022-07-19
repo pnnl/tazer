@@ -97,7 +97,7 @@ class OutputFile : public TazerFile {
 
     off_t seek(off_t offset, int whence, uint32_t index);
     uint64_t fileSize();
-
+    uint64_t numBlks();
     bool active();
 
     void setThreadFileDescriptor(int fd);
@@ -113,6 +113,7 @@ class OutputFile : public TazerFile {
     std::unordered_map<std::thread::id, int> *_threadFileDescriptors;
     ReaderWriterLock _outputFileLock;
     ReaderWriterLock _threadFdLock;
+    uint64_t _numBlks = 0;
 };
 
 #endif /* OutputFile_H_ */

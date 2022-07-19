@@ -76,12 +76,19 @@
 #include "Config.h"
 #include <string>
 #include <unistd.h>
+#include <UnixIO.h>
+#include <sys/stat.h>
+#include <Lib.h>
 
 int main(int argc, char **argv) {
     std::string name(argv[1]);
+    std::string metaname(argv[2]);
 
     //Create new file
-    OutputFile *file = new OutputFile(name, name, -1);
+    auto  _fd = (*unixopen)(metaname.c_str(), O_RDONLY, 0);
+std::cout<< "Before calling Outputfile constructor\n";
+    OutputFile *file = new OutputFile(name, metaname, _fd);
+
     std::cout << "+++++SIZE: " << file->fileSize() << std::endl;
     std::string buff("This is a test of the output file.\n");
     std::string buff2("Now we have a second line.\n");

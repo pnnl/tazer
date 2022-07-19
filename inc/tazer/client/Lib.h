@@ -87,6 +87,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <unordered_map>
+#include <map>
+#include <atomic>
+#include <string>
+#include <vector>
 #include <unordered_set>
 //#include "ErrorTester.h"
 #include "InputFile.h"
@@ -105,8 +109,8 @@
 
 #define ADD_THROW __THROW
 
-//#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
-#define DPRINTF(...)
+#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define DPRINTF(...)
 
 static Timer* timer;
 
@@ -119,6 +123,15 @@ static std::unordered_set<int> track_fd;
 static std::unordered_set<FILE *> track_fp;
 static std::unordered_set<int> ignore_fd;
 static std::unordered_set<FILE *> ignore_fp;
+
+// // The following map stores the filename, as well as the file descriptors, mode. We 
+// // Can extend this easily to save more info as part of the tuple. 
+// std::map<std::string, std::multimap<int, std::tuple<int>>> file_info;
+
+// std::map<int, std::string> file_info; // to reverse-lookup filename from fd
+// The following map stores the block information/ access freqency for each file
+std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_r_stat;
+std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_w_stat;
 
 unixopen_t unixopen = NULL;
 unixopen_t unixopen64 = NULL;
@@ -152,12 +165,17 @@ unixfeof_t unixfeof = NULL;
 unixreadv_t unixreadv = NULL;
 unixwritev_t unixwritev = NULL;
 
+bool write_printf = false;
+
 int removeStr(char *s, const char *r);
 
 /*Templating*************************************************************************************************/
 
 inline bool checkMeta(const char *pathname, std::string &path, std::string &file, TazerFile::Type &type) {
     int fd = (*unixopen)(pathname, O_RDONLY);
+    if (write_printf == true) {
+      printf("[Tazer] write meta filename %s\n", pathname);
+    }
 
     if(fd >= 0)
     {
@@ -171,6 +189,9 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         (*unixclose)(fd);
         if (ret <= 0) {
             delete[] meta;
+	    if (write_printf == true) {
+	      printf("[Tazer] in checkmeta for write 1\n");
+	    }
             return false;
         }
         meta[bufferSize] = '\0';
@@ -181,17 +202,26 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         std::getline(ss, curLine);
         if(curLine.compare(0, tazerVersion.length(), tazerVersion) != 0) {
             delete[] meta;
-            return false;
+	    if (write_printf == true) {
+	      printf("[Tazer] in checkmeta for write 2\n");
+	    }
+	    return false;
         }
 
         std::getline(ss, curLine);
         if(curLine.compare(0, 5, "type=") != 0) {
             delete[] meta;
+	    if (write_printf == true) {
+	      printf("[Tazer] in checkmeta for write 3\n");
+	    }
             return false;
         }
 
         std::string typeStr = curLine.substr(5, curLine.length() - 5);
         for(int i = 0; i < 3; i++) {
+	    if (write_printf == true) {
+	      printf("[Tazer] in checkmeta for write 4\n");
+	    }
             if(typeStr.compare(types[i]) == 0) {
                 path = pathname;
                 file = pathname;
@@ -202,6 +232,9 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
             }
         }
         delete[] meta;
+    }
+    if (write_printf == true) {
+      printf("[Tazer] in checkmeta for write 5\n");
     }
     return false;
 }
@@ -236,19 +269,32 @@ inline void removeFileStream(unixfclose_t posixFun, FILE *fp) {
 
 template <typename Func, typename FuncLocal, typename... Args>
 inline auto innerWrapper(int fd, bool &isTazerFile, Func tazerFun, FuncLocal localFun, Args... args) {
+  if (write_printf == true) {
+    printf("[Tazer] in innerwrapper 3 for write\n");
+  }
     TazerFile *file = NULL;
     unsigned int fp = 0;
+    
+    if (write_printf == true) {
+      printf("[Tazer] in innerwrapper 3 init val: %d , fd val %d \n", init, fd);
+    }
     if (init && TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, fp)) {
         isTazerFile = true;
 
         return tazerFun(file, fp, args...);
     }
+  if (write_printf == true) {
+    printf("[Tazer] in innerwrapper 3 for write calling localfun\n");
+  }
     return localFun(args...);
 }
 
 template <typename Func, typename FuncLocal, typename... Args>
 inline auto innerWrapper(FILE *fp, bool &isTazerFile, Func tazerFun, FuncLocal localFun, Args... args) {
-    if (init) {
+  if (write_printf == true) {
+    printf("[Tazer] in innerwrapper 2 for write\n");
+  } 
+  if (init) {
         ReaderWriterLock *lock = NULL;
         int fd = TazerFileStream::lookupStream(fp, lock);
         if (fd != -1) {
@@ -257,23 +303,51 @@ inline auto innerWrapper(FILE *fp, bool &isTazerFile, Func tazerFun, FuncLocal l
             TazerFile *file = NULL;
             unsigned int pos = 0;
             TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, pos);
+	    if (write_printf == true) {
+	      printf("[Tazer] in innerwrapper 3 for write calling Tazerfun\n");
+	    }
             auto ret = tazerFun(file, pos, fd, args...);
             lock->writerUnlock();
             removeFileStream(localFun, fp);
             return ret;
         }
     }
-    return localFun(args...);
+  if (write_printf == true) {
+    printf("[Tazer] in innerwrapper 2 for write calling localfun\n");
+  } 
+  return localFun(args...);
 }
 
 template <typename Func, typename FuncPosix, typename... Args>
 inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun, FuncPosix posixFun, Args... args) {
-    std::string path;
+  // std::cout << "[Tazer] In innerWrapper\n";
+  if (write_printf == true) {
+    printf("[Tazer] in innerwrapper for write\n");
+  }  
+  std::string path;
     std::string file;
     TazerFile::Type type;
     if (init && checkMeta(pathname, path, file, type)) {
+      if (write_printf == true) {
+	printf("[Tazer] in innerwrapper's init call for write\n");
+      }
+      // if (file.empty()) {
+      // 	std::cout << "Empty file";
+      // }
+      // else {
+      // 	std::cout << "[Tazer] innerwrapper file: " << file << std::endl;
+      // }
         isTazerFile = true;
         return tazerFun(file, path, type, args...);
+    }
+    // if (file.empty()) {
+    //   std::cout << "Empty file";
+    // }
+    // else {
+    //   std::cout << "[Tazer] innerwrapper file outside loop: " << std::endl;
+    // }
+    if (write_printf == true) {
+      printf("[Tazer] in innerwrapper calling posix\n");
     }
     return posixFun(args...);
 }
@@ -302,13 +376,25 @@ inline void removeFromSet(std::unordered_set<FILE *> &set, FILE *value, unixfclo
 
 template <typename FileId, typename Func, typename FuncPosix, typename... Args>
 auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func tazerFun, FuncPosix posixFun, Args... args) {
-    if (!init) {
-        posixFun = (FuncPosix)dlsym(RTLD_NEXT, name);
+  // DPRINTF("In outerwrapper\n");
+  // std::cout << "[Tazer] command: " << std::endl;
+  // fflush(stdout);
+  if (strcmp(name, "write") == 0) {
+    write_printf = true;
+    printf("In outerwrapper invocation for write\n");
+  }
+  if (!init) {
+      if (strcmp(name, "write") == 0) {
+	printf("In init for write calling in posix\n");
+      }
+    // std::cout << "[Tazer] " << " should not be here!\n";
+      // std::cout << "[Tazer] " << "HERE!!!" << std::endl;
+      posixFun = (FuncPosix)dlsym(RTLD_NEXT, name);
         return posixFun(args...);
     }
 
 
-
+  // std::cout << "[Tazer] command " << std::endl;
     timer->start();
 
     //Check if this is a special file to track (from environment variable)
@@ -321,6 +407,9 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
     bool isTazerFile = false;
 
     //Do the work
+    if (strcmp(name, "write") == 0) {
+	printf("Before calling innerwrapper for write\n");
+    }
     auto retValue = innerWrapper(fileId, isTazerFile, tazerFun, posixFun, args...);
     if (ignore) {
         //Maintain the ignore_fd set
@@ -356,7 +445,9 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
             timer->end(Timer::MetricType::system, metric);
         }
     }
-
+    if (write_printf == true) {
+      write_printf = false;
+    }
     return retValue;
 }
 

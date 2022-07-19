@@ -87,6 +87,11 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
+#include <tuple>
+#include <string>
+#include <fstream>
+#include <iostream>
 //#include "ErrorTester.h"
 #include "InputFile.h"
 #include "OutputFile.h"
@@ -105,8 +110,8 @@
 #include "Lib.h"
 #include "UrlDownload.h"
 
-//#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
-#define DPRINTF(...)
+#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define DPRINTF(...)
 #define TAZER_ID "TAZER"
 #define TAZER_ID_LEN 5 
 #define TAZER_VERSION "0.1"
@@ -240,6 +245,15 @@ int removeStr(char *s, const char *r) {
 int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, const char *pathname, int flags, int mode) {
     DPRINTF("tazerOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);
     int fd = (*unixopen64)(metaName.c_str(), O_RDONLY, 0);
+    // if (file_info.find(name) == file_info.end()) {
+    //   file_info.insert(std::make_pair(name, std::map<int, std::tuple<int> >()));
+    //   file_info[name].insert(std::make_pair(fd, std::make_tuple(mode)));
+    // }
+    // if (file_info.find(fd) == file_info.end()) {
+    //   file_info.insert(std::make_pair(fd, name));
+    // } else {
+    //   file_info[fd] = name;
+    // }
     TazerFile *file = TazerFile::addNewTazerFile(type, name, metaName, fd);
     if (file)
         TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
@@ -283,9 +297,19 @@ int close(int fd) {
 }
 
 ssize_t tazerRead(TazerFile *file, unsigned int fp, int fd, void *buf, size_t count) {
-    ssize_t ret = file->read(buf, count, fp);
-    timer->addAmt(Timer::MetricType::tazer, Timer::Metric::read, ret);
-    return ret;
+  //TODO: only track if flag is enabled
+  // auto num_blks = file->numBlks();
+  //Check if for the first time we are seeing this fd
+  // if (track_file_blk_stat.find(fd) == track_file_blk_stat.end()) { 
+  //   track_file_blk_stat.insert(std::make_pair(fd, std::map<int, std::atomic<int64_t> >()));
+  //   // for (auto i = 0; i < num_blks; ++i) {
+  //   //   track_file_blk_stat[fd].insert(std::make_pair(i, 0));
+  //   // }
+    
+  // }
+  ssize_t ret = file->read(buf, count, fp);
+  timer->addAmt(Timer::MetricType::tazer, Timer::Metric::read, ret);
+  return ret;
 }
 
 ssize_t read(int fd, void *buf, size_t count) {
@@ -296,14 +320,18 @@ ssize_t read(int fd, void *buf, size_t count) {
 }
 
 ssize_t tazerWrite(TazerFile *file, unsigned int fp, int fd, const void *buf, size_t count) {
-    auto ret = file->write(buf, count, fp);
+  std::cout << "[Tazer] " << "in Lib.cpp TazerWrite " << std::endl;  
+  auto ret = file->write(buf, count, fp);
     timer->addAmt(Timer::MetricType::tazer, Timer::Metric::write, ret);
     return ret;
 }
 
 ssize_t write(int fd, const void *buf, size_t count) {
-    vLock.readerLock();
+  std::cout << "[Tazer] " << "in Lib.cpp write " << std::endl;
+  vLock.readerLock();
+  std::cout << "[Tazer] " << "inside Lib.cpp write lock" << std::endl;
     auto ret = outerWrapper("write", fd, Timer::Metric::write, tazerWrite, unixwrite, fd, buf, count);
+    std::cout << "[Tazer] " << "in Lib.cpp return val " << ret << std::endl; 
     vLock.readerUnlock();
     return ret;
 }

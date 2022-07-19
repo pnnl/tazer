@@ -1,16 +1,21 @@
 #!/bin/bash
 module purge
-module load gcc/8.1.0
+module load gcc/10.3.0
+# module load gcc/8.1.0
 module load python/3.7.0
 
 #!!!!!! CHANGE THIS FOLDER !!!!!!
-SCRIPT_DIR=/people/mutl832/tazer-paper/script
-RES_DIR=$SCRIPT_DIR/"Results/"
+SCRIPT_DIR=/qfs/people/firo017/tazer/tazer_2/tazer/script/
+RES_DIR=$SCRIPT_DIR/"Results_3/"
 mkdir $RES_DIR
 
-test_list=("Test1A" "Test1B" "Test1C_rr" "Test1C_l1r4" "Test1C_l5r1" "NEW_Test2A_linear" "NEW_Test2B_random")
+test_list=("Test1A" "Test1B")
+
+#"Test1C_rr" "Test1C_l1r4" "Test1C_l5r1" "NEW_Test2A_linear" "NEW_Test2B_random")
 #test_list=("Test1C_rr" "Test1C_l1r4" "Test1C_l5r1" "NEW_Test2A_linear" "NEW_Test2B_random")
-test_memory=(64 64 64 64 64 60 60)
+test_memory=(64 64) 
+
+# 64 64 64 60 60)
 num_tests=${#test_list[@]}
 
 

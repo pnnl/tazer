@@ -81,12 +81,14 @@
 #include "PriorityThreadPool.h"
 #include "ReaderWriterLock.h"
 #include "Prefetcher.h"
+#include <map>
 #include <atomic>
 #include <mutex>
 #include <string>
 #include <unordered_set>
 
 class ScalableFileRegistry;
+extern std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_r_stat;
 
 class InputFile : public TazerFile {
   public:
@@ -98,6 +100,7 @@ class InputFile : public TazerFile {
     void open();
     void close();
     uint64_t fileSize();
+    // uint64_t numBlks();
 
     ssize_t read(void *buf, size_t count, uint32_t index = 0);
     ssize_t write(const void *buf, size_t count, uint32_t index = 0);
@@ -109,7 +112,6 @@ class InputFile : public TazerFile {
 
     static Cache *_cache;
     static std::chrono::time_point<std::chrono::high_resolution_clock>*  _time_of_last_read;
-
   private:
     uint64_t fileSizeFromServer();
 
@@ -122,7 +124,7 @@ class InputFile : public TazerFile {
     uint32_t _numBlks;
     uint32_t _regFileIndex;
     Prefetcher *_prefetcher;
-
+  
 
 
 };

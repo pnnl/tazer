@@ -77,12 +77,14 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <map>
 
 #include "TazerFile.h"
 #include "PriorityThreadPool.h"
 #include "ThreadPool.h"
 #include "OutputFile.h"
 
+extern std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_w_stat;
 class OutputFileInner : public TazerFile {
   public:
     OutputFileInner(std::string fileName, std::string metaName, int fd);

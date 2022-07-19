@@ -111,6 +111,7 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
     _active(false),
     _fd(fd)
      {
+       std::cout << "In tazerFile constructor\n";
     readMetaInfo();
     newFilePosIndex();
 }
@@ -126,17 +127,21 @@ TazerFile::~TazerFile() {
 //port=
 //file=
 bool TazerFile::readMetaInfo() {
+  std::cout << "BEGINNING\n";
     TIMEON(uint64_t t1 = Timer::getCurrentTime());
     auto start = Timer::getCurrentTime();
     unixread_t unixRead = (unixread_t)dlsym(RTLD_NEXT, "read");
     unixlseek_t unixlseek = (unixlseek_t)dlsym(RTLD_NEXT, "lseek");
-
+   
     if (_fd < 0) {
         log(this) << "ERROR: Failed to open local metafile " << _metaName.c_str() << " : " << strerror(errno) << std::endl;
+    	std::cout << "ERROR: Failed to open local metafile " << _metaName.c_str() << " : " << strerror(errno) << std::endl;
         return 0;
     }
 
+    std::cout << "GOT THE FILE\n";
     int64_t fileSize = (*unixlseek)(_fd, 0L, SEEK_END);
+    std::cout << "File size: " << fileSize << std::endl;
     (*unixlseek)(_fd, 0L, SEEK_SET);
     char *meta = new char[fileSize + 1];
     int ret = (*unixRead)(_fd, (void *)meta, fileSize);
@@ -162,6 +167,7 @@ bool TazerFile::readMetaInfo() {
     std::stringstream ss(meta);
 
     State state = DEFAULT;
+    std::cout << "Before the while loop \n";
     std::getline(ss, curLine);
     while(state != DONE) {
         switch (state)
@@ -171,7 +177,8 @@ bool TazerFile::readMetaInfo() {
             hostAddr = "\0";
             port = 0;
             fileName = "\0";
-
+	    std::cout << "In the server\n";
+	    
             while(std::getline(ss, curLine)) {
                 if(curLine.compare(0, 5, "host=") == 0) {
                     hostAddr = curLine.substr(5, (curLine.length() - 5));
@@ -213,13 +220,17 @@ bool TazerFile::readMetaInfo() {
             //make sure the host port and file name were given
             if(hostAddr == "\0" || port == 0 || fileName == "\0") {
                 log(this) << "0:improperly formatted meta file" << std::endl;
+		std::cout << "0:improperly formatted meta file" << std::endl;
                 return 0;
             }
             //after collecting info for a server
+	    std::cout << "after collecting info for a server\n";
             if (_type != TazerFile::Local) {
                 Connection *connection = Connection::addNewClientConnection(hostAddr, port);
                 std::cout << hostAddr << " " << port << " " << connection << std::endl;
+		std::cout << "CONNECTIONSSS!" << std::endl;
                 if (connection) {
+		  std::cout << "INSIDE IF \n";
                     if (ConnectionPool::useCnt->count(connection->addrport()) == 0) {
                         ConnectionPool::useCnt->emplace(connection->addrport(), 0);
                         ConnectionPool::consecCnt->emplace(connection->addrport(), 0);
@@ -228,6 +239,7 @@ bool TazerFile::readMetaInfo() {
                     numServers++;
                 }
             }
+	    
             state = DEFAULT;
             break;
         default:
@@ -278,6 +290,10 @@ bool TazerFile::active() {
 
 bool TazerFile::eof(uint32_t index) {
     return _eof[index];
+}
+
+int TazerFile::getFd() {
+  return _fd;
 }
 
 uint32_t TazerFile::newFilePosIndex() {

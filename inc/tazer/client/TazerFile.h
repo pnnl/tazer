@@ -104,7 +104,8 @@ class TazerFile : public Loggable, public Trackable<std::string, TazerFile *> {
     virtual void open() = 0;
     virtual void close() = 0;
     virtual uint64_t fileSize() = 0;
-
+  //  virtual uint64_t numBlks() = 0;
+  
     virtual ssize_t read(void *buf, size_t count, uint32_t filePosIndex = 0) = 0;
     virtual ssize_t write(const void *buf, size_t count, uint32_t filePosIndex = 0) = 0;
 
@@ -126,7 +127,7 @@ class TazerFile : public Loggable, public Trackable<std::string, TazerFile *> {
     bool prefetch();
     virtual bool active();
     bool eof(uint32_t index);
-
+    int getFd();
   protected:
     std::string findMetaParam(std::string param, std::string server, bool required);
     bool readMetaInfo();

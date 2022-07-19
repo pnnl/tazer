@@ -80,7 +80,7 @@ PriorityThreadPool<std::function<void()>>* OutputFile::_transferPool;
 ThreadPool<std::function<void()>>* OutputFile::_decompressionPool;
 
 OutputFile::OutputFile(std::string fileName, std::string metaName, int fd) : TazerFile(TazerFile::Type::Output, fileName, metaName, fd) {
-    //std::cout << "entered OutputFile constructor" << std::endl;
+    std::cout << "entered OutputFile constructor" << std::endl;
     _outputFiles = new std::unordered_map<int, TazerFile*>;
     _threadFileDescriptors = new std::unordered_map<std::thread::id, int>;
 
@@ -110,7 +110,8 @@ ssize_t OutputFile::read(void *buf, size_t count, uint32_t index) {
 }
 
 ssize_t OutputFile::write(const void *buf, size_t count, uint32_t index) {
-    return (*_outputFiles)[getThreadFileDescriptor()]->write(buf, count, index);
+  std::cout << "[Tazer] " << "in OutputFile::write" << std::endl;  
+  return (*_outputFiles)[getThreadFileDescriptor()]->write(buf, count, index);
 }
 
 off_t OutputFile::seek(off_t offset, int whence, uint32_t index) {
@@ -120,6 +121,10 @@ off_t OutputFile::seek(off_t offset, int whence, uint32_t index) {
 uint64_t OutputFile::fileSize() {
     return (*_outputFiles)[getThreadFileDescriptor()]->fileSize();
 }
+
+// uint64_t OutputFile::numBlks() {
+//   return _numBlks;
+// }
 
 bool OutputFile::active() {
     int fd = getThreadFileDescriptor();

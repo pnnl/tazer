@@ -71,7 +71,6 @@
 //                   under Contract DE-AC05-76RL01830
 //
 //*EndLicense****************************************************************
-
 #include "InputFile.h"
 #include "caches/Cache.h"
 #include "caches/bounded/BoundedFilelockCache.h"
@@ -275,7 +274,13 @@ InputFile::~InputFile() {
 }
 
 void InputFile::open() {
-    // std::cout << "[TAZER] " << "InputFile: " << _name << std::endl;
+    std::cout << "[TAZER] " << "InputFile: " << _name << std::endl;
+    if (track_file_blk_r_stat.find(_name) == track_file_blk_r_stat.end()) {
+      track_file_blk_r_stat.insert(std::make_pair(_name, 
+						  std::map<int, 
+						  std::atomic<int64_t> >()));
+    }
+
     if (_connections.size()) {
         std::unique_lock<std::mutex> lock(_openCloseLock);
         bool prev = false;
@@ -343,6 +348,19 @@ void InputFile::close() {
     }
     //end bmutlu
     lock.unlock();
+    
+    // write blk access stat in a file
+    std::cout << "Writing r blk access stat\n";
+    std::fstream current_file_stat;
+    std::string file_name = _name;
+    auto file_stat = file_name.append("_r_stat");
+    current_file_stat.open(file_stat, std::ios::out);
+    if (!current_file_stat) {std::cout << "File for read stat collection not created!";}
+    current_file_stat << _name << " " << "Block no." << " " << "Frequency" << std::endl;
+    for (auto& blk_info  : track_file_blk_r_stat[_name]) {
+      current_file_stat << blk_info.first << " " << blk_info.second << std::endl;
+    }
+    // track_file_blk_stat[fd].clear();
     // std::cout << "Closing file " << _name << std::endl;
 }
 
@@ -383,7 +401,7 @@ bool InputFile::trackRead(size_t count, uint32_t index, uint32_t startBlock, uin
 
         int fd = (*unixopen)("access_new.txt", O_WRONLY | O_APPEND | O_CREAT, 0660);
         if (fd != -1) {
-            std::stringstream ss;
+	    std::stringstream ss;
             ss << _name << " " << _filePos[index] << " " << count << " " << startBlock << " " << endBlock <<" "<<elapsed << std::endl;
             unixwrite(fd, ss.str().c_str(), ss.str().length());
             unixclose(fd);
@@ -425,7 +443,21 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
         if (endBlock > _numBlks) {
             endBlock = _numBlks;
         }
-        // std::cerr << "[TAZER] " << Timer::printTime() << _name << " " << _filePos[index] << " " << _fileSize << " " << count << " " << startBlock << " " << endBlock << std::endl;
+        std::cout << "[TAZER] Read file" << Timer::printTime() << _name << " " << _filePos[index] << " " << _fileSize << " " << count << " " << startBlock << " " << endBlock << std::endl;
+	for (auto i = startBlock; i < endBlock; i++) {
+	    if (track_file_blk_r_stat[_name].find(i) == 
+		track_file_blk_r_stat[_name].end()) {
+	      track_file_blk_r_stat[_name].insert(std::make_pair(i, 1)); // not thread-safe
+	    }
+	    else {
+	      track_file_blk_r_stat[_name][i]++;
+	    }
+	  }
+
+	  std::cout << "[TAZER] printing current stat for " << _name << std::endl;
+	  for (auto& [block, count]: track_file_blk_r_stat[_name]) {
+	    std::cout << block << " " << count << std::endl;
+	  }
 
         trackRead(count, index, startBlock, endBlock);
         // bool error = false;
@@ -573,6 +605,11 @@ uint64_t InputFile::fileSize() {
         return _fileSize;
     return fileSizeFromServer();
 }
+
+// uint64_t InputFile::numBlks() {
+//   return _numBlks;
+// }
+
 
 //TODO: handle for if there is the local file present...
 off_t InputFile::seek(off_t offset, int whence, uint32_t index) {

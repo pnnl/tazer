@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
     char *data = new char[size];
     file2->read(data, size);
     std::string strData(data, size);
-    //    std::cout << strData << std::endl;
+    std::cout << strData << std::endl;
     delete[] data;
 
     //Close and delete file
