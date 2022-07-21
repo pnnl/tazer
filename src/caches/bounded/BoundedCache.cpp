@@ -92,7 +92,9 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 //#define PPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+#define PPRINTFB(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
 #define PPRINTF(...)
+//#define PPRINTFB(...)
 
 template <class Lock>
 BoundedCache<Lock>::BoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, Cache * scalableCache) : Cache(cacheName,type),
@@ -118,7 +120,7 @@ BoundedCache<Lock>::BoundedCache(std::string cacheName, CacheType type, uint64_t
                                 << "NumBlocks not a multiple of associativity" << std::endl;
     }
     log(this) << _name << " " << _cacheSize << " " << _blockSize << " " << _numBlocks << " " << _associativity << " " << _numBins << std::endl;
-    debug()<< _name << " " << _cacheSize << " " << _blockSize << " " << _numBlocks << " " << _associativity << " " << _numBins << std::endl;
+    debug()<< _name << " BB " << _cacheSize << " " << _blockSize << " " << _numBlocks << " " << _associativity << " " << _numBins << std::endl;
 
     _localLock = new ReaderWriterLock();
     stats.end(false, CacheStats::Metric::constructor);
@@ -241,37 +243,37 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
             //JS: Scalable metric piggybacking
             if(_scalableCache) {
                 //if(blkEntry->fileIndex != victimFileIndex) {
-
                     auto umb = getLastUMB(fileIndex);
                     auto umbblock = getLastUMB(blkEntry->fileIndex);
-                    PPRINTF("i: %d, binindex:%d, umb: %.10lf, asking_umb: %.10lf, block_umb: %.10lf\n", i,binIndex, (umb<1000000000?umb:1000000000), (askingUMB<1000000000?askingUMB:1000000000), (umbblock<1000000000?umbblock:1000000000));
-                    // auto umb = _scalableCache->getLastUMB(fileIndex);
-
-                    // if(umb < victimMinUMB) {
-                    //     if (!anyUsers(blkEntry,req)) {
-                    //         victimTime = blkEntry->timeStamp;
-                    //         victimMinUMB = umb;
-                    //         victimEntry = blkEntry;
-                    //         PPRINTF("%s Got a UMB %lf\n", _name.c_str(), umb);
-                    //     }
-                    // }
-
-                    if(umbblock == victimMinUMB){
-                        //check if oldest
+                    PPRINTFB("%d:%d, INCOMING file:%d umb:%.10lf, BLOCK file:%d umb:%.10lf\n",binIndex,i, fileIndex, (askingUMB==std::numeric_limits<double>::max()?1000000000:(askingUMB==std::numeric_limits<double>::max()-1?999999999:askingUMB)), blkEntry->fileIndex,(umbblock==std::numeric_limits<double>::max()?1000000000:(umbblock==std::numeric_limits<double>::max()-1?999999999:umbblock)));
+                    if(umbblock == std::numeric_limits<double>::max()-1){ //umb hasn't been calculated for this file yet 
                         if (!anyUsers(blkEntry,req) &&  (blkEntry->timeStamp < victimTime)) {
                             victimTime = blkEntry->timeStamp;
                             victimMinUMB = umbblock;
                             victimEntry = blkEntry;
-                            PPRINTF("%s Updated oldest UMB block %lf\n", _name.c_str(), umbblock);
+                            //PPRINTF("%s Updated oldest UMB block %lf\n", _name.c_str(), umbblock);
                         }
                     }
-                    else if(umbblock < victimMinUMB){
-                        //update victim info
-                        if (!anyUsers(blkEntry,req)){
-                            victimTime = blkEntry->timeStamp;
-                            victimMinUMB = umbblock;
-                            victimEntry = blkEntry;
-                            PPRINTF("%s Got a UMB %lf\n", _name.c_str(), umbblock);
+                    else if(umbblock <= umb){ //if this this block has a less favorable umb we can kick it out
+                        //PPRINTF("i: %d, binindex:%d, umb: %.10lf, asking_umb: %.10lf, block_umb: %.10lf\n", i,binIndex, (umb<1000000000?umb:1000000000), (askingUMB<1000000000?askingUMB:1000000000), (umbblock<1000000000?umbblock:1000000000));
+
+                        if(umbblock == victimMinUMB){
+                            //check if oldest
+                            if (!anyUsers(blkEntry,req) &&  (blkEntry->timeStamp < victimTime)) {
+                                victimTime = blkEntry->timeStamp;
+                                victimMinUMB = umbblock;
+                                victimEntry = blkEntry;
+                                //PPRINTF("%s Updated oldest UMB block %lf\n", _name.c_str(), umbblock);
+                            }
+                        }
+                        else if(umbblock < victimMinUMB){
+                            //update victim info
+                            if (!anyUsers(blkEntry,req)){
+                                victimTime = blkEntry->timeStamp;
+                                victimMinUMB = umbblock;
+                                victimEntry = blkEntry;
+                                //PPRINTF("%s Got a UMB %lf\n", _name.c_str(), umbblock);
+                            }
                         }
                     }
                 //}
@@ -294,6 +296,10 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
             }
         }
     }
+    //gone through all options in the bin 
+    // if we have a victimBlock -- it has a lower UMB
+    // if we aren't using scalable, victimBlock and victim time will be undefined or default values 
+
 
     std::thread::id thread_id = req->threadId;
     //If a prefetched block is found, we evict it
@@ -308,14 +314,32 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
         return minPrefetchEntry;
     }
     
-    //JS: if we can piggyback then lets set mins, otherwise fall back on LRU
-    if (victimTime != (uint32_t)-1 && victimEntry) { //Did we find a space
-       minTime = victimTime;
-       minEntry = victimEntry;
-       PPRINTF("%s SCALE METRIC PIGGYBACK %lf\n", _name.c_str(), victimMinUMB);
-    }
 
-    if (minTime != (uint32_t)-1 && minEntry) { //Did we find a space
+    if(_scalableCache){
+        if (victimTime != (uint32_t)-1 && victimEntry) { //Did we find a space
+            minTime = victimTime;
+            minEntry = victimEntry;
+            PPRINTF("%s SCALE METRIC PIGGYBACK %lf\n", _name.c_str(), victimMinUMB);
+            PPRINTFB("%lf is kicking out %lf\n" , askingUMB, victimMinUMB);
+            _collisions++;
+            trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 0);
+            evictHisto.addData((double) fileIndex, (double) 1);
+            minEntry->status = BLK_EVICT;
+
+            req->trace(_name)<<"evicting  entry: "<<blockEntryStr(minEntry)<<std::endl;
+            stats.addAmt(0, CacheStats::Metric::evictions, 1, thread_id);
+            return minEntry;
+        }
+        else{ // we didn't find a valid space for the block -- skip caching in this level
+            log(this)<< _name << " No available spots for this UMB value " << std::endl;
+            req->trace(_name)<<"no entries found for UMB"<<std::endl;
+            PPRINTFB("skipping %lf for this cache\n" , askingUMB);
+            return NULL;
+        }
+    }
+    
+
+    if (minTime != (uint32_t)-1 && minEntry) { //LRU version -- Did we find a space
         _collisions++;
         trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 0);
         evictHisto.addData((double) fileIndex, (double) 1);
@@ -331,7 +355,6 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
 }
 
 template <class Lock>
-
 void BoundedCache<Lock>::cleanUpBlockData(uint8_t *data) {
     // debug()<<_name<<" (not) delete data"<<std::endl;
 }

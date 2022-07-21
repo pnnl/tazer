@@ -272,13 +272,18 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     accessPerInterval++;
     int blocks = numBlocks.load();
     if(miss) {
+        partitionMissCount++;
         if(lastMissTimeStamp) {
             double i = (double)(timestamp - lastMissTimeStamp);
-            missInterval.addData(i, 1);
             if(lastDeliveryTime > 0 && blocks ){ //check to make sure we recorded a deliverytime
+                //partitionMissCount++;
+                partitionMissCost = partitionMissCost + lastDeliveryTime;
+                //check for division by zero 
+                double scaledMissCost = log2(partitionMissCost / (partitionMissCount-1));
+                benefitHistogram.addData(i, (((double) accessPerInterval/scaledMissCost)/blocks)/log2(i));
 
-                double cost = log2(lastDeliveryTime);
-                benefitHistogram.addData(i, accessPerInterval/cost/blocks);
+                // double cost = log2(lastDeliveryTime);
+                // benefitHistogram.addData(i, accessPerInterval/cost/blocks);
                 
                 //here we are guaranteed to have at least two misses, and data in the histograms, so we can call recalc marginal benefit for the partition
                 recalc = true;
@@ -287,6 +292,7 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 PPRINTF("BM: We have a second miss but no deliverytime yet! \n");
             }
             accessPerInterval = 0;
+            missInterval.addData(i, 1);
         }
         DPRINTF("SETTING: %lu = %lu\n", lastMissTimeStamp, timestamp);
         lastMissTimeStamp = timestamp;
@@ -301,7 +307,7 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     DPRINTF("* Timestamp: %lu recalc: %u\n", time, recalc);
     if(numBlocks.load() < 1){
         unitBenefit=0;
-        upperLevelMetric = 100000000; //temp big value
+        upperLevelMetric = std::numeric_limits<double>::max()-1; //temp big value
         prevUnitBenefit=0;
         prevSize=0;
         ret = unitMarginalBenefit = 0;
@@ -312,7 +318,7 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         double Bh = benefitHistogram.getValue(t);
 
         unitBenefit = (Bh/Mh);///log2(t);
-        upperLevelMetric = Mh;
+        upperLevelMetric = Mh;//*log2(partitionMissCost/(partitionMissCount-1));
         auto curBlocks = numBlocks.load();
         if(curBlocks > prevSize){
             unitMarginalBenefit = unitBenefit - prevUnitBenefit;

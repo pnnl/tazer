@@ -119,6 +119,8 @@ struct ScalableMetaData {
         int prevSize;
         //BM: for algorithm calculations.
         double lastDeliveryTime;
+        int partitionMissCount;
+        double partitionMissCost;
 
         std::atomic<uint64_t> numBlocks;
         
@@ -143,8 +145,10 @@ struct ScalableMetaData {
             prevUnitBenefit(0),
             prevSize(0),
             unitMarginalBenefit(0),
-            upperLevelMetric(100000000),//a temp big value
+            upperLevelMetric(std::numeric_limits<double>::max()-1),//a temp big value
             lastDeliveryTime(-1.0),
+            partitionMissCount(0),
+            partitionMissCost(0),
             numBlocks(0),
             missInterval(100),
             benefitHistogram(100,Config::TraceHistogram) {
