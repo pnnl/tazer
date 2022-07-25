@@ -145,7 +145,7 @@ struct ScalableMetaData {
             prevUnitBenefit(0),
             prevSize(0),
             unitMarginalBenefit(0),
-            upperLevelMetric(std::numeric_limits<double>::max()-1),//a temp big value
+            upperLevelMetric(std::numeric_limits<double>::min()),//default value
             lastDeliveryTime(-1.0),
             partitionMissCount(0),
             partitionMissCost(0),

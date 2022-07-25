@@ -307,7 +307,7 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     DPRINTF("* Timestamp: %lu recalc: %u\n", time, recalc);
     if(numBlocks.load() < 1){
         unitBenefit=0;
-        upperLevelMetric = std::numeric_limits<double>::max()-1; //temp big value
+        upperLevelMetric = std::numeric_limits<double>::min();
         prevUnitBenefit=0;
         prevSize=0;
         ret = unitMarginalBenefit = 0;
@@ -318,14 +318,13 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         double Bh = benefitHistogram.getValue(t);
 
         unitBenefit = (Bh/Mh);///log2(t);
-        upperLevelMetric = Mh;//*log2(partitionMissCost/(partitionMissCount-1));
+        upperLevelMetric = Mh*log2(partitionMissCost/(partitionMissCount-1));
         auto curBlocks = numBlocks.load();
         if(curBlocks > prevSize){
             unitMarginalBenefit = unitBenefit - prevUnitBenefit;
             prevUnitBenefit = unitBenefit;
             prevSize = curBlocks;
         }
-
         else if(prevSize > curBlocks) {
             unitMarginalBenefit = prevUnitBenefit - unitBenefit;
             prevUnitBenefit = unitBenefit;
