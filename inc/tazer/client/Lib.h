@@ -269,31 +269,18 @@ inline void removeFileStream(unixfclose_t posixFun, FILE *fp) {
 
 template <typename Func, typename FuncLocal, typename... Args>
 inline auto innerWrapper(int fd, bool &isTazerFile, Func tazerFun, FuncLocal localFun, Args... args) {
-  if (write_printf == true) {
-    printf("[Tazer] in innerwrapper 3 for write\n");
-  }
     TazerFile *file = NULL;
     unsigned int fp = 0;
-    
-    if (write_printf == true) {
-      printf("[Tazer] in innerwrapper 3 init val: %d , fd val %d \n", init, fd);
-    }
     if (init && TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, fp)) {
         isTazerFile = true;
 
         return tazerFun(file, fp, args...);
     }
-  if (write_printf == true) {
-    printf("[Tazer] in innerwrapper 3 for write calling localfun\n");
-  }
     return localFun(args...);
 }
 
 template <typename Func, typename FuncLocal, typename... Args>
 inline auto innerWrapper(FILE *fp, bool &isTazerFile, Func tazerFun, FuncLocal localFun, Args... args) {
-  if (write_printf == true) {
-    printf("[Tazer] in innerwrapper 2 for write\n");
-  } 
   if (init) {
         ReaderWriterLock *lock = NULL;
         int fd = TazerFileStream::lookupStream(fp, lock);
@@ -312,42 +299,17 @@ inline auto innerWrapper(FILE *fp, bool &isTazerFile, Func tazerFun, FuncLocal l
             return ret;
         }
     }
-  if (write_printf == true) {
-    printf("[Tazer] in innerwrapper 2 for write calling localfun\n");
-  } 
   return localFun(args...);
 }
 
 template <typename Func, typename FuncPosix, typename... Args>
 inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun, FuncPosix posixFun, Args... args) {
-  // std::cout << "[Tazer] In innerWrapper\n";
-  if (write_printf == true) {
-    printf("[Tazer] in innerwrapper for write\n");
-  }  
-  std::string path;
+    std::string path;
     std::string file;
     TazerFile::Type type;
     if (init && checkMeta(pathname, path, file, type)) {
-      if (write_printf == true) {
-	printf("[Tazer] in innerwrapper's init call for write\n");
-      }
-      // if (file.empty()) {
-      // 	std::cout << "Empty file";
-      // }
-      // else {
-      // 	std::cout << "[Tazer] innerwrapper file: " << file << std::endl;
-      // }
         isTazerFile = true;
         return tazerFun(file, path, type, args...);
-    }
-    // if (file.empty()) {
-    //   std::cout << "Empty file";
-    // }
-    // else {
-    //   std::cout << "[Tazer] innerwrapper file outside loop: " << std::endl;
-    // }
-    if (write_printf == true) {
-      printf("[Tazer] in innerwrapper calling posix\n");
     }
     return posixFun(args...);
 }
@@ -376,25 +338,11 @@ inline void removeFromSet(std::unordered_set<FILE *> &set, FILE *value, unixfclo
 
 template <typename FileId, typename Func, typename FuncPosix, typename... Args>
 auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func tazerFun, FuncPosix posixFun, Args... args) {
-  // DPRINTF("In outerwrapper\n");
-  // std::cout << "[Tazer] command: " << std::endl;
-  // fflush(stdout);
-  if (strcmp(name, "write") == 0) {
-    write_printf = true;
-    printf("In outerwrapper invocation for write\n");
-  }
   if (!init) {
-      if (strcmp(name, "write") == 0) {
-	printf("In init for write calling in posix\n");
-      }
-    // std::cout << "[Tazer] " << " should not be here!\n";
-      // std::cout << "[Tazer] " << "HERE!!!" << std::endl;
       posixFun = (FuncPosix)dlsym(RTLD_NEXT, name);
-        return posixFun(args...);
+      return posixFun(args...);
     }
 
-
-  // std::cout << "[Tazer] command " << std::endl;
     timer->start();
 
     //Check if this is a special file to track (from environment variable)
@@ -407,9 +355,6 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
     bool isTazerFile = false;
 
     //Do the work
-    if (strcmp(name, "write") == 0) {
-	printf("Before calling innerwrapper for write\n");
-    }
     auto retValue = innerWrapper(fileId, isTazerFile, tazerFun, posixFun, args...);
     if (ignore) {
         //Maintain the ignore_fd set

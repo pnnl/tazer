@@ -91,9 +91,7 @@ bool TazerFileDescriptor::lookupTazerFileDescriptor(int fd, TazerFile *&file, un
             outputFile->setThreadFileDescriptor(fd);
         }
         return true;
-    } else {
-      printf("Returning false from Tazerfd where fd = %d", fd);
-    }
+    } 
     return false;
 }
 

@@ -127,7 +127,6 @@ class TazerFile : public Loggable, public Trackable<std::string, TazerFile *> {
     bool prefetch();
     virtual bool active();
     bool eof(uint32_t index);
-    int getFd();
   protected:
     std::string findMetaParam(std::string param, std::string server, bool required);
     bool readMetaInfo();

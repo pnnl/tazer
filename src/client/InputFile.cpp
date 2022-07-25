@@ -444,7 +444,21 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
             endBlock = _numBlks;
         }
         std::cout << "[TAZER] Read file" << Timer::printTime() << _name << " " << _filePos[index] << " " << _fileSize << " " << count << " " << startBlock << " " << endBlock << std::endl;
-	for (auto i = startBlock; i < endBlock; i++) {
+	auto blockSizeForStat = Config::blockSizeForStat;
+	auto diff = _filePos[index] - _filePos[0];
+	auto precNumBlocks = diff / blockSizeForStat;
+	uint32_t startBlockForStat = precNumBlocks; 
+        uint32_t endBlockForStat = (diff + count) / blockSizeForStat;
+
+        if (((diff + count) % blockSizeForStat)) {
+            endBlockForStat++;
+        }
+
+	// std::cout << "[Tazer read]: startblocknum" << startBlockForStat 
+	// 	  << " endblocknum " << endBlockForStat << " Index " << index 
+	// 	  << " count " << count << std::endl;
+	
+	for (auto i = startBlockForStat; i <= endBlockForStat; i++) {
 	    if (track_file_blk_r_stat[_name].find(i) == 
 		track_file_blk_r_stat[_name].end()) {
 	      track_file_blk_r_stat[_name].insert(std::make_pair(i, 1)); // not thread-safe
@@ -454,10 +468,11 @@ ssize_t InputFile::read(void *buf, size_t count, uint32_t index) {
 	    }
 	  }
 
-	  std::cout << "[TAZER] printing current stat for " << _name << std::endl;
-	  for (auto& [block, count]: track_file_blk_r_stat[_name]) {
-	    std::cout << block << " " << count << std::endl;
-	  }
+	  // std::cout << "[TAZER] printing current stat for blocks read" << _name 
+	  // 	    << std::endl;
+	  // for (auto& [block, count]: track_file_blk_r_stat[_name]) {
+	  //   std::cout << block << " " << count << std::endl;
+	  // }
 
         trackRead(count, index, startBlock, endBlock);
         // bool error = false;

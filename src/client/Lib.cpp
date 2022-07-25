@@ -320,18 +320,14 @@ ssize_t read(int fd, void *buf, size_t count) {
 }
 
 ssize_t tazerWrite(TazerFile *file, unsigned int fp, int fd, const void *buf, size_t count) {
-  std::cout << "[Tazer] " << "in Lib.cpp TazerWrite " << std::endl;  
-  auto ret = file->write(buf, count, fp);
+    auto ret = file->write(buf, count, fp);
     timer->addAmt(Timer::MetricType::tazer, Timer::Metric::write, ret);
     return ret;
 }
 
 ssize_t write(int fd, const void *buf, size_t count) {
-  std::cout << "[Tazer] " << "in Lib.cpp write " << std::endl;
-  vLock.readerLock();
-  std::cout << "[Tazer] " << "inside Lib.cpp write lock" << std::endl;
+    vLock.readerLock();
     auto ret = outerWrapper("write", fd, Timer::Metric::write, tazerWrite, unixwrite, fd, buf, count);
-    std::cout << "[Tazer] " << "in Lib.cpp return val " << ret << std::endl; 
     vLock.readerUnlock();
     return ret;
 }

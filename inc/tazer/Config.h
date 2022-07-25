@@ -262,6 +262,8 @@ const bool PrefetcherLog = false;
 //BM: turn on for Histogram trace
 const bool TraceHistogram = getenv("TAZER_TRACE_HISTOGRAM") ? atoi(getenv("TAZER_TRACE_HISTOGRAM")) : 0;
 
+const uint64_t blockSizeForStat = 1024UL;
+
 #define FILE_CACHE_WRITE_THROUGH 1
 
 //#define PRINTF(...) fprintf(stderr, __VA_ARGS__)

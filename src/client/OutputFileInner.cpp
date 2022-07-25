@@ -219,37 +219,41 @@ ssize_t OutputFileInner::read(void *buf, size_t count, uint32_t index) {
     return 0;
 }
 
-void UpdateBlockStatInfo(int fd, uint64_t _fileSize, const std::vector<uint64_t>& _filePos, 
+void UpdateBlockStatInfo(uint64_t _fileSize, const std::vector<uint64_t>& _filePos, 
 			 size_t count, uint32_t index, std::string _name) {
-  uint32_t _blkSize = 1, _numBlks;
-  if (_fileSize) {
-    _blkSize = Config::memoryCacheBlocksize;
-    if (_fileSize < _blkSize)
-      _blkSize = _fileSize;
+  uint32_t _blkSize = 1;
+    
+  //  if (_fileSize) {
+  _blkSize = Config::blockSizeForStat;
+  //   if (_fileSize < _blkSize)
+  //     _blkSize = _fileSize;
+  // }
 
-    _numBlks = _fileSize / _blkSize;
-    if (_fileSize % _blkSize != 0)
-      _numBlks++;
-  }
+  // if ((uint64_t)count > _fileSize - _filePos[index]) {
+  //   count = _fileSize - _filePos[index];
+  // }
 
-  if ((uint64_t)count > _fileSize - _filePos[index]) {
-    count = _fileSize - _filePos[index];
-  }
+  // if (_blkSize == 0) {
+  //   _blkSize = 1;
+  // } 
 
-  if (_blkSize == 0) {
-    _blkSize = 1;
-  } 
-  uint32_t startBlock = _filePos[index] / _blkSize;
-  uint32_t endBlock = ((_filePos[index] + count) / _blkSize);
+  std::cout << "Filesize " << _fileSize << " blksize " << _blkSize   
+	    << " count " << count << " index " << index << std::endl; 
 
-  if (((_filePos[index] + count) % _blkSize)) {
+  auto diff = _filePos[index] - _filePos[0];
+  auto precNumBlocks = diff / _blkSize;
+  uint32_t startBlock = precNumBlocks; 
+  uint32_t endBlock = (diff + count) / _blkSize; 
+
+  // std::cout <<"[Tazer write]:"  << "startblock " << startBlock 
+  // 	    << " endBlock " << endBlock << " Index " << index 
+  // 	    << " count " << count << std::endl;
+
+  if (((diff + count) % _blkSize)) {
     endBlock++;
   }
-  if (endBlock > _numBlks) {
-    endBlock = _numBlks;
-  }
 
-  for (auto i = startBlock; i < endBlock; i++) {
+  for (auto i = startBlock; i <= endBlock; i++) {
     if (track_file_blk_w_stat[_name].find(i) == track_file_blk_w_stat[_name].end()) {
       track_file_blk_w_stat[_name].insert(std::make_pair(i, 1)); // not thread-safe
     }
@@ -257,14 +261,19 @@ void UpdateBlockStatInfo(int fd, uint64_t _fileSize, const std::vector<uint64_t>
       track_file_blk_w_stat[_name][i]++;
     }
   }
+
+  // std::cout << "[TAZER] printing current stat for write accessed blocks" << 
+  //   _name << std::endl;
+  // for (auto& [block, count]: track_file_blk_w_stat[_name]) {
+  //   std::cout << block << " " << count << std::endl;
+  // }
+
 }
 
 // void OutputFileInner::addCompressTask(char *buf, uint32_t size, uint64_t fp, uint32_t seqNum) {
 //void OutputFileInner::addTransferTask(char *buf, uint32_t size, uint32_t compSize, uint64_t fp, uint32_t seqNum) {
 ssize_t OutputFileInner::write(const void *buf, size_t count, uint32_t index) {
-  std::cout << "[Tazer] " << "in OutputFileInner::write" << std::endl;
-  auto original_fd = getFd();
-  UpdateBlockStatInfo(original_fd, _fileSize, _filePos, count, index, _name); 
+  UpdateBlockStatInfo(_fileSize, _filePos, count, index, _name); 
   if (_active.load()) {
          std::unique_lock<std::mutex> bufLock(_bufferLock);
         trackWrites(count, index, 0, 0);
