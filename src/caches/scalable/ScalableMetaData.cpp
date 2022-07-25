@@ -272,7 +272,6 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     accessPerInterval++;
     int blocks = numBlocks.load();
     if(miss) {
-<<<<<<< HEAD
         partitionMissCount++;
         if(lastMissTimeStamp) {
             double i = (double)(timestamp - lastMissTimeStamp);
@@ -286,17 +285,6 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 // double cost = log2(lastDeliveryTime);
                 // benefitHistogram.addData(i, accessPerInterval/cost/blocks);
                 
-=======
-        average_miss += 1;
-        average_cost += lastDeliveryTime;
-        if(lastMissTimeStamp) {
-            double i = (double)(timestamp - lastMissTimeStamp);
-            missInterval.addData(i, 1);
-            if(average_cost>0){ //check to make sure we recorded a deliverytime
-                //double Mh = missInterval.getValue(i);
-                double cost = log2(average_cost/average_miss);//log2(i); //average_cost; //lastMissTimeStamp;
-                benefitHistogram.addData(i, accessPerInterval/cost/blocks/log2(i));// /cost); ///blocks);
->>>>>>> 76b282f9b4c0f12441b60b62ec3bba2c3e725717
                 //here we are guaranteed to have at least two misses, and data in the histograms, so we can call recalc marginal benefit for the partition
                 recalc = true;
             }
