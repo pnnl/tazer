@@ -80,8 +80,8 @@
 #define DPRINTF(...)
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
-//#define PRINTF(...)
-#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define PPRINTF(...)
+//#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
     auto blockEntry = &blocks[blockIndex];
@@ -105,7 +105,7 @@ uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffse
 
 void ScalableMetaData::setBlock(uint64_t blockIndex, uint8_t * data) {
     auto blockEntry = &blocks[blockIndex];
-
+    //blockEntry->blkLock.readerLock();
     //JS: Inc our total number of blocks
     numBlocks.fetch_add(1);
     blockEntry->data.store(data);
@@ -272,6 +272,7 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     accessPerInterval++;
     int blocks = numBlocks.load();
     if(miss) {
+<<<<<<< HEAD
         partitionMissCount++;
         if(lastMissTimeStamp) {
             double i = (double)(timestamp - lastMissTimeStamp);
@@ -285,6 +286,17 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 // double cost = log2(lastDeliveryTime);
                 // benefitHistogram.addData(i, accessPerInterval/cost/blocks);
                 
+=======
+        average_miss += 1;
+        average_cost += lastDeliveryTime;
+        if(lastMissTimeStamp) {
+            double i = (double)(timestamp - lastMissTimeStamp);
+            missInterval.addData(i, 1);
+            if(average_cost>0){ //check to make sure we recorded a deliverytime
+                //double Mh = missInterval.getValue(i);
+                double cost = log2(average_cost/average_miss);//log2(i); //average_cost; //lastMissTimeStamp;
+                benefitHistogram.addData(i, accessPerInterval/cost/blocks/log2(i));// /cost); ///blocks);
+>>>>>>> 76b282f9b4c0f12441b60b62ec3bba2c3e725717
                 //here we are guaranteed to have at least two misses, and data in the histograms, so we can call recalc marginal benefit for the partition
                 recalc = true;
             }
@@ -312,7 +324,7 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         prevSize=0;
         ret = unitMarginalBenefit = 0;
     }
-    else if(lastMissTimeStamp && recalc) {
+    else if(lastDeliveryTime && recalc) {
         double t = ((double) time) / ((double) misses);
         double Mh = missInterval.getValue(t);
         double Bh = benefitHistogram.getValue(t);
@@ -334,8 +346,8 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
             //we haven't changed the number of blocks yet, we might get a new block or reuse. we don't know yet 
             PRINTF("prevsize and current size is the same! \n");
         }
-        ret = unitMarginalBenefit;
-        //ret = unitMarginalBenefit = marginalBenefit / ((double) numBlocks.load());
+        //ret = unitMarginalBenefit;
+        ret = unitMarginalBenefit; // / ((double) numBlocks.load());
         //DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
         if(isnan(unitMarginalBenefit)){
             PPRINTF("** nan! t: %f, misses: %d, Bh: %lf Mh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Bh, Mh , unitBenefit, unitMarginalBenefit,numBlocks.load());
@@ -367,6 +379,7 @@ void ScalableMetaData::updateRank(bool dec) {
                 //JS: This checks if marginalBenefit == 0
                 // The check marginalBenefit == 0 seems to fail
                 if(unitBenefit - unitMarginalBenefit < 0) {
+                    //if (unitBenefit == 0){
                     unitMarginalBenefit = 0;
                     unitBenefit = 0;
                 }
