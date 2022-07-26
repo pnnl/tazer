@@ -228,7 +228,7 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
     //JS: Update my UMB list here
     PPRINTF("############################ oldestBlock %s %p ############################\n", _name.c_str(), _scalableCache);
     double askingUMB;
-    double threshold = (100 - Config::UMBThreshold ) / 100.0; //percentage threshold turned into a multiplier (20% threshold --> 0.80)
+    
     //std::cout<<"SharedMemory threshold: "<< threshold << std::endl;
     if(_scalableCache) {
         auto umbs = ((ScalableCache*)_scalableCache)->getLastUMB(static_cast<Cache*>(this));
@@ -239,43 +239,28 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
         askingUMB = getLastUMB(fileIndex);
     }
 
-    for (uint32_t i = 0; i < _associativity; i++) {
+    for (uint32_t i = 0; i < _associativity; i++) { //loop to find oldest block and block with lowest umb(if scalable piggyback is on)
         blkEntry = blkEntries[i];
         if (blkEntry->status == BLK_AVAIL) {// we found an available block, deterimine if we evict it
-            //JS: Scalable metric piggybacking
             if(_scalableCache) {
-                //if(blkEntry->fileIndex != victimFileIndex) {
-                    auto umb = getLastUMB(fileIndex);
-                    auto umbblock = getLastUMB(blkEntry->fileIndex);
-                    //PPRINTFB("%d:%d, INCOMING file:%d umb:%.10lf, BLOCK file:%d umb:%.10lf time:%lu\n",binIndex,i, fileIndex, 
-                    //    (askingUMB==std::numeric_limits<double>::min()?-5000:askingUMB), 
-                    //    blkEntry->fileIndex,(umbblock==std::numeric_limits<double>::min()?-5000:umbblock), blkEntry->timeStamp);
-                    PPRINTFB("%d:%d, INCOMING file:%d umb:%.10lf, BLOCK file:%d umb:%.10lf time:%lu\n",
-                        binIndex,i, fileIndex, askingUMB, blkEntry->fileIndex,umbblock, blkEntry->timeStamp);
-                    if((umbblock * threshold) <= umb){ //if this this block has a less favorable umb, we can kick it out
-                        if(umbblock == victimMinUMB){
-                            //check if oldest
-                            if (!anyUsers(blkEntry,req) &&  (blkEntry->timeStamp < victimTime)) {
-                                victimTime = blkEntry->timeStamp;
-                                victimMinUMB = umbblock;
-                                victimEntry = blkEntry;
-                                victimFileIndex = i; //debug purposes, keeps the index in the bin
-                                //PPRINTF("%s Updated oldest UMB block %lf\n", _name.c_str(), umbblock);
-                            }
-                        }
-                        else if(umbblock < victimMinUMB){
-                            //update victim info
-                            if (!anyUsers(blkEntry,req)){
-                                victimTime = blkEntry->timeStamp;
-                                victimMinUMB = umbblock;
-                                victimEntry = blkEntry;
-                                victimFileIndex = i; //debug purposes, keeps the index in the bin
-                                //PPRINTF("%s Got a UMB %lf\n", _name.c_str(), umbblock);
-                            }
-                        }
-                        //else: we already have a victim that has a lower umb, do nothing
+                auto umbblock = getLastUMB(blkEntry->fileIndex);
+                PPRINTFB("%d:%d, INCOMING file:%d umb:%.10lf, BLOCK file:%d umb:%.10lf time:%lu\n",
+                    binIndex,i, fileIndex, askingUMB, blkEntry->fileIndex,umbblock, blkEntry->timeStamp);
+
+                if(umbblock < victimMinUMB){ //we found a possible victim block
+                    if (!anyUsers(blkEntry,req)){
+                        victimTime = blkEntry->timeStamp;
+                        victimMinUMB = umbblock;
+                        victimEntry = blkEntry;
                     }
-                //}
+                }
+                else if(umbblock == victimMinUMB){ //check if this block is older, then select this block as victim 
+                    if (!anyUsers(blkEntry,req) &&  (blkEntry->timeStamp < victimTime)) {
+                            victimTime = blkEntry->timeStamp;
+                            victimMinUMB = umbblock;
+                            victimEntry = blkEntry;
+                    }
+                }
             }
 
             //LRU
@@ -296,9 +281,8 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
         }
     }
     //gone through all options in the bin 
-    // if we have a victimBlock -- it has a lower UMB
-    // if we aren't using scalable, victimBlock and victim time will be undefined or default values 
-
+    // we have LRU block kept in minEntry
+    // we have lowest UMB block kept in victimEntry 
 
     std::thread::id thread_id = req->threadId;
     //If a prefetched block is found, we evict it
@@ -313,30 +297,57 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
         return minPrefetchEntry;
     }
     
-
+    //here we decide on the right action for scalable piggyback 
     if(_scalableCache){
-        if (victimTime != (uint32_t)-1 && victimEntry) { //Did we find a space
-            minTime = victimTime;
-            minEntry = victimEntry;
-            PPRINTF("%s SCALE METRIC PIGGYBACK %lf\n", _name.c_str(), victimMinUMB);
-            PPRINTFB("%.10lf, is kicking out %.10lf, with id:%d\n" , askingUMB, victimMinUMB, victimFileIndex);
-            _collisions++;
-            trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 0);
-            evictHisto.addData((double) fileIndex, (double) 1);
-            minEntry->status = BLK_EVICT;
+        //Did we find a space --  it's possible none of the blocks were available, that case we skip this level for caching
+        if (victimTime != (uint32_t)-1 && victimEntry && minTime != (uint32_t)-1 && minEntry) { 
+            double threshold = (100 - Config::UMBThreshold ) / 100.0; //percentage threshold turned into a multiplier (ex. 20% threshold --> 0.80)
+            auto incomingTime = Timer::getCurrentTime();
+            
+            double timeRatio = minTime / incomingTime; //always between 0-1 
+            double umbRatio = victimMinUMB / askingUMB; // always positive , could be >1 
 
-            req->trace(_name)<<"evicting  entry: "<<blockEntryStr(minEntry)<<std::endl;
-            stats.addAmt(0, CacheStats::Metric::evictions, 1, thread_id);
-            return minEntry;
+            if ( umbRatio <= (1 + threshold)){
+                if (timeRatio < umbRatio){
+                    //evict oldest timestamp
+                    _collisions++;
+                    trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 0);
+                    evictHisto.addData((double) fileIndex, (double) 1);
+                    minEntry->status = BLK_EVICT;
+
+                    req->trace(_name)<<"evicting  entry: "<<blockEntryStr(minEntry)<<std::endl;
+                    stats.addAmt(0, CacheStats::Metric::evictions, 1, thread_id);
+                    return minEntry;
+                }
+                else{
+                    //evict lowest umb 
+                    minTime = victimTime;
+                    minEntry = victimEntry;
+                    PPRINTF("%s SCALE METRIC PIGGYBACK %lf\n", _name.c_str(), victimMinUMB);
+                    PPRINTFB("%.10lf, is kicking out %.10lf, with id:%d\n" , askingUMB, victimMinUMB, victimFileIndex);
+                    _collisions++;
+                    trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 0);
+                    evictHisto.addData((double) fileIndex, (double) 1);
+                    minEntry->status = BLK_EVICT;
+
+                    req->trace(_name)<<"evicting  entry: "<<blockEntryStr(minEntry)<<std::endl;
+                    stats.addAmt(0, CacheStats::Metric::evictions, 1, thread_id);
+                    return minEntry;
+                }
+            }
+            else{
+                //skip caching for this block 
+                log(this)<< _name << " No available spots for this UMB value " << std::endl;
+                req->trace(_name)<<"no entries found for UMB"<<std::endl;
+                PPRINTFB("skipping %lf for this cache\n" , askingUMB);
+                return NULL;
+            }
         }
-        else{ // we didn't find a valid space for the block -- skip caching in this level
-            log(this)<< _name << " No available spots for this UMB value " << std::endl;
-            req->trace(_name)<<"no entries found for UMB"<<std::endl;
-            PPRINTFB("skipping %lf for this cache\n" , askingUMB);
-            return NULL;
-        }
-    }
-    
+        log(this)<< _name << " No available spots for this UMB value " << std::endl;
+        req->trace(_name)<<"no entries found for UMB"<<std::endl;
+        PPRINTFB("skipping %lf for this cache\n" , askingUMB);
+        return NULL;
+    } //end of scalable piggyback section
 
     if (minTime != (uint32_t)-1 && minEntry) { //LRU version -- Did we find a space
         _collisions++;
