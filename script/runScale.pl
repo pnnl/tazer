@@ -24,7 +24,7 @@ my $workload = "$workloadPath -f $dataFile -i $ioIntensity -m .meta.in -k $kerne
 # my $workload = "$workloadPath -f $dataFile -i $ioIntensity -k $kernel";
 my @allocators = (0); #, 1, 2, 3, 4, 5);
 foreach my $allocator (@allocators) {
-    my $command = "salloc -A ippd -x node28,node22,node42,node40,node33,node07  -N $numNodes ./runTest.pl -c $metaFile -p $port -a $allocator $workload";
+    my $command = "salloc -A oddite -x node28,node22,node42,node40,node33,node07  -N $numNodes ./runTest.pl -c $metaFile -p $port -a $allocator $workload";
     print "$command\n";
     system($command);
 }
