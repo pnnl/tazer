@@ -292,6 +292,8 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 PPRINTF("BM: We have a second miss but no deliverytime yet! \n");
             }
             accessPerInterval = 0;
+            //OCEANE:This is where we add data to missInterval histogram . i is the time.
+            //we will test log(i) instead of inputting i 
             missInterval.addData(i, 1);
         }
         DPRINTF("SETTING: %lu = %lu\n", lastMissTimeStamp, timestamp);
@@ -314,11 +316,14 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     }
     else if(lastDeliveryTime && recalc) {
         double t = ((double) time) / ((double) misses);
+        //OCEANE: if we test log(i), send log(t) here instead of t
         double Mh = missInterval.getValue(t);
         double Bh = benefitHistogram.getValue(t);
 
         unitBenefit = (Bh/Mh);///log2(t);
-        upperLevelMetric = Mh*log2(partitionMissCost/(partitionMissCount-1));
+        //OCEANE: cost is the part with log [log2(partitionMissCost/(partitionMissCount-1))]
+        // to have cost=1 , comment out the multiplication
+        upperLevelMetric = Mh;//*log2(partitionMissCost/(partitionMissCount-1));
         auto curBlocks = numBlocks.load();
         if(curBlocks > prevSize){
             unitMarginalBenefit = unitBenefit - prevUnitBenefit;
