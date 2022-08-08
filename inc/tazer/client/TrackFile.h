@@ -1,4 +1,4 @@
-// -*-Mode: C++;-*-
+// -*-Mode: C++;-*- // technically C99
 
 //*BeginLicense**************************************************************
 //
@@ -72,40 +72,44 @@
 // 
 //*EndLicense****************************************************************
 
-#include "TazerFileDescriptor.h"
+#ifndef TRACKFILE_H
+#define TRACKFILE_H
+#include "FileCacheRegister.h"
+#include "TazerFile.h"
+#include <atomic>
+#include <mutex>
+#include <string>
+#include <map>
 
-TazerFileDescriptor::TazerFileDescriptor(TazerFile *file, unsigned int index) : _file(file),
-                                                                             _index(index) {
-}
+extern std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_r_stat;
+extern std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_w_stat;
 
-TazerFileDescriptor::~TazerFileDescriptor() {
-}
+class TrackFile : public TazerFile {
+public:
+  TrackFile(std::string name, int fd, bool openFile = true);
+  ~TrackFile();
 
-bool TazerFileDescriptor::lookupTazerFileDescriptor(int fd, TazerFile *&file, unsigned int &index) {
-    TazerFileDescriptor *v = Trackable<int, TazerFileDescriptor *>::LookupTrackable(fd);
-    if (v) {
-        file = v->_file;
-        index = v->_index;
-        if(file->type() == TazerFile::Output) {
-            OutputFile *outputFile = dynamic_cast<OutputFile*>(file);
-            outputFile->setThreadFileDescriptor(fd);
-        }
-        return true;
-    } 
-    // else {
-    //   printf("Returning false from Tazerfd where fd = %d", fd);
-    // }
+  void open();
+  void close();
+  uint64_t fileSize();
 
-    return false;
-}
+  ssize_t read(void *buf, size_t count, uint32_t index = 0);
+  ssize_t write(const void *buf, size_t count, uint32_t index = 0);
+  off_t seek(off_t offset, int whence, uint32_t index = 0);
 
-bool TazerFileDescriptor::addTazerFileDescriptor(int fd, TazerFile *file, unsigned int index) {
-    return Trackable<int, TazerFileDescriptor *>::AddTrackable(
-               fd, [=]() -> TazerFileDescriptor * {
-                   return new TazerFileDescriptor(file, index);
-               }) != NULL;
-}
+private:
+// bool trackRead(size_t count, uint32_t index, uint32_t startBlock, uint32_t endBlock);
+//    uint64_t copyBlock(char *buf, char *blkBuf, uint32_t blk, uint32_t startBlock, uint32_t endBlock, uint32_t fpIndex, uint64_t count);
 
-bool TazerFileDescriptor::removeTazerFileDescriptor(int fd) {
-    return Trackable<int, TazerFileDescriptor *>::RemoveTrackable(fd);
-}
+    std::mutex _openCloseLock;
+// std::atomic<uint64_t> 
+    uint64_t _fileSize;
+    uint32_t _numBlks;
+    uint32_t _regFileIndex;
+    int _fd_orig;
+std::string _filename;
+
+};
+
+
+#endif /* LOCALFILE_H */

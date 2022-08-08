@@ -5,6 +5,7 @@ set(CLIENT_HEADERS
     ${TAZER_CLIENT_INC_DIR}/OutputFileInner.h
     ${TAZER_CLIENT_INC_DIR}/OutputFile.h
     ${TAZER_CLIENT_INC_DIR}/LocalFile.h
+    ${TAZER_CLIENT_INC_DIR}/TrackFile.h
     ${TAZER_CLIENT_INC_DIR}/TazerFileDescriptor.h
     ${TAZER_CLIENT_INC_DIR}/TazerFileStream.h
 )
@@ -15,6 +16,7 @@ set(CLIENT_FILES
     OutputFileInner.cpp
     OutputFile.cpp
     LocalFile.cpp
+    TrackFile.cpp
     TazerFileDescriptor.cpp
     TazerFileStream.cpp
     Lib.cpp

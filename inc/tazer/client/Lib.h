@@ -112,6 +112,8 @@
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 // #define DPRINTF(...)
 
+#define TRACKFILECHANGES 1
+
 static Timer* timer;
 
 std::once_flag log_flag;
@@ -166,15 +168,32 @@ unixreadv_t unixreadv = NULL;
 unixwritev_t unixwritev = NULL;
 
 bool write_printf = false;
+bool open_printf = false;
 
 int removeStr(char *s, const char *r);
 
 /*Templating*************************************************************************************************/
 
 inline bool checkMeta(const char *pathname, std::string &path, std::string &file, TazerFile::Type &type) {
+
+#ifdef TRACKFILECHANGES
+  std::string filename(pathname);
+  auto found = false;
+  found =  strstr(pathname, "residue"); // filename.find("h5");
+  // printf("In checkmeta for file %s \n",  pathname);
+  // printf("found: %d\n" , found);
+  if (found) {
+    DPRINTF("Calling HDF5 Open for file %s\n", pathname);
+    type = TazerFile::TrackLocal;
+    file = filename;
+    return true;// tazerFun(filename, filename, type, args...);
+  }
+#endif
+
+
     int fd = (*unixopen)(pathname, O_RDONLY);
     if (write_printf == true) {
-      printf("[Tazer] write meta filename %s\n", pathname);
+      DPRINTF("[Tazer] write meta filename %s\n", pathname);
     }
 
     if(fd >= 0)
@@ -190,7 +209,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         if (ret <= 0) {
             delete[] meta;
 	    if (write_printf == true) {
-	      printf("[Tazer] in checkmeta for write 1\n");
+	      DPRINTF("[Tazer] in checkmeta for write 1\n");
 	    }
             return false;
         }
@@ -203,7 +222,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         if(curLine.compare(0, tazerVersion.length(), tazerVersion) != 0) {
             delete[] meta;
 	    if (write_printf == true) {
-	      printf("[Tazer] in checkmeta for write 2\n");
+	      DPRINTF("[Tazer] in checkmeta for write 2\n");
 	    }
 	    return false;
         }
@@ -212,7 +231,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         if(curLine.compare(0, 5, "type=") != 0) {
             delete[] meta;
 	    if (write_printf == true) {
-	      printf("[Tazer] in checkmeta for write 3\n");
+	      DPRINTF("[Tazer] in checkmeta for write 3\n");
 	    }
             return false;
         }
@@ -220,7 +239,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         std::string typeStr = curLine.substr(5, curLine.length() - 5);
         for(int i = 0; i < 3; i++) {
 	    if (write_printf == true) {
-	      printf("[Tazer] in checkmeta for write 4\n");
+	      DPRINTF("[Tazer] in checkmeta for write 4\n");
 	    }
             if(typeStr.compare(types[i]) == 0) {
                 path = pathname;
@@ -234,7 +253,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         delete[] meta;
     }
     if (write_printf == true) {
-      printf("[Tazer] in checkmeta for write 5\n");
+      DPRINTF("[Tazer] in checkmeta for write 5\n");
     }
     return false;
 }
@@ -269,18 +288,40 @@ inline void removeFileStream(unixfclose_t posixFun, FILE *fp) {
 
 template <typename Func, typename FuncLocal, typename... Args>
 inline auto innerWrapper(int fd, bool &isTazerFile, Func tazerFun, FuncLocal localFun, Args... args) {
+  if (write_printf == true) {
+    DPRINTF("[Tazer] in innerwrapper 3 for write\n");
+  }
+
     TazerFile *file = NULL;
     unsigned int fp = 0;
+
+    if (write_printf == true) {
+      DPRINTF("[Tazer] in innerwrapper 3 init val: %d , fd val %d \n", init, fd);
+    }
+
+
     if (init && TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, fp)) {
         isTazerFile = true;
 
         return tazerFun(file, fp, args...);
     }
+    // else if (not internal write) {
+    // do track
+    
+    //}
+    if (write_printf == true) {
+      DPRINTF("[Tazer] in innerwrapper 3 for write calling localfun\n");
+    }
+
     return localFun(args...);
 }
 
 template <typename Func, typename FuncLocal, typename... Args>
 inline auto innerWrapper(FILE *fp, bool &isTazerFile, Func tazerFun, FuncLocal localFun, Args... args) {
+  if (write_printf == true) {
+    DPRINTF("[Tazer] in innerwrapper 2 for write\n");
+  }
+
   if (init) {
         ReaderWriterLock *lock = NULL;
         int fd = TazerFileStream::lookupStream(fp, lock);
@@ -291,7 +332,7 @@ inline auto innerWrapper(FILE *fp, bool &isTazerFile, Func tazerFun, FuncLocal l
             unsigned int pos = 0;
             TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, pos);
 	    if (write_printf == true) {
-	      printf("[Tazer] in innerwrapper 3 for write calling Tazerfun\n");
+	      DPRINTF("[Tazer] in innerwrapper 2 for write calling Tazerfun\n");
 	    }
             auto ret = tazerFun(file, pos, fd, args...);
             lock->writerUnlock();
@@ -299,19 +340,41 @@ inline auto innerWrapper(FILE *fp, bool &isTazerFile, Func tazerFun, FuncLocal l
             return ret;
         }
     }
+  if (write_printf == true) {
+    DPRINTF("[Tazer] in innerwrapper 2 for write calling localfun\n");
+  } 
+
   return localFun(args...);
 }
 
 template <typename Func, typename FuncPosix, typename... Args>
 inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun, FuncPosix posixFun, Args... args) {
-    std::string path;
-    std::string file;
-    TazerFile::Type type;
-    if (init && checkMeta(pathname, path, file, type)) {
-        isTazerFile = true;
-        return tazerFun(file, path, type, args...);
+  if (write_printf == true) {
+    DPRINTF("[Tazer] in innerwrapper for write\n");
+  }
+  if (open_printf) {
+    DPRINTF("[Tazer] in innerwrapper for open\n");
+  }
+
+  std::string path;
+  std::string file;
+  TazerFile::Type type;
+
+  if (init && checkMeta(pathname, path, file, type)) {
+    if (write_printf == true) {
+      DPRINTF("[Tazer] in innerwrapper's init call for write\n");
     }
-    return posixFun(args...);
+
+    isTazerFile = true;
+    DPRINTF("Before calling Tazerfun \n");
+    DPRINTF("With file %s\n", pathname);
+    return tazerFun(file, path, type, args...);
+  }
+  if (write_printf == true) {
+    DPRINTF("[Tazer] in innerwrapper calling posix\n");
+  }
+
+  return posixFun(args...);
 }
 
 template <typename T1, typename T2>
@@ -338,7 +401,30 @@ inline void removeFromSet(std::unordered_set<FILE *> &set, FILE *value, unixfclo
 
 template <typename FileId, typename Func, typename FuncPosix, typename... Args>
 auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func tazerFun, FuncPosix posixFun, Args... args) {
+  DPRINTF("command %s\n", name);
+  // if (strcmp(name, "write") == 0) {
+  //   DPRINTF("command write with file id %d", fileId);
+  // }
+  // if (strcmp(name, "fwrite") == 0) {
+  //   DPRINTF("command fwrite with file  %s", fileId);
+  // }
+  // if (strcmp(name, "open") == 0) {
+  //   DPRINTF("command open with file  %s", fileId);
+  // }
+  // if (strcmp(name, "write") == 0) {
+  //   write_printf = true;
+  //   DPRINTF("In outerwrapper invocation for write\n");
+  // }
+  // if (strcmp(name, "open") == 0) {
+  //   open_printf = true;
+  //   DPRINTF("In outerwrapper invocation for open\n");
+  // }
+
   if (!init) {
+    if (strcmp(name, "write") == 0) {
+      DPRINTF("In init for write calling in posix\n");
+    }
+
       posixFun = (FuncPosix)dlsym(RTLD_NEXT, name);
       return posixFun(args...);
     }
@@ -355,6 +441,10 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
     bool isTazerFile = false;
 
     //Do the work
+    if (strcmp(name, "write") == 0) {
+      DPRINTF("Before calling innerwrapper for write\n");
+    }
+
     auto retValue = innerWrapper(fileId, isTazerFile, tazerFun, posixFun, args...);
     if (ignore) {
         //Maintain the ignore_fd set
@@ -392,6 +482,9 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
     }
     if (write_printf == true) {
       write_printf = false;
+    } 
+    if (open_printf) {
+      open_printf = false;
     }
     return retValue;
 }

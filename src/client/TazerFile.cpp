@@ -90,11 +90,14 @@
 #include "TazerFile.h"
 #include "OutputFile.h"
 #include "LocalFile.h"
+#include "TrackFile.h"
 #include "Timer.h"
 #include "UnixIO.h"
 
 //#define TIMEON(...) __VA_ARGS__
 #define TIMEON(...)
+#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define DPRINTF(...)
 
 extern int removeStr(char *s, const char *r);
 TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaName, int fd) : 
@@ -111,8 +114,16 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
     _active(false),
     _fd(fd)
      {
+#ifdef TRACKFILECHANGES
+    std::string hdf_file_name(name);
+    auto found = hdf_file_name.find("h5");
+    if (!found) {
+#endif
     readMetaInfo();
     newFilePosIndex();
+#ifdef TRACKFILECHANGES
+    }
+#endif
 }
 
 TazerFile::~TazerFile() {
@@ -307,7 +318,7 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
     if (type == TazerFile::Input) {
         return Trackable<std::string, TazerFile *>::AddTrackable(
             metaName, [=]() -> TazerFile * {
-                // std::cout << "new input " <<fileName<<" "<<metaName<<" "<<std::endl;
+                std::cout << "new input " <<fileName<<" "<<metaName<<" "<<std::endl;
                 TazerFile *temp = new InputFile(fileName, metaName, fd, open);
                 if (open && temp && temp->active() == 0) {
                     delete temp;
@@ -320,8 +331,8 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
         bool dontcare;
         return Trackable<std::string, TazerFile *>::AddTrackable(
             metaName, [=]() -> TazerFile * {
-                // std::cout << "new output " <<fileName<<" "<<metaName<<" "<<std::endl;
-                //std::cout << "Create new" << std::endl;
+                std::cout << "new output " <<fileName<<" "<<metaName<<" "<<std::endl;
+                std::cout << "Create new" << std::endl;
                 TazerFile *temp = new OutputFile(fileName, metaName, fd);
                 if (temp) {
                     OutputFile* out = dynamic_cast<OutputFile*>(temp);
@@ -350,7 +361,19 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
                 }
                 return temp;
             });
-    }
+    } else if (type == TazerFile::TrackLocal) {
+      DPRINTF("Trackfile going to be added to the Trackable \n");
+        return Trackable<std::string, TazerFile *>::AddTrackable(
+            fileName, [=]() -> TazerFile * {
+	      DPRINTF("Filename in lambda %s", fileName.c_str());
+                TazerFile *temp = new TrackFile(fileName, fd, open);
+                if (open && temp && temp->active() == 0) {
+                    delete temp;
+                    return NULL;
+                }
+                return temp;
+            });
+    }  
     return NULL;
 }
 

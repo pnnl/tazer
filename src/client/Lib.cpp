@@ -92,6 +92,7 @@
 #include <string>
 #include <fstream>
 #include <iostream>
+#include <string>
 //#include "ErrorTester.h"
 #include "InputFile.h"
 #include "OutputFile.h"
@@ -110,6 +111,7 @@
 #include "Lib.h"
 #include "UrlDownload.h"
 
+
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 // #define DPRINTF(...)
 #define TAZER_ID "TAZER"
@@ -117,7 +119,7 @@
 #define TAZER_VERSION "0.1"
 #define TAZER_VERSION_LEN 3 //5+3
 
-
+#define TRACKFILECHANGES 1 // tmp-ly added
 
 void __attribute__((constructor)) tazerInit(void) {
     std::call_once(log_flag, []() {
@@ -243,26 +245,70 @@ int removeStr(char *s, const char *r) {
 /*Posix******************************************************************************************************/
 
 int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, const char *pathname, int flags, int mode) {
-    DPRINTF("tazerOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);
-    int fd = (*unixopen64)(metaName.c_str(), O_RDONLY, 0);
-    // if (file_info.find(name) == file_info.end()) {
-    //   file_info.insert(std::make_pair(name, std::map<int, std::tuple<int> >()));
-    //   file_info[name].insert(std::make_pair(fd, std::make_tuple(mode)));
-    // }
-    // if (file_info.find(fd) == file_info.end()) {
-    //   file_info.insert(std::make_pair(fd, name));
-    // } else {
-    //   file_info[fd] = name;
-    // }
-    TazerFile *file = TazerFile::addNewTazerFile(type, name, metaName, fd);
-    if (file)
-        TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
-    else if(fd != -1) {
-        (*unixclose)(fd);
-        fd = -1;
+  DPRINTF("Here\n");
+  DPRINTF("tazerOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);
+  auto fd = -1;
+#ifdef TRACKFILECHANGES
+  auto found = false;
+  // std::string hdf_file_name(pathname);
+  found = name.find("residue");
+  if (found) {
+    DPRINTF("Opening a HDF5 file %s \n",  name.c_str());
+    //      return outerWrapper("open", pathname, metric, trackFileOpen, unixopen, pathname, 
+    // 			  flags, mode);
+    DPRINTF("trackFileOpen: %s mode  %d\n", name.c_str(), mode);
+    fd = (*unixopen64)(name.c_str(), O_CREAT | O_RDWR | O_APPEND, 0660); // TODO: check open mode R/W?
+    TazerFile *file = TazerFile::addNewTazerFile(type, name, name, fd, true);
+    // DPRINTF("trackFileOpen attempting to add new tazer file: %s %s %u\n", 
+    //	  name.c_str(), metaName.c_str(), type);
+    if (file) {
+      TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
+      DPRINTF("trackFileOpen add new  file success: %s , fd %d\n", pathname, fd);
+    } else if (fd != -1) {
+      DPRINTF("trackFileOpen add new  file failed: %s  , fd = %d\n", pathname, fd);
+      (*unixclose)(fd);
+      fd = -1;
     }
-    return fd;
+   } else {
+#endif
+    fd = (*unixopen64)(metaName.c_str(), O_RDONLY, 0);
+    TazerFile *file = TazerFile::addNewTazerFile(type, name, metaName, fd);
+    DPRINTF("tazerOpen attempting to add new tazer file: %s %s %u\n", name.c_str(), metaName.c_str(), type);
+    if (file) {
+      TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
+      DPRINTF("tazerOpen add new tazer file success: %s %s fd%d\n", name.c_str(), metaName.c_str(), fd);
+    } else if(fd != -1) {
+      DPRINTF("tazerOpen add new tazer file failed: %s %s %d\n", name.c_str(), metaName.c_str(), fd);
+      (*unixclose)(fd);
+      fd = -1;
+    }
+#ifdef TRACKFILECHANGES  
+  }
+#endif
+  return fd;
 }
+
+// int trackFileOpen(std::string name, std::string metaName, TazerFile::Type type, 
+// 		  const char *pathname,  int flags, int mode) {
+
+
+//   DPRINTF("trackFileOpen: %s mode  %d\n", pathname, mode);
+//   int fd = (*unixopen64)(pathname, mode, 0666); // TODO: check open mode R/W?
+//   std::string filepath(pathname);
+//   TazerFile *file = TazerFile::addNewTazerFile(type, filepath, filepath, fd, true);
+//   // DPRINTF("trackFileOpen attempting to add new tazer file: %s %s %u\n", 
+//   //	  name.c_str(), metaName.c_str(), type);
+//   if (file) {
+//     TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
+//     DPRINTF("trackFileOpen add new  file success: %s , fd %d\n", pathname, fd);
+//   } else if (fd != -1) {
+//     DPRINTF("trackFileOpen add new  file failed: %s  , fd = %d\n", pathname, fd);
+//     (*unixclose)(fd);
+//     fd = -1;
+//   }
+  
+//   return fd;
+// }
 
 int open(const char *pathname, int flags, ...) {
     int mode = 0;
@@ -272,7 +318,12 @@ int open(const char *pathname, int flags, ...) {
     va_end(arg);
 
     Timer::Metric metric = (flags & O_WRONLY || flags & O_RDWR) ? Timer::Metric::out_open : Timer::Metric::in_open;
+
+    DPRINTF("Open %s: \n", pathname);
     return outerWrapper("open", pathname, metric, tazerOpen, unixopen, pathname, flags, mode);
+// #ifdef TRACKFILECHANGES
+//     }
+// #endif
 }
 
 int open64(const char *pathname, int flags, ...) {
@@ -287,6 +338,7 @@ int open64(const char *pathname, int flags, ...) {
 }
 
 int tazerClose(TazerFile *file, unsigned int fp, int fd) {
+    DPRINTF("In tazer close \n");
     TazerFile::removeTazerFile(file);
     TazerFileDescriptor::removeTazerFileDescriptor(fd);
     return (*unixclose)(fd);
@@ -297,16 +349,6 @@ int close(int fd) {
 }
 
 ssize_t tazerRead(TazerFile *file, unsigned int fp, int fd, void *buf, size_t count) {
-  //TODO: only track if flag is enabled
-  // auto num_blks = file->numBlks();
-  //Check if for the first time we are seeing this fd
-  // if (track_file_blk_stat.find(fd) == track_file_blk_stat.end()) { 
-  //   track_file_blk_stat.insert(std::make_pair(fd, std::map<int, std::atomic<int64_t> >()));
-  //   // for (auto i = 0; i < num_blks; ++i) {
-  //   //   track_file_blk_stat[fd].insert(std::make_pair(i, 0));
-  //   // }
-    
-  // }
   ssize_t ret = file->read(buf, count, fp);
   timer->addAmt(Timer::MetricType::tazer, Timer::Metric::read, ret);
   return ret;
@@ -320,13 +362,16 @@ ssize_t read(int fd, void *buf, size_t count) {
 }
 
 ssize_t tazerWrite(TazerFile *file, unsigned int fp, int fd, const void *buf, size_t count) {
+    DPRINTF("In Tazer write\n");
     auto ret = file->write(buf, count, fp);
     timer->addAmt(Timer::MetricType::tazer, Timer::Metric::write, ret);
+    DPRINTF("Returning from Tazer write\n");
     return ret;
 }
 
 ssize_t write(int fd, const void *buf, size_t count) {
     vLock.readerLock();
+    DPRINTF("Printing fd in write %d and count %ul\n", fd, count);
     auto ret = outerWrapper("write", fd, Timer::Metric::write, tazerWrite, unixwrite, fd, buf, count);
     vLock.readerUnlock();
     return ret;

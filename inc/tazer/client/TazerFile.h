@@ -96,7 +96,9 @@ class TazerFile : public Loggable, public Trackable<std::string, TazerFile *> {
   public:
     enum Type { Input = 0,
                 Output = 1,
-                Local = 2 };
+                Local = 2,
+		TrackLocal = 3
+    };
 
     TazerFile(TazerFile::Type type, std::string name, std::string metaName, int fd);
     virtual ~TazerFile();
