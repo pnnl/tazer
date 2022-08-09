@@ -197,9 +197,9 @@ template <class Lock>
 typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_t index, uint32_t fileIndex, Request* req) {
     req->trace(_name)<<"searching for oldest block: "<<index<<" "<<fileIndex<<std::endl;
     BlockEntry* blkEntry = NULL;
-    uint32_t minTime = -1; //this is max uint32_t
+    uint64_t minTime = -1; //this is max uint64_t
     BlockEntry *minEntry = NULL;
-    uint32_t minPrefetchTime = -1; //Prefetched block
+    uint64_t minPrefetchTime = -1; //Prefetched block
     BlockEntry *minPrefetchEntry = NULL;
     uint32_t binIndex = getBinIndex(index, fileIndex);
     auto cmpBlk = getCompareBlkEntry(index, fileIndex);
@@ -209,7 +209,7 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
 
     BlockEntry *victimEntry = NULL;
     uint32_t victimFileIndex = -1;
-    uint32_t victimTime = -1;
+    uint64_t victimTime = -1;
     double victimMinUMB = std::numeric_limits<double>::max();
     for (uint32_t i = 0; i < _associativity; i++) { // maybe we want to split this into two loops--first to check if any empty or if its here, then a lru pass, other wise we require checking the number of active users on every block which can be expensive for file backed caches
         //Find actual, empty, or oldest
@@ -229,7 +229,6 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
     PPRINTF("############################ oldestBlock %s %p ############################\n", _name.c_str(), _scalableCache);
     double askingUMB;
     
-    //std::cout<<"SharedMemory threshold: "<< threshold << std::endl;
     if(_scalableCache) {
         auto umbs = ((ScalableCache*)_scalableCache)->getLastUMB(static_cast<Cache*>(this));
         PPRINTF("%s UMB SIZE %u\n", _name.c_str(), umbs.size());
@@ -283,10 +282,12 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
     //gone through all options in the bin 
     // we have LRU block kept in minEntry
     // we have lowest UMB block kept in victimEntry 
+    PPRINTFB("-LRU in bin: file: %d, time:%lu\n", minEntry->fileIndex, minTime);
+    PPRINTFB("-minUMB    : file: %d, time:%lu, umb::%.10lf\n", victimEntry->fileIndex, victimTime, victimMinUMB);
 
     std::thread::id thread_id = req->threadId;
     //If a prefetched block is found, we evict it
-    if (Config::prefetchEvict && minPrefetchTime != (uint32_t)-1 && minPrefetchEntry) {
+    if (Config::prefetchEvict && minPrefetchTime != (uint64_t)-1 && minPrefetchEntry) {
         _prefetchCollisions++;
         trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 1);
         evictHisto.addData((double) fileIndex, (double) 1);
@@ -300,12 +301,14 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
     //here we decide on the right action for scalable piggyback 
     if(_scalableCache){
         //Did we find a space --  it's possible none of the blocks were available, that case we skip this level for caching
-        if (victimTime != (uint32_t)-1 && victimEntry && minTime != (uint32_t)-1 && minEntry) { 
+        if (victimTime != (uint64_t)-1 && victimEntry && minTime != (uint64_t)-1 && minEntry) { 
             double threshold = (100 - Config::UMBThreshold ) / 100.0; //percentage threshold turned into a multiplier (ex. 20% threshold --> 0.80)
             auto incomingTime = Timer::getCurrentTime();
             
-            double timeRatio = minTime / incomingTime; //always between 0-1 
+            double timeRatio = minTime*1.0 / incomingTime; //always between 0-1 
             double umbRatio = victimMinUMB / askingUMB; // always positive , could be >1 
+            PPRINTFB("mintime: %lu, incoming time: %lu, gettimestep(): %lu, getcurtime: %lu\n", minTime, incomingTime, Timer::getTimestamp() ,Timer::getCurrentTime());
+            PPRINTFB("umbratio: %.10lf, timeratio: %.10lf\n", umbRatio, timeRatio);
 
             if ( umbRatio <= (1 + threshold)){
                 if (timeRatio < umbRatio){
@@ -314,7 +317,7 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
                     trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 0);
                     evictHisto.addData((double) fileIndex, (double) 1);
                     minEntry->status = BLK_EVICT;
-
+                    PPRINTFB("%.10lf, is kicking out oldest block %.10lf, with time:%lu\n" , askingUMB, getLastUMB(minEntry->fileIndex), minTime);
                     req->trace(_name)<<"evicting  entry: "<<blockEntryStr(minEntry)<<std::endl;
                     stats.addAmt(0, CacheStats::Metric::evictions, 1, thread_id);
                     return minEntry;
@@ -349,7 +352,7 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
         return NULL;
     } //end of scalable piggyback section
 
-    if (minTime != (uint32_t)-1 && minEntry) { //LRU version -- Did we find a space
+    if (minTime != (uint64_t)-1 && minEntry) { //LRU version -- Did we find a space
         _collisions++;
         trackBlock(_name, "[BLOCK_EVICTED]", fileIndex, index, 0);
         evictHisto.addData((double) fileIndex, (double) 1);

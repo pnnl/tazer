@@ -112,7 +112,7 @@ class BoundedCache : public Cache {
         uint32_t id;
         uint32_t fileIndex;
         uint32_t blockIndex;
-        uint32_t timeStamp;
+        uint64_t timeStamp;
         uint32_t status;
         uint32_t prefetched;
         // char origCache[32];

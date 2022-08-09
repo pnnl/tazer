@@ -817,7 +817,7 @@ void BoundedFilelockCache::setLastUMB(std::vector<std::tuple<uint32_t, double>> 
 }
 
 double BoundedFilelockCache::getLastUMB(uint32_t fileIndex) {
-    double ret = std::numeric_limits<double>::max();
+    double ret = std::numeric_limits<double>::min();
     if(_UMBLock) {
         if(fileIndex < SCALEABLE_METRIC_FILE_MAX) {
             _UMBLock->readerLock();
@@ -828,6 +828,11 @@ double BoundedFilelockCache::getLastUMB(uint32_t fileIndex) {
                 DPRINTF("FC-------------getLastUMB %lf %u\n", umb, umbc);
             }
             _UMBLock->readerUnlock();
+        }
+        else{
+            //THIS IS NOT EXPECTED BEHAVIOR. WE DON'T SUPPORT #OF FILES MORE THAN SCALEABLE_METRIC_FILE_MAX
+            std::cerr << "[TAZER] We do not currently support number of files more than "<< SCALEABLE_METRIC_FILE_MAX << std::endl;
+            raise(SIGSEGV);
         }
     }
     return ret;
