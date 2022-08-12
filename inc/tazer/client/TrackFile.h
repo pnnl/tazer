@@ -107,8 +107,8 @@ private:
     uint32_t _numBlks;
     uint32_t _regFileIndex;
     int _fd_orig;
-std::string _filename;
-
+    std::string _filename;
+bool _closed;
 };
 
 

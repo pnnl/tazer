@@ -103,7 +103,7 @@
 // #define DPRINTF(...)
 
 TrackFile::TrackFile(std::string name, int fd, bool openFile) : 
-  TazerFile(TazerFile::Type::Local, name, name, fd),
+  TazerFile(TazerFile::Type::TrackLocal, name, name, fd),
   _fileSize(0),
   _numBlks(0),
   _fd_orig(fd),
@@ -114,7 +114,7 @@ TrackFile::TrackFile(std::string name, int fd, bool openFile) :
   //   std::cout << "Failed to open file " << _name << std::endl;
   // else 
   DPRINTF("In Trackfile constructor openfile bool: %d\n", openFile);
-  if(openFile)
+  // if(openFile)
     open();
   // else {
    _active.store(true);
@@ -129,6 +129,7 @@ TrackFile::~TrackFile() {
 
 void TrackFile::open() {
   // #if 0
+  _closed = false;
   DPRINTF("[TAZER] TrackFile open: %s\n", _name.c_str()) ;
   if (track_file_blk_r_stat.find(_name) == track_file_blk_r_stat.end()) {
     track_file_blk_r_stat.insert(std::make_pair(_name, 
@@ -163,6 +164,14 @@ void TrackFile::open() {
 
 void TrackFile::close() {
   DPRINTF("Calling TrackFile close \n");
+  if (!_closed) {
+    unixclose_t unixClose = (unixclose_t)dlsym(RTLD_NEXT, "close");
+    auto close_success = (*unixClose)(_fd_orig);
+    if (close_success) {
+      _closed = true;
+      DPRINTF("Closed file with fd %d with name %s successfully\n", _name);
+    }
+  }
    // write blk access stat in a file
   // DPRINTF("Writing r blk access stat\n");
   //   std::fstream current_file_stat_r;
@@ -239,6 +248,7 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
 }
 ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
   DPRINTF("In trackfile write\n");
+#if 0
   uint32_t _blkSize = 1;
     
   _blkSize = Config::blockSizeForStat;
@@ -269,12 +279,18 @@ ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
       track_file_blk_w_stat[_name][i]++;
     }
   }
+#endif
 
   unixwrite_t unixWrite = (unixwrite_t)dlsym(RTLD_NEXT, "write");
+  DPRINTF("About to write %u count to file with fd %d and file_name: %s", 
+	  count, _fd_orig, _filename.c_str());
   auto write_success = (*unixWrite)(_fd_orig, buf, count);
+
+#if 0  
   _filePos[index] += count;
   if (_filePos[index] > _fileSize)
     _fileSize = _filePos[index] + 1;
+#endif
   if (write_success) {
     DPRINTF("Successfully wrote to the TrackFile\n");
     return count;

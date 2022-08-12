@@ -365,12 +365,13 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
       DPRINTF("Trackfile going to be added to the Trackable \n");
         return Trackable<std::string, TazerFile *>::AddTrackable(
             fileName, [=]() -> TazerFile * {
-	      DPRINTF("Filename in lambda %s", fileName.c_str());
+	      DPRINTF("Filename in lambda %s\n", fileName.c_str());
                 TazerFile *temp = new TrackFile(fileName, fd, open);
                 if (open && temp && temp->active() == 0) {
                     delete temp;
                     return NULL;
                 }
+		DPRINTF("Adding (filename,Trackfile) to map\n");
                 return temp;
             });
     }  
@@ -379,7 +380,8 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
 
 //fileName is the metaFile
 bool TazerFile::removeTazerFile(std::string fileName) {
-    if (strstr(fileName.c_str(), ".tmp") != NULL) {
+  DPRINTF("Removing Tazerfile %s\n", fileName.c_str());  
+  if (strstr(fileName.c_str(), ".tmp") != NULL) {
         char temp[1000];
         strcpy(temp, fileName.c_str());
         removeStr(temp, ".tmp");
@@ -393,6 +395,7 @@ bool TazerFile::removeTazerFile(std::string fileName) {
 }
 
 bool TazerFile::removeTazerFile(TazerFile *file) {
+  DPRINTF("Removing Tazerfile %s\n", file->_metaName.c_str());
     // std::cout<<" remove: "<<file->_name<<" "<<file->_metaName<<std::endl;
     return removeTazerFile(file->_metaName);
 }

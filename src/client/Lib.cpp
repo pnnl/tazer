@@ -110,7 +110,7 @@
 #include "PriorityThreadPool.h"
 #include "Lib.h"
 #include "UrlDownload.h"
-
+#include "TrackFile.h"
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 // #define DPRINTF(...)
@@ -339,12 +339,20 @@ int open64(const char *pathname, int flags, ...) {
 
 int tazerClose(TazerFile *file, unsigned int fp, int fd) {
     DPRINTF("In tazer close \n");
+    if (strstr(file->name().c_str(), "residue")) {
+    // TrackFile* trackfile = reinterpret_cast<TrackFile*>(file) ; 
+     file->close();
+     //   if (closefile) {
+          DPRINTF("Successfully closed a file with fd %d\n", fd);
+	  //   }
+    }
     TazerFile::removeTazerFile(file);
     TazerFileDescriptor::removeTazerFileDescriptor(fd);
     return (*unixclose)(fd);
 }
 
 int close(int fd) {
+    DPRINTF("Trying to close file with fd %d\n", fd);
     return outerWrapper("close", fd, Timer::Metric::close, tazerClose, unixclose, fd);
 }
 
@@ -371,7 +379,7 @@ ssize_t tazerWrite(TazerFile *file, unsigned int fp, int fd, const void *buf, si
 
 ssize_t write(int fd, const void *buf, size_t count) {
     vLock.readerLock();
-    DPRINTF("Printing fd in write %d and count %ul\n", fd, count);
+    DPRINTF("Printing fd in write %d and count %u\n", fd, count);
     auto ret = outerWrapper("write", fd, Timer::Metric::write, tazerWrite, unixwrite, fd, buf, count);
     vLock.readerUnlock();
     return ret;
