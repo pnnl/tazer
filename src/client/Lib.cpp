@@ -111,6 +111,7 @@
 #include "Lib.h"
 #include "UrlDownload.h"
 #include "TrackFile.h"
+#include <cassert>
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 // #define DPRINTF(...)
@@ -254,17 +255,14 @@ int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, cons
   found = name.find("residue");
   if (found) {
     DPRINTF("Opening a HDF5 file %s \n",  name.c_str());
-    //      return outerWrapper("open", pathname, metric, trackFileOpen, unixopen, pathname, 
-    // 			  flags, mode);
-    DPRINTF("trackFileOpen: %s mode  %d\n", name.c_str(), mode);
     fd = (*unixopen64)(name.c_str(), O_CREAT | O_RDWR | O_APPEND, 0660); // TODO: check open mode R/W?
+    if (fd < 0) DPRINTF("fd negative for file %s", name.c_str());
+    assert(fd >=0);
     TazerFile *file = TazerFile::addNewTazerFile(type, name, name, fd, true);
-    // DPRINTF("trackFileOpen attempting to add new tazer file: %s %s %u\n", 
-    //	  name.c_str(), metaName.c_str(), type);
     if (file) {
       TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
-      DPRINTF("trackFileOpen add new  file success: %s , fd %d\n", pathname, fd);
-    } else if (fd != -1) {
+      DPRINTF("trackFileOpen add new  file success: %s , fd = %d\n", pathname, fd);
+    } else if (fd < 0) {
       DPRINTF("trackFileOpen add new  file failed: %s  , fd = %d\n", pathname, fd);
       (*unixclose)(fd);
       fd = -1;
@@ -288,27 +286,6 @@ int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, cons
   return fd;
 }
 
-// int trackFileOpen(std::string name, std::string metaName, TazerFile::Type type, 
-// 		  const char *pathname,  int flags, int mode) {
-
-
-//   DPRINTF("trackFileOpen: %s mode  %d\n", pathname, mode);
-//   int fd = (*unixopen64)(pathname, mode, 0666); // TODO: check open mode R/W?
-//   std::string filepath(pathname);
-//   TazerFile *file = TazerFile::addNewTazerFile(type, filepath, filepath, fd, true);
-//   // DPRINTF("trackFileOpen attempting to add new tazer file: %s %s %u\n", 
-//   //	  name.c_str(), metaName.c_str(), type);
-//   if (file) {
-//     TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
-//     DPRINTF("trackFileOpen add new  file success: %s , fd %d\n", pathname, fd);
-//   } else if (fd != -1) {
-//     DPRINTF("trackFileOpen add new  file failed: %s  , fd = %d\n", pathname, fd);
-//     (*unixclose)(fd);
-//     fd = -1;
-//   }
-  
-//   return fd;
-// }
 
 int open(const char *pathname, int flags, ...) {
     int mode = 0;
@@ -321,9 +298,6 @@ int open(const char *pathname, int flags, ...) {
 
     DPRINTF("Open %s: \n", pathname);
     return outerWrapper("open", pathname, metric, tazerOpen, unixopen, pathname, flags, mode);
-// #ifdef TRACKFILECHANGES
-//     }
-// #endif
 }
 
 int open64(const char *pathname, int flags, ...) {
@@ -334,11 +308,13 @@ int open64(const char *pathname, int flags, ...) {
     va_end(arg);
 
     Timer::Metric metric = (flags & O_WRONLY || flags & O_RDWR) ? Timer::Metric::out_open : Timer::Metric::in_open;
+    DPRINTF("Open64 %s: \n", pathname);
     return outerWrapper("open64", pathname, metric, tazerOpen, unixopen64, pathname, flags, mode);
 }
 
 int tazerClose(TazerFile *file, unsigned int fp, int fd) {
     DPRINTF("In tazer close \n");
+#ifdef TRACKFILECHANGES
     if (strstr(file->name().c_str(), "residue")) {
     // TrackFile* trackfile = reinterpret_cast<TrackFile*>(file) ; 
      file->close();
@@ -346,8 +322,12 @@ int tazerClose(TazerFile *file, unsigned int fp, int fd) {
           DPRINTF("Successfully closed a file with fd %d\n", fd);
 	  //   }
     }
+#endif
     TazerFile::removeTazerFile(file);
     TazerFileDescriptor::removeTazerFileDescriptor(fd);
+#ifdef TRACKFILECHANGES
+    return 0;
+#endif    
     return (*unixclose)(fd);
 }
 

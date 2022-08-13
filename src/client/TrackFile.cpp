@@ -98,6 +98,7 @@
 #include <system_error>
 #include <thread>
 #include <unistd.h>
+#include <cassert>
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 // #define DPRINTF(...)
@@ -113,6 +114,7 @@ TrackFile::TrackFile(std::string name, int fd, bool openFile) :
   // if(_fileSize == (uint64_t) -1)
   //   std::cout << "Failed to open file " << _name << std::endl;
   // else 
+  assert(_fd_orig > 0);
   DPRINTF("In Trackfile constructor openfile bool: %d\n", openFile);
   // if(openFile)
     open();
@@ -124,12 +126,12 @@ TrackFile::TrackFile(std::string name, int fd, bool openFile) :
 
 TrackFile::~TrackFile() {
     *this << "Destroying file " << _metaName << std::endl;
-    close();
+    // close();
 }
 
 void TrackFile::open() {
   // #if 0
-  _closed = false;
+  // _closed = false;
   DPRINTF("[TAZER] TrackFile open: %s\n", _name.c_str()) ;
   if (track_file_blk_r_stat.find(_name) == track_file_blk_r_stat.end()) {
     track_file_blk_r_stat.insert(std::make_pair(_name, 
@@ -164,14 +166,14 @@ void TrackFile::open() {
 
 void TrackFile::close() {
   DPRINTF("Calling TrackFile close \n");
-  if (!_closed) {
-    unixclose_t unixClose = (unixclose_t)dlsym(RTLD_NEXT, "close");
-    auto close_success = (*unixClose)(_fd_orig);
-    if (close_success) {
-      _closed = true;
-      DPRINTF("Closed file with fd %d with name %s successfully\n", _name);
-    }
+  // if (!_closed) {
+  unixclose_t unixClose = (unixclose_t)dlsym(RTLD_NEXT, "close");
+  auto close_success = (*unixClose)(_fd_orig);
+  if (close_success) {
+    // _closed = true;
+    DPRINTF("Closed file with fd %d with name %s successfully\n", _fd_orig, _name.c_str());
   }
+    // }
    // write blk access stat in a file
   // DPRINTF("Writing r blk access stat\n");
   //   std::fstream current_file_stat_r;

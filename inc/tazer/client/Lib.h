@@ -180,21 +180,17 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
   std::string filename(pathname);
   auto found = false;
   found =  strstr(pathname, "residue"); // filename.find("h5");
-  // printf("In checkmeta for file %s \n",  pathname);
-  // printf("found: %d\n" , found);
   if (found) {
     DPRINTF("Will be calling HDF5 branch for file %s\n", pathname);
     type = TazerFile::TrackLocal;
     file = filename;
+    path = filename;
     return true;// tazerFun(filename, filename, type, args...);
   }
 #endif
 
 
     int fd = (*unixopen)(pathname, O_RDONLY);
-    if (write_printf == true) {
-      DPRINTF("[Tazer] write meta filename %s\n", pathname);
-    }
 
     if(fd >= 0)
     {
@@ -208,9 +204,6 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         (*unixclose)(fd);
         if (ret <= 0) {
             delete[] meta;
-	    if (write_printf == true) {
-	      DPRINTF("[Tazer] in checkmeta for write 1\n");
-	    }
             return false;
         }
         meta[bufferSize] = '\0';
@@ -221,26 +214,17 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         std::getline(ss, curLine);
         if(curLine.compare(0, tazerVersion.length(), tazerVersion) != 0) {
             delete[] meta;
-	    if (write_printf == true) {
-	      DPRINTF("[Tazer] in checkmeta for write 2\n");
-	    }
 	    return false;
         }
 
         std::getline(ss, curLine);
         if(curLine.compare(0, 5, "type=") != 0) {
             delete[] meta;
-	    if (write_printf == true) {
-	      DPRINTF("[Tazer] in checkmeta for write 3\n");
-	    }
             return false;
         }
 
         std::string typeStr = curLine.substr(5, curLine.length() - 5);
         for(int i = 0; i < 3; i++) {
-	    if (write_printf == true) {
-	      DPRINTF("[Tazer] in checkmeta for write 4\n");
-	    }
             if(typeStr.compare(types[i]) == 0) {
                 path = pathname;
                 file = pathname;
@@ -251,9 +235,6 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
             }
         }
         delete[] meta;
-    }
-    if (write_printf == true) {
-      DPRINTF("[Tazer] in checkmeta for write 5\n");
     }
     return false;
 }
@@ -344,30 +325,18 @@ inline auto innerWrapper(FILE *fp, bool &isTazerFile, Func tazerFun, FuncLocal l
 
 template <typename Func, typename FuncPosix, typename... Args>
 inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun, FuncPosix posixFun, Args... args) {
-  if (write_printf == true) {
-    DPRINTF("[Tazer] in innerwrapper for write\n");
-  }
-  if (open_printf) {
-    DPRINTF("[Tazer] in innerwrapper for open\n");
-  }
-
   std::string path;
   std::string file;
   TazerFile::Type type;
 
   if (init && checkMeta(pathname, path, file, type)) {
-    if (write_printf == true) {
-      DPRINTF("[Tazer] in innerwrapper's init call for write\n");
-    }
-
     isTazerFile = true;
     DPRINTF("Before calling Tazerfun \n");
     DPRINTF("With file %s\n", pathname);
     return tazerFun(file, path, type, args...);
   }
-  if (write_printf == true) {
-    DPRINTF("[Tazer] in innerwrapper calling posix\n");
-  }
+  DPRINTF("[Tazer] in innerwrapper calling posix\n");
+  
 
   return posixFun(args...);
 }
@@ -397,23 +366,6 @@ inline void removeFromSet(std::unordered_set<FILE *> &set, FILE *value, unixfclo
 template <typename FileId, typename Func, typename FuncPosix, typename... Args>
 auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func tazerFun, FuncPosix posixFun, Args... args) {
   DPRINTF("command %s\n", name);
-  // if (strcmp(name, "write") == 0) {
-  //   DPRINTF("command write with file id %d", fileId);
-  // }
-  // if (strcmp(name, "fwrite") == 0) {
-  //   DPRINTF("command fwrite with file  %s", fileId);
-  // }
-  // if (strcmp(name, "open") == 0) {
-  //   DPRINTF("command open with file  %s", fileId);
-  // }
-  // if (strcmp(name, "write") == 0) {
-  //   write_printf = true;
-  //   DPRINTF("In outerwrapper invocation for write\n");
-  // }
-  // if (strcmp(name, "open") == 0) {
-  //   open_printf = true;
-  //   DPRINTF("In outerwrapper invocation for open\n");
-  // }
 
   if (!init) {
     if (strcmp(name, "write") == 0) {
@@ -474,12 +426,6 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
             }
             timer->end(Timer::MetricType::system, metric);
         }
-    }
-    if (write_printf == true) {
-      write_printf = false;
-    } 
-    if (open_printf) {
-      open_printf = false;
     }
     return retValue;
 }

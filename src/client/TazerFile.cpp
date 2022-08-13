@@ -116,7 +116,7 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
      {
 #ifdef TRACKFILECHANGES
     std::string hdf_file_name(name);
-    auto found = hdf_file_name.find("h5");
+    auto found = hdf_file_name.find("residue");
     if (!found) {
 #endif
     readMetaInfo();
@@ -369,7 +369,9 @@ TazerFile *TazerFile::addNewTazerFile(TazerFile::Type type, std::string fileName
                 TazerFile *temp = new TrackFile(fileName, fd, open);
                 if (open && temp && temp->active() == 0) {
                     delete temp;
-                    return NULL;
+		    DPRINTF("Can't add a TrackFile with Filename %s fd %d", 
+			    fileName.c_str(), fd);
+		    return NULL;
                 }
 		DPRINTF("Adding (filename,Trackfile) to map\n");
                 return temp;
