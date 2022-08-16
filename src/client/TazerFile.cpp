@@ -98,6 +98,7 @@
 #define TIMEON(...)
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
+#define MYPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define TRACKFILECHANGES 1
 
 extern int removeStr(char *s, const char *r);
@@ -138,6 +139,7 @@ TazerFile::~TazerFile() {
 //port=
 //file=
 bool TazerFile::readMetaInfo() {
+    MYPRINTF("Trying to read meta info for file %s\n", _name.c_str());
     TIMEON(uint64_t t1 = Timer::getCurrentTime());
     auto start = Timer::getCurrentTime();
     unixread_t unixRead = (unixread_t)dlsym(RTLD_NEXT, "read");

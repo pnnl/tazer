@@ -110,7 +110,8 @@
 #define ADD_THROW __THROW
 
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
- #define DPRINTF(...)
+#define DPRINTF(...)
+#define MYPRINTF(...) fprintf(stderr, __VA_ARGS__)
 
 #define TRACKFILECHANGES 1
 
@@ -201,6 +202,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         char *meta = new char[bufferSize+1];
 
         int ret = (*unixread)(fd, (void *)meta, bufferSize);
+	MYPRINTF("Will be calling close on file %s\n", pathname);
         (*unixclose)(fd);
         if (ret <= 0) {
             delete[] meta;
@@ -316,10 +318,6 @@ inline auto innerWrapper(FILE *fp, bool &isTazerFile, Func tazerFun, FuncLocal l
             return ret;
         }
     }
-  // if (write_printf == true) {
-  //   DPRINTF("[Tazer] in innerwrapper 2 for write calling localfun\n");
-  // } 
-
   return localFun(args...);
 }
 
@@ -331,8 +329,7 @@ inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun,
 
   if (init && checkMeta(pathname, path, file, type)) {
     isTazerFile = true;
-    // DPRINTF("Before calling Tazerfun \n");
-    // DPRINTF("With file %s\n", pathname);
+    // DPRINTF("tazerfun With file %s\n", pathname);
     return tazerFun(file, path, type, args...);
   }
   // DPRINTF("[Tazer] in innerwrapper calling posix\n");

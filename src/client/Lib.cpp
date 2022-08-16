@@ -113,8 +113,8 @@
 #include "TrackFile.h"
 #include <cassert>
 
-// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
-#define DPRINTF(...)
+#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define DPRINTF(...)
 #define TAZER_ID "TAZER"
 #define TAZER_ID_LEN 5 
 #define TAZER_VERSION "0.1"
@@ -246,7 +246,6 @@ int removeStr(char *s, const char *r) {
 /*Posix******************************************************************************************************/
 
 int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, const char *pathname, int flags, int mode) {
-  DPRINTF("Here\n");
   DPRINTF("tazerOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);
   auto fd = -1;
 #ifdef TRACKFILECHANGES
@@ -328,8 +327,9 @@ int tazerClose(TazerFile *file, unsigned int fp, int fd) {
     TazerFileDescriptor::removeTazerFileDescriptor(fd);
 #ifdef TRACKFILECHANGES
     return 0;
-#endif    
+#else    
     return (*unixclose)(fd);
+#endif
 }
 
 int close(int fd) {

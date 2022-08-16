@@ -108,8 +108,9 @@ TrackFile::TrackFile(std::string name, int fd, bool openFile) :
   _fileSize(0),
   _numBlks(0),
   _fd_orig(fd),
-  _filename(name),
-  _regFileIndex(id()) { //This is if there is no file cache...
+  _filename(name)
+  // ,_regFileIndex(id()) 
+{ //This is if there is no file cache...
   // std::unique_lock<std::mutex> lock(_openCloseLock);
   // if(_fileSize == (uint64_t) -1)
   //   std::cout << "Failed to open file " << _name << std::endl;
@@ -130,9 +131,9 @@ TrackFile::~TrackFile() {
 }
 
 void TrackFile::open() {
-  // #if 0
-  // _closed = false;
   DPRINTF("[TAZER] TrackFile open: %s\n", _name.c_str()) ;
+#if 0
+  // _closed = false;
   if (track_file_blk_r_stat.find(_name) == track_file_blk_r_stat.end()) {
     track_file_blk_r_stat.insert(std::make_pair(_name, 
 						std::map<int, 
@@ -143,7 +144,9 @@ void TrackFile::open() {
 						std::map<int, 
 						std::atomic<int64_t> >()));
   }
+#endif
   DPRINTF("Returning from trackfile open\n");
+
     // _blkSize = Config::blockSizeForStat;
 
     // if (_fileSize < _blkSize)
