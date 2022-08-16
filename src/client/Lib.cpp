@@ -113,8 +113,8 @@
 #include "TrackFile.h"
 #include <cassert>
 
-#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
-// #define DPRINTF(...)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+#define DPRINTF(...)
 #define TAZER_ID "TAZER"
 #define TAZER_ID_LEN 5 
 #define TAZER_VERSION "0.1"
@@ -255,18 +255,19 @@ int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, cons
   found = name.find("residue");
   if (found) {
     DPRINTF("Opening a HDF5 file %s \n",  name.c_str());
-    fd = (*unixopen64)(name.c_str(), O_CREAT | O_RDWR | O_APPEND, 0660); // TODO: check open mode R/W?
+    fd = (*unixopen64)(name.c_str(), flags, mode);//O_CREAT | O_RDWR | O_EXCL, 0644); // TODO: check open mode R/W? O_APPEND 0660
     if (fd < 0) DPRINTF("fd negative for file %s", name.c_str());
     assert(fd >=0);
     TazerFile *file = TazerFile::addNewTazerFile(type, name, name, fd, true);
     if (file) {
       TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
       DPRINTF("trackFileOpen add new  file success: %s , fd = %d\n", pathname, fd);
-    } else if (fd < 0) {
-      DPRINTF("trackFileOpen add new  file failed: %s  , fd = %d\n", pathname, fd);
-      (*unixclose)(fd);
-      fd = -1;
-    }
+    } 
+    // else if (fd < 0) {
+    //   DPRINTF("trackFileOpen add new  file failed: %s  , fd = %d\n", pathname, fd);
+    //   (*unixclose)(fd);
+    //   fd = -1;
+    // }
    } else {
 #endif
     fd = (*unixopen64)(metaName.c_str(), O_RDONLY, 0);

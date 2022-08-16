@@ -96,8 +96,9 @@
 
 //#define TIMEON(...) __VA_ARGS__
 #define TIMEON(...)
-#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
-// #define DPRINTF(...)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+#define DPRINTF(...)
+#define TRACKFILECHANGES 1
 
 extern int removeStr(char *s, const char *r);
 TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaName, int fd) : 
@@ -120,10 +121,10 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
     if (!found) {
 #endif
     readMetaInfo();
-    newFilePosIndex();
 #ifdef TRACKFILECHANGES
     }
 #endif
+    newFilePosIndex();
 }
 
 TazerFile::~TazerFile() {

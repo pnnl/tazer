@@ -100,8 +100,8 @@
 #include <unistd.h>
 #include <cassert>
 
-#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
-// #define DPRINTF(...)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+#define DPRINTF(...)
 
 TrackFile::TrackFile(std::string name, int fd, bool openFile) : 
   TazerFile(TazerFile::Type::TrackLocal, name, name, fd),
