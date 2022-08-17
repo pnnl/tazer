@@ -205,10 +205,9 @@ void TrackFile::close() {
 
 
 ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
+  DPRINTF("In trackfile read count %u \n", count);
+  
 #if 0
-  std::cout << "In trackfile read\n";
-
-
   if (_active.load() && _numBlks) {
     if (_filePos[index] >= _fileSize) {
       // std::cerr << "[TAZER]" << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
@@ -242,6 +241,12 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
     }
 #endif
     // auto seek_success = unixlseek(_fd, index, SEEK_SET); // TODO: check
+    struct stat sb;
+    fstat(_fd_orig, &sb);
+    auto total_size = sb.st_size;
+    if (count > total_size) {
+      count = total_size;
+    }
     unixread_t unixRead = (unixread_t)dlsym(RTLD_NEXT, "read");
     auto read_success = (*unixRead)(_fd_orig, buf, count);
     // _filePos[index] += count;
@@ -255,7 +260,7 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
   return 0;
 }
 ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
-  DPRINTF("In trackfile write\n");
+  DPRINTF("In trackfile write count %u \n", count);
 #if 0
   uint32_t _blkSize = 1;
     

@@ -345,6 +345,7 @@ ssize_t tazerRead(TazerFile *file, unsigned int fp, int fd, void *buf, size_t co
 
 ssize_t read(int fd, void *buf, size_t count) {
     vLock.readerLock();
+    DPRINTF("Original read count %u\n", count);
     auto ret = outerWrapper("read", fd, Timer::Metric::read, tazerRead, unixread, fd, buf, count);
     vLock.readerUnlock();
     return ret;
