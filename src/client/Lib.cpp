@@ -249,10 +249,10 @@ int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, cons
   DPRINTF("tazerOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);
   auto fd = -1;
 #ifdef TRACKFILECHANGES
-  auto found = false;
+  // auto found = false;
   // std::string hdf_file_name(pathname);
-  found = name.find("residue");
-  if (found!=std::string::npos) {
+  // found = name.find("residue");
+  if (name.find("residue") != std::string::npos) {
     DPRINTF("Opening a HDF5 file %s \n",  name.c_str());
     fd = (*unixopen64)(name.c_str(), flags, mode);//O_CREAT | O_RDWR | O_EXCL, 0644); // TODO: check open mode R/W? O_APPEND 0660
     if (fd < 0) DPRINTF("fd negative for file %s", name.c_str());
@@ -315,7 +315,7 @@ int open64(const char *pathname, int flags, ...) {
 int tazerClose(TazerFile *file, unsigned int fp, int fd) {
     DPRINTF("In tazer close \n");
 #ifdef TRACKFILECHANGES
-    if (file->name().find("residue") !=std::string::npos) {
+    if (file->name().find("residue") != std::string::npos) {
     // TrackFile* trackfile = reinterpret_cast<TrackFile*>(file) ; 
      file->close();
      //   if (closefile) {

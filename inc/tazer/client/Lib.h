@@ -179,9 +179,8 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
 
 #ifdef TRACKFILECHANGES
   std::string filename(pathname);
-  auto found = false;
-  found =  filename.find("residue"); // strstr(pathname, "residue"); // filename.find("h5");
-  if (found!=std::string::npos) {
+  // auto found =  filename.find("residue"); // strstr(pathname, "residue"); // filename.find("h5");
+  if (filename.find("residue") != std::string::npos) {
     DPRINTF("Will be calling HDF5 branch for file %s\n", pathname);
     type = TazerFile::TrackLocal;
     file = filename;

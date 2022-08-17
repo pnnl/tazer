@@ -118,8 +118,8 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
      {
 #ifdef TRACKFILECHANGES
     std::string hdf_file_name(name);
-    auto found = hdf_file_name.find("residue");
-    if (found == std::string::npos) {
+    // auto found = hdf_file_name.find("residue");
+    if (hdf_file_name.find("residue") == std::string::npos) {
 #endif
     readMetaInfo();
 #ifdef TRACKFILECHANGES
