@@ -109,8 +109,8 @@
 
 #define ADD_THROW __THROW
 
-// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
-#define DPRINTF(...)
+#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define DPRINTF(...)
 #define MYPRINTF(...) fprintf(stderr, __VA_ARGS__)
 
 #define TRACKFILECHANGES 1
@@ -181,7 +181,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
   std::string filename(pathname);
   auto found = false;
   found =  filename.find("residue"); // strstr(pathname, "residue"); // filename.find("h5");
-  if (found) {
+  if (found!=std::string::npos) {
     DPRINTF("Will be calling HDF5 branch for file %s\n", pathname);
     type = TazerFile::TrackLocal;
     file = filename;
