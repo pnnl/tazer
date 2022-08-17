@@ -100,8 +100,8 @@
 #include <unistd.h>
 #include <cassert>
 
-// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
-#define DPRINTF(...)
+#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define DPRINTF(...)
 
 TrackFile::TrackFile(std::string name, int fd, bool openFile) : 
   TazerFile(TazerFile::Type::TrackLocal, name, name, fd),
@@ -205,9 +205,10 @@ void TrackFile::close() {
 
 
 ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
+#if 0
   std::cout << "In trackfile read\n";
 
-  // #if 0
+
   if (_active.load() && _numBlks) {
     if (_filePos[index] >= _fileSize) {
       // std::cerr << "[TAZER]" << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
@@ -239,16 +240,18 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
     if (((diff + count) % blockSizeForStat)) {
       endBlockForStat++;
     }
-
+#endif
     // auto seek_success = unixlseek(_fd, index, SEEK_SET); // TODO: check
     unixread_t unixRead = (unixread_t)dlsym(RTLD_NEXT, "read");
     auto read_success = (*unixRead)(_fd_orig, buf, count);
-    _filePos[index] += count;
+    // _filePos[index] += count;
     if (read_success) {
       DPRINTF("Successfully read the TrackFile\n");
       return count;
     }
+#if 0
   }
+#endif
   return 0;
 }
 ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {

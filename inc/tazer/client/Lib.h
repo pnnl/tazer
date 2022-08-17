@@ -111,7 +111,7 @@
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 // #define DPRINTF(...)
-#define MYPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define MYPRINTF(...) fprintf(stderr, __VA_ARGS__)
 
 #define TRACKFILECHANGES 1
 
@@ -189,7 +189,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
   }
 #endif
 
-
+  DPRINTF("Checkmeta calling open on file %s\n", pathname);
     int fd = (*unixopen)(pathname, O_RDONLY);
 
     if(fd >= 0)
@@ -201,7 +201,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
         char *meta = new char[bufferSize+1];
 
         int ret = (*unixread)(fd, (void *)meta, bufferSize);
-	MYPRINTF("Will be calling close on file %s\n", pathname);
+	// MYPRINTF("Will be calling close on file %s\n", pathname);
         (*unixclose)(fd);
         if (ret <= 0) {
             delete[] meta;
