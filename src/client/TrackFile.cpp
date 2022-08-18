@@ -312,6 +312,13 @@ ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
   auto write_success = (*unixWrite)(_fd_orig, buf, count);
   if (write_success) {
     DPRINTF("Successfully wrote to the TrackFile\n");
+    struct stat sb;
+    fstat(_fd_orig, &sb);
+    auto total_size = sb.st_size;
+    // if (count > total_size) {
+    //   count = total_size;
+    // }
+    DPRINTF("File size after the write %u\n", total_size);
     return count;
   }
   return 0;
@@ -322,6 +329,11 @@ uint64_t TrackFile::fileSize() {
 }
 
 off_t TrackFile::seek(off_t offset, int whence, uint32_t index) {
+  DPRINTF("Calling Seek in Trackfile\n");
+  unixlseek_t unixLseek = (unixlseek_t)dlsym(RTLD_NEXT, "lseek");
+  auto offset_loc = (*unixLseek)(_fd_orig, offset, whence);
+  return  offset_loc; 
+#if 0
   switch (whence) {
   case SEEK_SET:
     _filePos[index] = offset;
@@ -339,7 +351,7 @@ off_t TrackFile::seek(off_t offset, int whence, uint32_t index) {
   _eof[index] = false;
 
   return _filePos[index];
-#if 0
+
   // just forward the lseek call to sys call
   unixlseek_t unixLseek = (unixlseek_t)dlsym(RTLD_NEXT, "lseek");
   auto offset_loc = (*unixLseek)(_fd_orig, offset, whence);
