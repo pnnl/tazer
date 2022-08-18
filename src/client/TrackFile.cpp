@@ -115,7 +115,7 @@ TrackFile::TrackFile(std::string name, int fd, bool openFile) :
   // if(_fileSize == (uint64_t) -1)
   //   std::cout << "Failed to open file " << _name << std::endl;
   // else 
-  assert(_fd_orig > 0);
+  // assert(_fd_orig > 0);
   DPRINTF("In Trackfile constructor openfile bool: %d\n", openFile);
   // if(openFile)
     open();
@@ -206,14 +206,13 @@ void TrackFile::close() {
 
 ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
   DPRINTF("In trackfile read count %u \n", count);
-  
-#if 0
-  if (_active.load() && _numBlks) {
-    if (_filePos[index] >= _fileSize) {
-      // std::cerr << "[TAZER]" << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
-      _eof[index] = true;
-      return 0;
-    }
+#if 0  
+  // if (_active.load() && _numBlks) {
+  if (_filePos[index] >= _fileSize) {
+    // std::cerr << "[TAZER]" << _name << " " << _filePos[index] << " " << _fileSize << " " << count << std::endl;
+    _eof[index] = true;
+    // return 0;
+  }
         
     char *localPtr = (char *)buf;
     if ((uint64_t)count > _fileSize - _filePos[index])
@@ -240,6 +239,7 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
       endBlockForStat++;
     }
 #endif
+
     // auto seek_success = unixlseek(_fd, index, SEEK_SET); // TODO: check
     struct stat sb;
     fstat(_fd_orig, &sb);
@@ -252,6 +252,9 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
     // _filePos[index] += count;
     if (read_success) {
       DPRINTF("Successfully read the TrackFile\n");
+      #if 0
+      _filePos[index] += count;
+      #endif
       return count;
     }
 #if 0
@@ -259,6 +262,7 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
 #endif
   return 0;
 }
+
 ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
   DPRINTF("In trackfile write count %u \n", count);
 #if 0
@@ -292,18 +296,20 @@ ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
       track_file_blk_w_stat[_name][i]++;
     }
   }
+
+  uint64_t fp = _filePos[index];
+  _filePos[index] += count;
+  if (_filePos[index] > _fileSize) {
+    _fileSize = _filePos[index] + 1;
+  }
+
 #endif
+
 
   unixwrite_t unixWrite = (unixwrite_t)dlsym(RTLD_NEXT, "write");
-  DPRINTF("About to write %u count to file with fd %d and file_name: %s", 
+  DPRINTF("About to write %u count to file with fd %d and file_name: %s\n", 
 	  count, _fd_orig, _filename.c_str());
   auto write_success = (*unixWrite)(_fd_orig, buf, count);
-
-#if 0  
-  _filePos[index] += count;
-  if (_filePos[index] > _fileSize)
-    _fileSize = _filePos[index] + 1;
-#endif
   if (write_success) {
     DPRINTF("Successfully wrote to the TrackFile\n");
     return count;
@@ -316,20 +322,27 @@ uint64_t TrackFile::fileSize() {
 }
 
 off_t TrackFile::seek(off_t offset, int whence, uint32_t index) {
-    switch (whence) {
-    case SEEK_SET:
-        _filePos[index] = offset;
-        break;
-    case SEEK_CUR:
-        _filePos[index] += offset;
-        if (_filePos[index] > _fileSize) {
-            _filePos[index] = _fileSize;
-        }
-        break;
-    case SEEK_END:
-        _filePos[index] = _fileSize + offset;
-        break;
+  switch (whence) {
+  case SEEK_SET:
+    _filePos[index] = offset;
+    break;
+  case SEEK_CUR:
+    _filePos[index] += offset;
+    if (_filePos[index] > _fileSize) {
+      _filePos[index] = _fileSize;
     }
-    _eof[index] = false;
-    return _filePos[index];
+    break;
+  case SEEK_END:
+    _filePos[index] = _fileSize + offset;
+    break;
+  }
+  _eof[index] = false;
+
+  return _filePos[index];
+#if 0
+  // just forward the lseek call to sys call
+  unixlseek_t unixLseek = (unixlseek_t)dlsym(RTLD_NEXT, "lseek");
+  auto offset_loc = (*unixLseek)(_fd_orig, offset, whence);
+  return  offset_loc;// _filePos[index];
+#endif
 }

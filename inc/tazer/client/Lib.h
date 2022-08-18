@@ -277,7 +277,7 @@ inline auto innerWrapper(int fd, bool &isTazerFile, Func tazerFun, FuncLocal loc
 
     // DPRINTF("[Tazer] in innerwrapper 3 init val: %d , fd val %d \n", init, fd);
 
-
+    
     if (init && TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, fp)) {
       // DPRINTF("Found a file with fd %d\n", fd);
         isTazerFile = true;
@@ -325,7 +325,11 @@ inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun,
   std::string path;
   std::string file;
   TazerFile::Type type;
-
+  
+  std::string test_tty(pathname);
+  if(test_tty.find("tty") != std::string::npos) {
+    return posixFun(args...);
+  }
   if (init && checkMeta(pathname, path, file, type)) {
     isTazerFile = true;
     // DPRINTF("tazerfun With file %s\n", pathname);

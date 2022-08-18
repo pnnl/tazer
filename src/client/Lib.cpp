@@ -112,6 +112,7 @@
 #include "UrlDownload.h"
 #include "TrackFile.h"
 #include <cassert>
+#include <errno.h>
 
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 // #define DPRINTF(...)
@@ -254,9 +255,17 @@ int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, cons
   // found = name.find("residue");
   if (name.find("residue") != std::string::npos) {
     DPRINTF("Opening a HDF5 file %s \n",  name.c_str());
-    fd = (*unixopen64)(name.c_str(), flags, mode);//O_CREAT | O_RDWR | O_EXCL, 0644); // TODO: check open mode R/W? O_APPEND 0660
-    if (fd < 0) DPRINTF("fd negative for file %s", name.c_str());
-    assert(fd >=0);
+    // if (flags & O_RDONLY) {
+    fd = (*unixopen64)(name.c_str(), flags, mode);
+      // } else {
+      //O_CREAT | O_RDWR | O_EXCL, 0644); // TODO: check open mode R/W? O_APPEND 0660
+    // if (fd == -1) {
+    //   if(errno == ENOENT) {
+    //   fd = (*unixopen64)(name.c_str(),  O_RDWR|O_CREAT|O_EXCL, 0666);
+    //   }
+    //   assert(fd != -1);
+    // }
+    // }
     TazerFile *file = TazerFile::addNewTazerFile(type, name, name, fd, true);
     if (file) {
       TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
