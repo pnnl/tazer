@@ -244,6 +244,7 @@ int removeStr(char *s, const char *r) {
 }
 
 
+
 /*Posix******************************************************************************************************/
 
 int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, const char *pathname, int flags, int mode) {
