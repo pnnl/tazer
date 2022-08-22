@@ -86,6 +86,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <fnmatch.h>
 #include <unordered_map>
 #include <map>
 #include <atomic>
@@ -106,6 +107,7 @@
 #include "UnixIO.h"
 #include "ThreadPool.h"
 #include "PriorityThreadPool.h"
+
 
 #define ADD_THROW __THROW
 
@@ -178,9 +180,11 @@ int removeStr(char *s, const char *r);
 inline bool checkMeta(const char *pathname, std::string &path, std::string &file, TazerFile::Type &type) {
 
 #ifdef TRACKFILECHANGES
-  std::string filename(pathname);
-  // auto found =  filename.find("residue"); // strstr(pathname, "residue"); // filename.find("h5");
-  if (filename.find("residue") != std::string::npos) {
+  char pattern[] = "*.h5";
+  auto ret_val = fnmatch(pattern, pathname, 0);
+  if (ret_val == 0) {
+    // DPRINTF("Filename matched with fnmatch %s\n", pathname);
+    std::string filename(pathname);
     DPRINTF("Will be calling HDF5 branch for file %s\n", pathname);
     type = TazerFile::TrackLocal;
     file = filename;

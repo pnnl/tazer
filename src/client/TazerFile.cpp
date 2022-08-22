@@ -82,6 +82,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fnmatch.h>
 
 #include "Config.h"
 #include "Connection.h"
@@ -117,9 +118,12 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
     _fd(fd)
      {
 #ifdef TRACKFILECHANGES
-    std::string hdf_file_name(name);
+  char pattern[] = "*.h5";
+  auto ret_val = fnmatch(pattern, name.c_str(), 0);
+  //  std::string hdf_file_name(name);
     // auto found = hdf_file_name.find("residue");
-    if (hdf_file_name.find("residue") == std::string::npos) {
+    //if (hdf_file_name.find("residue") == std::string::npos) {
+  if (ret_val !=0 ) {
 #endif
     readMetaInfo();
 #ifdef TRACKFILECHANGES

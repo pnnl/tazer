@@ -85,6 +85,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <fnmatch.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -251,10 +252,10 @@ int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, cons
   DPRINTF("tazerOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);
   auto fd = -1;
 #ifdef TRACKFILECHANGES
-  // auto found = false;
-  // std::string hdf_file_name(pathname);
-  // found = name.find("residue");
-  if (name.find("residue") != std::string::npos) {
+  //if (name.find("residue") != std::string::npos) {
+  char pattern[] = "*.h5";
+  auto ret_val = fnmatch(pattern, name.c_str(), 0);
+  if (ret_val == 0) {  
     DPRINTF("Opening a HDF5 file %s \n",  name.c_str());
     // if (flags & O_RDONLY) {
     fd = (*unixopen64)(name.c_str(), flags, mode);
@@ -323,15 +324,18 @@ int open64(const char *pathname, int flags, ...) {
 }
 
 int tazerClose(TazerFile *file, unsigned int fp, int fd) {
-    DPRINTF("In tazer close \n");
+  DPRINTF("In tazer close \n");
 #ifdef TRACKFILECHANGES
-    if (file->name().find("residue") != std::string::npos) {
+  char pattern[] = "*.h5";
+  auto ret_val = fnmatch(pattern, file->name().c_str(), 0);
+  if(ret_val == 0) {
+    // if (file->name().find("residue") != std::string::npos) {
     // TrackFile* trackfile = reinterpret_cast<TrackFile*>(file) ; 
-     file->close();
+    file->close();
      //   if (closefile) {
-          DPRINTF("Successfully closed a file with fd %d\n", fd);
+    DPRINTF("Successfully closed a file with fd %d\n", fd);
 	  //   }
-    }
+  }
 #endif
     TazerFile::removeTazerFile(file);
     TazerFileDescriptor::removeTazerFileDescriptor(fd);
