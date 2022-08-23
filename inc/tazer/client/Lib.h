@@ -189,7 +189,7 @@ inline bool checkMeta(const char *pathname, std::string &path, std::string &file
     type = TazerFile::TrackLocal;
     file = filename;
     path = filename;
-    return true;// tazerFun(filename, filename, type, args...);
+    return true;
   }
 #endif
 

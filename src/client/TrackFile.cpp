@@ -239,27 +239,22 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
       endBlockForStat++;
     }
 #endif
-
+    std::cout << "Printing fp in read " << _filePos[index] << std::endl;
     // auto seek_success = unixlseek(_fd, index, SEEK_SET); // TODO: check
     struct stat sb;
     fstat(_fd_orig, &sb);
     auto total_size = sb.st_size;
-    if (count > total_size) {
-      count = total_size;
+    if (count > total_size - _filePos[index]) {
+      count = total_size - _filePos[index];
     }
     unixread_t unixRead = (unixread_t)dlsym(RTLD_NEXT, "read");
     auto read_success = (*unixRead)(_fd_orig, buf, count);
     // _filePos[index] += count;
     if (read_success) {
       DPRINTF("Successfully read the TrackFile\n");
-      #if 0
       _filePos[index] += count;
-      #endif
       return count;
     }
-#if 0
-  }
-#endif
   return 0;
 }
 

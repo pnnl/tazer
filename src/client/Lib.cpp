@@ -86,6 +86,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <fnmatch.h>
+#include <limits.h>
+#include <errno.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -252,13 +254,25 @@ int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, cons
   DPRINTF("tazerOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);
   auto fd = -1;
 #ifdef TRACKFILECHANGES
-  //if (name.find("residue") != std::string::npos) {
   char pattern[] = "*.h5";
   auto ret_val = fnmatch(pattern, name.c_str(), 0);
   if (ret_val == 0) {  
     DPRINTF("Opening a HDF5 file %s \n",  name.c_str());
-    // if (flags & O_RDONLY) {
-    fd = (*unixopen64)(name.c_str(), flags, mode);
+    if (flags & O_WRONLY) { // file needs to exist for writing
+    // check whether the file exists
+      char buf[PATH_MAX]; 
+      char *res = realpath(name.c_str(), buf);
+      if (res == NULL) {
+	if(errno == ENOENT || errno == EBADF) { // file does not exist
+	  DPRINTF("Trying to create a non-existent file for writing\n");
+	  fd = (*unixopen64)(name.c_str(), O_CREAT | O_WRONLY | O_EXCL, 0644);
+	} else {
+	  DPRINTF("Unknown error while checking whether the file exists\n");
+	  exit(-1);
+	}
+      } else { // we found an existing file to write to
+	fd = (*unixopen64)(name.c_str(), flags, mode);
+      }
       // } else {
       //O_CREAT | O_RDWR | O_EXCL, 0644); // TODO: check open mode R/W? O_APPEND 0660
     // if (fd == -1) {
@@ -267,7 +281,9 @@ int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, cons
     //   }
     //   assert(fd != -1);
     // }
-    // }
+    } else {
+      fd = (*unixopen64)(name.c_str(), flags, mode);
+    }
     TazerFile *file = TazerFile::addNewTazerFile(type, name, name, fd, true);
     if (file) {
       TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
