@@ -424,32 +424,36 @@ int innerStat(int version, const char *filename, struct stat64 *buf) { return wh
 
 template <typename T>
 int tazerStat(std::string name, std::string metaName, TazerFile::Type type, int version, const char *filename, T *buf) {
-    auto ret = innerStat(_STAT_VER, metaName.c_str(), buf);
-    TazerFile *file = TazerFile::lookUpTazerFile(filename);
-    if (file)
-        buf->st_size = (off_t)file->fileSize();
-    else {
-        int fd = (*unixopen)(metaName.c_str(), O_RDONLY, 0);
-        if(type == TazerFile::Type::Input) {
-            InputFile tempFile(name, metaName, fd, false);
-            buf->st_size = tempFile.fileSize();
-        }
-        else if(type == TazerFile::Type::Local) {
-            int urlSize = supportedUrlType(name) ? sizeUrlPath(name) : -1;
-            if(urlSize > -1) {
-                if(Config::downloadForSize)
-                    buf->st_size = urlSize;
-                else if(urlSize == 0)
-                    buf->st_size = 1;
-            }
-            else {
-                LocalFile tempFile(name, metaName, fd, false);
-                buf->st_size = tempFile.fileSize();
-            }
-        }
-        (*unixclose)(fd);
+  auto ret = innerStat(_STAT_VER, metaName.c_str(), buf);
+  TazerFile *file = TazerFile::lookUpTazerFile(filename);
+  if (file)
+    buf->st_size = (off_t)file->fileSize();
+  else {
+    if(type == TazerFile::Type::TrackLocal) {
+      return ret;
     }
-    return ret;
+
+    int fd = (*unixopen)(metaName.c_str(), O_RDONLY, 0);
+    if(type == TazerFile::Type::Input) {
+      InputFile tempFile(name, metaName, fd, false);
+      buf->st_size = tempFile.fileSize();
+    }
+    else if(type == TazerFile::Type::Local) {
+      int urlSize = supportedUrlType(name) ? sizeUrlPath(name) : -1;
+      if(urlSize > -1) {
+	if(Config::downloadForSize)
+	  buf->st_size = urlSize;
+	else if(urlSize == 0)
+	  buf->st_size = 1;
+      }
+      else {
+	LocalFile tempFile(name, metaName, fd, false);
+	buf->st_size = tempFile.fileSize();
+      }
+    }
+    (*unixclose)(fd);
+  }
+  return ret;
 }
 
 int __xstat(int version, const char *filename, struct stat *buf) ADD_THROW {
