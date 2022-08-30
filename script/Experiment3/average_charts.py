@@ -141,13 +141,14 @@ numexp = len(hits.keys())
 n = 0.5
 width=0.4
 i=0
-colors = ["pink", "blue", "red", "green", "violet","lightgreen", "yellow",   "orange", "lightblue", "pink"] #['cyan', 'lightblue', 'lightgreen', 'tan', 'pink']
-caches = ["private", "shared", "filelock", "network"]
+dist = int(numexp/2 + 1.5)
+colors = ["pink", "blue", "red", "green", "violet","lightgreen",   "orange", "lightblue", "black", "pink"] #['cyan', 'lightblue', 'lightgreen', 'tan', 'pink']
+caches = ["Private", "SharedMemory", "SharedFilesytem", "DataSource"]
 
-fig=plt.figure()#figsize=(17,10))
+fig=plt.figure(figsize=(8,4)) #figsize=(15,10)
 for key in hits.keys():
     i = i+1
-    locs = np.array(range(4)) * 3 + n*i
+    locs = np.array(range(4)) * dist + n*i
     #vals = [np.log(hits[key]["private"]),np.log(hits[key]["shared"]), np.log(hits[key]["filelock"]),np.log(hits[key]["network"]) ]
     vals = [hits[key]["private"],hits[key]["shared"], hits[key]["filelock"],hits[key]["network"] ]
     bpl = plt.boxplot(vals, positions=locs, sym='', widths=width)#, patch_artist=True)
@@ -155,9 +156,56 @@ for key in hits.keys():
     plt.plot([], c=colors[i], label=key)
 
 plt.legend()
-plt.xticks(np.array(range(4))*3+((i+1)/2*n), caches)
+plt.xticks(np.array(range(4))*dist+((i+1)/2*n), caches)
 plt.ylim(bottom=0)
-fig.savefig("experiment_results.png")
+fig.savefig("D-experiment_results.png")
+fig_width, fig_height = plt.gcf().get_size_inches()
+print(fig_width, fig_height)
+
+fig= plt.figure()
+i=0
+for key in hits.keys():
+    i = i+1
+    locs = [n*i]
+    #vals = [np.log(hits[key]["private"]),np.log(hits[key]["shared"]), np.log(hits[key]["filelock"]),np.log(hits[key]["network"]) ]
+    vals = [hits[key]["shared"]]
+    bpl = plt.boxplot(vals,positions=locs, sym='', widths=width)#, patch_artist=True)
+    set_box_color(bpl, colors[i])
+    plt.plot([], c=colors[i], label=key)
+plt.legend()
+plt.xticks([(i+1)/2*n], ["SharedMemory"])
+#plt.ylim(21500,24500)
+fig.savefig("D-shared_results.png")
+
+fig= plt.figure()
+i=0
+for key in hits.keys():
+    i = i+1
+    locs = [n*i]
+    #vals = [np.log(hits[key]["private"]),np.log(hits[key]["shared"]), np.log(hits[key]["filelock"]),np.log(hits[key]["network"]) ]
+    vals = [hits[key]["private"]]
+    bpl = plt.boxplot(vals,positions=locs, sym='', widths=width)#, patch_artist=True)
+    set_box_color(bpl, colors[i])
+    plt.plot([], c=colors[i], label=key)
+plt.legend()
+plt.xticks([(i+1)/2*n], ["PrivateMemory"])
+#plt.ylim(217700,218000)
+fig.savefig("D-private_results.png")
+
+fig= plt.figure()
+i=0
+for key in hits.keys():
+    i = i+1
+    locs = [n*i]
+    #vals = [np.log(hits[key]["private"]),np.log(hits[key]["shared"]), np.log(hits[key]["filelock"]),np.log(hits[key]["network"]) ]
+    vals = [hits[key]["network"]]
+    bpl = plt.boxplot(vals,positions=locs, sym='', widths=width)#, patch_artist=True)
+    set_box_color(bpl, colors[i])
+    plt.plot([], c=colors[i], label=key)
+plt.legend()
+plt.xticks([(i+1)/2*n], ["DataSource"])
+#plt.ylim(217700,218000)
+fig.savefig("D-network_results.png")
 
 
 
