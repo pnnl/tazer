@@ -164,7 +164,7 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
 // #if 0
 #ifdef GATHERSTAT  
   auto blockSizeForStat = Config::blockSizeForStat;
-  auto diff = _filePos[index] - _filePos[0];
+  auto diff = _filePos[index]; //- _filePos[0]; // technically index is always equal to 0 for us, assuming there is only one fp for a file open at a time.
   auto precNumBlocks = diff / blockSizeForStat;
   uint32_t startBlockForStat = precNumBlocks; 
   uint32_t endBlockForStat = (diff + count) / blockSizeForStat;
@@ -176,7 +176,7 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
   for (auto i = startBlockForStat; i <= endBlockForStat; i++) {
     if (track_file_blk_r_stat[_name].find(i) == 
 	track_file_blk_r_stat[_name].end()) {
-      track_file_blk_r_stat[_name].insert(std::make_pair(i, 1)); // not thread-safe
+      track_file_blk_r_stat[_name].insert(std::make_pair(i, 1));
     }
     else {
       track_file_blk_r_stat[_name][i]++;
@@ -197,7 +197,7 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
 ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
   DPRINTF("In trackfile write count %u \n", count);
 #ifdef GATHERSTAT
-  auto diff = _filePos[index] - _filePos[0];
+  auto diff = _filePos[index]; //  - _filePos[0];
   auto precNumBlocks = diff / _blkSize;
   uint32_t startBlockForStat = precNumBlocks; 
   uint32_t endBlockForStat = (diff + count) / _blkSize; 
