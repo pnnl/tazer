@@ -100,8 +100,8 @@
 #include <unistd.h>
 #include <cassert>
 
-#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
-// #define DPRINTF(...)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+#define DPRINTF(...)
 
 #define GATHERSTAT 1
 

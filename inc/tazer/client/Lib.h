@@ -111,8 +111,8 @@
 
 #define ADD_THROW __THROW
 
-#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
-// #define DPRINTF(...)
+// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+#define DPRINTF(...)
 // #define MYPRINTF(...) fprintf(stderr, __VA_ARGS__)
 
 #define TRACKFILECHANGES 1
