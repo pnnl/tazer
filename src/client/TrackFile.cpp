@@ -154,85 +154,92 @@ void TrackFile::open() {
 
 ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
   DPRINTF("In trackfile read count %u \n", count);
-  struct stat sb;
-  fstat(_fd_orig, &sb);
-  auto total_size = sb.st_size;
-  if (count > total_size - _filePos[index]) {
-    count = total_size - _filePos[index];
-  }
+  // struct stat sb;
+  // fstat(_fd_orig, &sb);
+  // auto total_size = sb.st_size;
+  // if (count > total_size - _filePos[index]) {
+  //   count = total_size - _filePos[index];
+  // }
 
 // #if 0
-#ifdef GATHERSTAT  
-  auto blockSizeForStat = Config::blockSizeForStat;
-  auto diff = _filePos[index]; //- _filePos[0]; // technically index is always equal to 0 for us, assuming there is only one fp for a file open at a time.
-  auto precNumBlocks = diff / blockSizeForStat;
-  uint32_t startBlockForStat = precNumBlocks; 
-  uint32_t endBlockForStat = (diff + count) / blockSizeForStat;
+  unixread_t unixRead = (unixread_t)dlsym(RTLD_NEXT, "read");
+  auto bytes_read = (*unixRead)(_fd_orig, buf, count);
+#ifdef GATHERSTAT
+  if (bytes_read != -1) { // Only update stats if nonzero byte counts are read
+    auto blockSizeForStat = Config::blockSizeForStat;
+    auto diff = _filePos[index]; //- _filePos[0]; // technically index is always equal to 0 for us, assuming there is only one fp for a file open at a time.
+    auto precNumBlocks = diff / blockSizeForStat;
+    uint32_t startBlockForStat = precNumBlocks; 
+    uint32_t endBlockForStat = (diff + bytes_read) / blockSizeForStat;
   
-  if (((diff + count) % blockSizeForStat)) {
-    endBlockForStat++;
-  }
-
-  for (auto i = startBlockForStat; i <= endBlockForStat; i++) {
-    if (track_file_blk_r_stat[_name].find(i) == 
-	track_file_blk_r_stat[_name].end()) {
-      track_file_blk_r_stat[_name].insert(std::make_pair(i, 1));
+    if (((diff + bytes_read) % blockSizeForStat)) {
+      endBlockForStat++;
     }
-    else {
-      track_file_blk_r_stat[_name][i]++;
+
+    for (auto i = startBlockForStat; i <= endBlockForStat; i++) {
+      if (track_file_blk_r_stat[_name].find(i) == 
+	  track_file_blk_r_stat[_name].end()) {
+	track_file_blk_r_stat[_name].insert(std::make_pair(i, 1));
+      }
+      else {
+	track_file_blk_r_stat[_name][i]++;
+      }
     }
   }
 #endif
-    unixread_t unixRead = (unixread_t)dlsym(RTLD_NEXT, "read");
-    auto read_success = (*unixRead)(_fd_orig, buf, count);
-    // _filePos[index] += count;
-    if (read_success) {
-      DPRINTF("Successfully read the TrackFile\n");
-      _filePos[index] += count;
-      return count;
-    }
-  return 0;
+  if (bytes_read != -1) {
+    DPRINTF("Successfully read the TrackFile\n");
+    _filePos[index] += bytes_read;
+  }
+  return bytes_read;
+  //  return 0;
 }
 
 ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
   DPRINTF("In trackfile write count %u \n", count);
-#ifdef GATHERSTAT
-  auto diff = _filePos[index]; //  - _filePos[0];
-  auto precNumBlocks = diff / _blkSize;
-  uint32_t startBlockForStat = precNumBlocks; 
-  uint32_t endBlockForStat = (diff + count) / _blkSize; 
-  if (((diff + count) % _blkSize)) {
-    endBlockForStat++;
-  }
-
-  for (auto i = startBlockForStat; i <= endBlockForStat; i++) {
-    if (track_file_blk_w_stat[_name].find(i) == track_file_blk_w_stat[_name].end()) {
-      track_file_blk_w_stat[_name].insert(std::make_pair(i, 1)); // not thread-safe
-    }
-    else {
-      track_file_blk_w_stat[_name][i]++;
-    }
-  }
-#endif
-
   unixwrite_t unixWrite = (unixwrite_t)dlsym(RTLD_NEXT, "write");
   DPRINTF("About to write %u count to file with fd %d and file_name: %s\n", 
 	  count, _fd_orig, _filename.c_str());
-  auto write_success = (*unixWrite)(_fd_orig, buf, count);
-  if (write_success) {
-    DPRINTF("Successfully wrote to the TrackFile\n");
-    struct stat sb;
-    fstat(_fd_orig, &sb);
-    auto total_size = sb.st_size;
-    _filePos[index] += count;
-    _fileSize = total_size;
-    // if (count > total_size) {
-    //   count = total_size;
-    // }
-    DPRINTF("File size after the write %u\n", total_size);
-    return count;
+  auto bytes_written = (*unixWrite)(_fd_orig, buf, count);
+  
+#ifdef GATHERSTAT
+  if (bytes_written != -1) {
+    auto diff = _filePos[index]; //  - _filePos[0];
+    auto precNumBlocks = diff / _blkSize;
+    uint32_t startBlockForStat = precNumBlocks; 
+    uint32_t endBlockForStat = (diff + bytes_written) / _blkSize; 
+    if (((diff + bytes_written) % _blkSize)) {
+      endBlockForStat++;
+    }
+
+    for (auto i = startBlockForStat; i <= endBlockForStat; i++) {
+      if (track_file_blk_w_stat[_name].find(i) == track_file_blk_w_stat[_name].end()) {
+	track_file_blk_w_stat[_name].insert(std::make_pair(i, 1)); // not thread-safe
+      }
+      else {
+	track_file_blk_w_stat[_name][i]++;
+      }
+    }
   }
-  return 0;
+#endif
+  if (bytes_written != -1) {
+    DPRINTF("Successfully wrote to the TrackFile\n");
+    _filePos[index] += bytes_written;
+    // _fileSize += bytes_written;  
+  }
+  // if (bytes_written) {
+  //   struct stat sb;
+  //   fstat(_fd_orig, &sb);
+  //   auto total_size = sb.st_size;
+  //   _filePos[index] += count;
+  //   _fileSize = total_size;
+  //   // if (count > total_size) {
+  //   //   count = total_size;
+  //   // }
+  //   DPRINTF("File size after the write %u\n", total_size);
+  //   return count;
+  // }
+  return bytes_written;
 }
 
 uint64_t TrackFile::fileSize() {
