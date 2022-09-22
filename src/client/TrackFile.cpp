@@ -94,6 +94,7 @@
 #include <sstream>
 #include <string.h>
 #include <string>
+#include <tuple>
 #include <sys/stat.h>
 #include <system_error>
 #include <thread>
@@ -132,11 +133,22 @@ void TrackFile::open() {
 						std::map<int, 
 						std::atomic<int64_t> >()));
   }
+  if (track_file_blk_r_stat_size.find(_name) == track_file_blk_r_stat_size.end()) {
+    track_file_blk_r_stat_size.insert(std::make_pair(_name, 
+						std::map<int, 
+						std::atomic<int64_t> >()));
+  }
   if (track_file_blk_w_stat.find(_name) == track_file_blk_w_stat.end()) {
     track_file_blk_w_stat.insert(std::make_pair(_name, 
 						std::map<int, 
 						std::atomic<int64_t> >()));
   }
+  if (track_file_blk_w_stat_size.find(_name) == track_file_blk_w_stat_size.end()) {
+    track_file_blk_w_stat_size.insert(std::make_pair(_name, 
+						std::map<int, 
+						std::atomic<int64_t> >()));
+  }
+
   // #endif
   DPRINTF("Returning from trackfile open\n");
 
@@ -180,6 +192,8 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
       if (track_file_blk_r_stat[_name].find(i) == 
 	  track_file_blk_r_stat[_name].end()) {
 	track_file_blk_r_stat[_name].insert(std::make_pair(i, 1));
+	//track_file_blk_r_stat_size[_name].insert(std::make_pair(i, bytes_read - ((i - startBlockForStat) * blockSizeForStat)));
+	track_file_blk_r_stat_size[_name].insert(std::make_pair(i, bytes_read));
       }
       else {
 	track_file_blk_r_stat[_name][i]++;
@@ -215,6 +229,7 @@ ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
     for (auto i = startBlockForStat; i <= endBlockForStat; i++) {
       if (track_file_blk_w_stat[_name].find(i) == track_file_blk_w_stat[_name].end()) {
 	track_file_blk_w_stat[_name].insert(std::make_pair(i, 1)); // not thread-safe
+	track_file_blk_w_stat_size[_name].insert(std::make_pair(i, bytes_written)); // not thread-safe
       }
       else {
 	track_file_blk_w_stat[_name][i]++;
@@ -292,9 +307,9 @@ void TrackFile::close() {
   auto file_stat_r = file_name_r.append("_r_stat");
   current_file_stat_r.open(file_stat_r, std::ios::out);
   if (!current_file_stat_r) { DPRINTF("File for read stat collection not created!");}
-  current_file_stat_r << _filename << " " << "Block no." << " " << "Frequency" << std::endl;
+  current_file_stat_r << _filename << " " << "Block no." << " " << "Frequency" << " " << "Access size in byte" << std::endl;
   for (auto& blk_info  : track_file_blk_r_stat[_name]) {
-    current_file_stat_r << blk_info.first << " " << blk_info.second << std::endl;
+    current_file_stat_r << blk_info.first << " " << blk_info.second << " " << track_file_blk_r_stat_size[_name][blk_info.first] << std::endl;
   }
 
   DPRINTF("Writing w blk access stat\n");
@@ -304,9 +319,10 @@ void TrackFile::close() {
   auto file_stat_w = file_name_w.append("_w_stat");
   current_file_stat_w.open(file_stat_w, std::ios::out);
   if (!current_file_stat_w) {DPRINTF("File for read stat collection not created!");}
-  current_file_stat_w << _filename << " " << "Block no." << " " << "Frequency" << std::endl;
+  current_file_stat_w << _filename << " " << "Block no." << " " << "Frequency" << " " << "Access size in byte" << std::endl;
   for (auto& blk_info  : track_file_blk_w_stat[_name]) {
-    current_file_stat_w << blk_info.first << " " << blk_info.second << std::endl;
+    current_file_stat_w << blk_info.first << " " << blk_info.second << " " << track_file_blk_w_stat_size[_name][blk_info.first] << std::endl;
+    //current_file_stat_w << std::get<0>(blk_info) << " " << std::get<1>(blk_info) << " " << std::get<2>(blk_info) << std::endl;
   }
 
 }
