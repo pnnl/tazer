@@ -319,7 +319,7 @@ void SharedMemoryCache::setLastUMB(std::vector<std::tuple<uint32_t, double>> &UM
 }
 
 double SharedMemoryCache::getLastUMB(uint32_t fileIndex) {
-    double ret = std::numeric_limits<double>::max();
+    double ret = std::numeric_limits<double>::min();
     if(fileIndex < SCALEABLE_METRIC_FILE_MAX) {
         _UMBLock->readerLock();
         if(_UMBC[fileIndex] && !isnan(_UMB[fileIndex]) && !isinf(_UMB[fileIndex])) {
@@ -327,6 +327,11 @@ double SharedMemoryCache::getLastUMB(uint32_t fileIndex) {
             PPRINTF("SM-------------getLastUMB %lf %u\n", _UMB[fileIndex], _UMBC[fileIndex]);
         }
         _UMBLock->readerUnlock();
+    }
+    else{
+        //THIS IS NOT EXPECTED BEHAVIOR. WE DON'T SUPPORT #OF FILES MORE THAN SCALEABLE_METRIC_FILE_MAX
+        std::cerr << "[TAZER] We do not currently support number of files more than "<< SCALEABLE_METRIC_FILE_MAX << std::endl;
+        raise(SIGSEGV);
     }
     return ret;
 }

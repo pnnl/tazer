@@ -261,6 +261,8 @@ const bool PrefetcherLog = false;
 
 //BM: turn on for Histogram trace
 const bool TraceHistogram = getenv("TAZER_TRACE_HISTOGRAM") ? atoi(getenv("TAZER_TRACE_HISTOGRAM")) : 0;
+//threshold percentage for UMB retention / eviction policy. given as a percentage
+const double UMBThreshold = getenv("TAZER_UMB_THRESHOLD") ? atoi(getenv("TAZER_UMB_THRESHOLD")) : 0;
 
 const uint64_t blockSizeForStat = 1024UL;
 

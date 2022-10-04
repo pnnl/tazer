@@ -395,7 +395,7 @@ double Cache::getRequestTime() {
 }
 
 void Cache::addFile(uint32_t index, std::string filename, uint64_t blockSize, std::uint64_t fileSize) {
-    // std::cout<<"[TAZER] " << "adding file: " << filename << " " << (void *)this << " " << (void *)_nextLevel << std::endl;
+    std::cout<<"[TAZER] " << "adding file: " << filename << " " << index << " " << (void *)this << " " << (void *)_nextLevel << std::endl;
     log(this) << "adding" << _name << " " << filename << " " << fileSize << " " << blockSize << std::endl;
     if (_nextLevel) {
         _nextLevel->addFile(index, filename, blockSize, fileSize);

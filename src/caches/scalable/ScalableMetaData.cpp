@@ -272,16 +272,18 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     accessPerInterval++;
     int blocks = numBlocks.load();
     if(miss) {
-        if (average_miss == 0){
-          average_miss += 1;
-        }
+        partitionMissCount++;
         if(lastMissTimeStamp) {
             double i = (double)(timestamp - lastMissTimeStamp);
-            missInterval.addData(i, 1);
-            if(lastDeliveryTime>0 && blocks){ //check to make sure we recorded a deliverytime
-                average_cost += lastDeliveryTime;
-                double cost = log2(average_cost/average_miss);///Mh);//Mh*i;//(double)timestamp/(access/accessPerInterval));//(double)timestamp/access); //(double)timestamp*Mh;//log2(i);//log2(i); //average_cost; //lastMissTimeStamp;
-                benefitHistogram.addData(i, accessPerInterval/cost/blocks/log2(i));//log2(i));//log2(i));///log2(i));//accessPerInterval/cost); // /cost); ///blocks);
+            if(lastDeliveryTime > 0 && blocks ){ //check to make sure we recorded a deliverytime
+                //partitionMissCount++;
+                partitionMissCost = partitionMissCost + lastDeliveryTime;
+                //check for division by zero 
+                double scaledMissCost = log2(partitionMissCost / (partitionMissCount-1));
+                benefitHistogram.addData(i, (((double) accessPerInterval/scaledMissCost)/blocks)/log2(i));
+
+                // double cost = log2(lastDeliveryTime);
+                // benefitHistogram.addData(i, accessPerInterval/cost/blocks);
                 
                 //here we are guaranteed to have at least two misses, and data in the histograms, so we can call recalc marginal benefit for the partition
                 recalc = true;
@@ -290,6 +292,9 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 PPRINTF("BM: We have a second miss but no deliverytime yet! \n");
             }
             accessPerInterval = 0;
+            //OCEANE:This is where we add data to missInterval histogram . i is the time.
+            //we will test log(i) instead of inputting i 
+            missInterval.addData(i, 1);
         }
         DPRINTF("SETTING: %lu = %lu\n", lastMissTimeStamp, timestamp);
         lastMissTimeStamp = timestamp;
@@ -304,18 +309,21 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     DPRINTF("* Timestamp: %lu recalc: %u\n", time, recalc);
     if(numBlocks.load() < 1){
         unitBenefit=0;
-        upperLevelMetric = 100000000; //temp big value
+        upperLevelMetric = std::numeric_limits<double>::min();
         prevUnitBenefit=0;
         prevSize=0;
         ret = unitMarginalBenefit = 0;
     }
     else if(lastDeliveryTime && recalc) {
         double t = ((double) time) / ((double) misses);
+        //OCEANE: if we test log(i), send log(t) here instead of t
         double Mh = missInterval.getValue(t);
         double Bh = benefitHistogram.getValue(t);
-        average_miss = (double) misses;
-        unitBenefit = Bh / Mh; /// ((double) numBlocks.load());//*log2(t); //(Bh/Mh);///log2(t);
-        upperLevelMetric = Mh*log2(average_cost/((double)misses));///Mh);//Mh);//average_cost;//Mh*log2(average_cost/Mh);//((double)time)/access;//(double) time;//Mh*t; //(double)misses); //(double) time;//((double) numBlocks.load());//(double)time; //Mh;  // ((double) numBlocks.load()); //Mh; ///((double) numBlocks.load()) ; //unitBenefit/((double) numBlocks.load());//Mh; //*log2(t);
+
+        unitBenefit = (Bh/Mh);///log2(t);
+        //OCEANE: cost is the part with log [log2(partitionMissCost/(partitionMissCount-1))]
+        // to have cost=1 , comment out the multiplication
+        upperLevelMetric = Mh;//*log2(partitionMissCost/(partitionMissCount-1));
         auto curBlocks = numBlocks.load();
         if(curBlocks > prevSize){
             unitMarginalBenefit = unitBenefit - prevUnitBenefit;

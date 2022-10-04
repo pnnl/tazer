@@ -119,8 +119,9 @@ struct ScalableMetaData {
         int prevSize;
         //BM: for algorithm calculations.
         double lastDeliveryTime;
-        double average_cost = 0; 
-        double average_miss = 0;
+        int partitionMissCount;
+        double partitionMissCost;
+
         std::atomic<uint64_t> numBlocks;
         
         //JS: Also for Nathan (intervalTime, fpGrowth, missInverval)
@@ -144,10 +145,13 @@ struct ScalableMetaData {
             prevUnitBenefit(0),
             prevSize(0),
             unitMarginalBenefit(0),
-            upperLevelMetric(100000000),//a temp big value
+            upperLevelMetric(std::numeric_limits<double>::min()),//default value
             lastDeliveryTime(-1.0),
+            partitionMissCount(0),
+            partitionMissCost(0),
             numBlocks(0),
-            missInterval(100),
+            //OCEANE: Number in the paranthesis sets the number of buckets for histogram [ missInterval(n) n--> number of buckets]
+            missInterval(10),
             benefitHistogram(100,Config::TraceHistogram) {
                 blocks = new BlockEntry[totalBlocks];
                 for(unsigned int i=0; i<totalBlocks; i++) {
