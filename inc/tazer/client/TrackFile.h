@@ -82,7 +82,10 @@
 #include <map>
 
 extern std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_r_stat;
+extern std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_r_stat_size;
 extern std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_w_stat;
+extern std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_w_stat_size;
+//extern std::map<std::string, std::map<int, std::tuple<std::atomic<int64_t>, std::atomic<int64_t> > > > track_file_blk_w_stat;
 
 // For tracing
 extern std::map<std::string, std::vector<int> > trace_read_blk_seq;

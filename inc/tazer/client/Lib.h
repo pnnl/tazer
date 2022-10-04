@@ -136,7 +136,10 @@ static std::unordered_set<FILE *> ignore_fp;
 // std::map<int, std::string> file_info; // to reverse-lookup filename from fd
 // The following map stores the block information/ access freqency for each file
 std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_r_stat;
+std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_r_stat_size;
 std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_w_stat;
+std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_w_stat_size;
+//std::map<std::string, std::map<int, std::tuple<std::atomic<int64_t>, std::atomic<int64_t> > > > track_file_blk_w_stat;
 
 // For tracing
 std::map<std::string, std::vector<int> > trace_read_blk_seq;
