@@ -265,7 +265,7 @@ const bool TraceHistogram = getenv("TAZER_TRACE_HISTOGRAM") ? atoi(getenv("TAZER
 const double UMBThreshold = getenv("TAZER_UMB_THRESHOLD") ? atoi(getenv("TAZER_UMB_THRESHOLD")) : 0;
 
 const uint64_t blockSizeForStat = 1024UL;
-
+const uint64_t hashtableSizeForStat = 1000;
 #define FILE_CACHE_WRITE_THROUGH 1
 
 //#define PRINTF(...) fprintf(stderr, __VA_ARGS__)

@@ -138,6 +138,10 @@ static std::unordered_set<FILE *> ignore_fp;
 std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_r_stat;
 std::map<std::string, std::map<int, std::atomic<int64_t> > > track_file_blk_w_stat;
 
+// For tracing
+std::map<std::string, std::vector<int> > trace_read_blk_seq;
+std::map<std::string, std::vector<int> > trace_write_blk_seq;
+
 unixopen_t unixopen = NULL;
 unixopen_t unixopen64 = NULL;
 unixclose_t unixclose = NULL;

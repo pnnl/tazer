@@ -99,11 +99,14 @@
 #include <thread>
 #include <unistd.h>
 #include <cassert>
+#include <functional>
 
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
 #define GATHERSTAT 1
+#define USE_HASH 1
+#define ENABLE_TRACE 1
 
 TrackFile::TrackFile(std::string name, int fd, bool openFile) : 
   TazerFile(TazerFile::Type::TrackLocal, name, name, fd),
@@ -137,6 +140,16 @@ void TrackFile::open() {
 						std::map<int, 
 						std::atomic<int64_t> >()));
   }
+
+  if (trace_read_blk_seq.find(_name) == trace_read_blk_seq.end()) {
+    trace_read_blk_seq.insert(std::make_pair(_name, std::vector<int>()));
+  }
+
+  if (trace_write_blk_seq.find(_name) == trace_write_blk_seq.end()) {
+    trace_write_blk_seq.insert(std::make_pair(_name, std::vector<int>()));
+  }
+
+
   // #endif
   DPRINTF("Returning from trackfile open\n");
 
@@ -177,13 +190,26 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
     }
 
     for (auto i = startBlockForStat; i <= endBlockForStat; i++) {
-      if (track_file_blk_r_stat[_name].find(i) == 
-	  track_file_blk_r_stat[_name].end()) {
-	track_file_blk_r_stat[_name].insert(std::make_pair(i, 1));
+      auto index = i;
+#ifdef USE_HASH
+      auto sample = hashed(index) % Config::hashtableSizeForStat;
+      if (sample < Config::hashtableSizeForStat/2) { // Sample only 50%
+	// index = sample;
+#endif      
+	if (track_file_blk_r_stat[_name].find(index) == 
+	    track_file_blk_r_stat[_name].end()) {
+	  track_file_blk_r_stat[_name].insert(std::make_pair(index, 1));
+	} else {
+	  track_file_blk_r_stat[_name][index]++;
+	}
+	// For tracing order
+	trace_read_blk_seq[_name].push_back(index);
+
+#ifdef USE_HASH    
+      } else {
+	continue;
       }
-      else {
-	track_file_blk_r_stat[_name][i]++;
-      }
+#endif
     }
   }
 #endif
@@ -213,12 +239,26 @@ ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
     }
 
     for (auto i = startBlockForStat; i <= endBlockForStat; i++) {
-      if (track_file_blk_w_stat[_name].find(i) == track_file_blk_w_stat[_name].end()) {
-	track_file_blk_w_stat[_name].insert(std::make_pair(i, 1)); // not thread-safe
+      auto index = i;
+#ifdef USE_HASH
+      auto sample = hashed(index) % Config::hashtableSizeForStat;
+      if (sample < Config::hashtableSizeForStat/2) { // Sample only 50%
+	// index = sample;
+#endif      
+	if (track_file_blk_w_stat[_name].find(index) == track_file_blk_w_stat[_name].end()) {
+	  track_file_blk_w_stat[_name].insert(std::make_pair(index, 1)); // not thread-safe
+        }
+        else {
+	  track_file_blk_w_stat[_name][index]++;
+        }
+
+	trace_write_blk_seq[_name].push_back(index);
+
+#ifdef USE_HASH    
+      } else {
+	continue;
       }
-      else {
-	track_file_blk_w_stat[_name][i]++;
-      }
+#endif
     }
   }
 #endif
@@ -291,7 +331,7 @@ void TrackFile::close() {
   std::string file_name_r = _filename;
   auto file_stat_r = file_name_r.append("_r_stat");
   current_file_stat_r.open(file_stat_r, std::ios::out);
-  if (!current_file_stat_r) { DPRINTF("File for read stat collection not created!");}
+  if (!current_file_stat_r) { DPRINTF("File for write  stat collection not created!");}
   current_file_stat_r << _filename << " " << "Block no." << " " << "Frequency" << std::endl;
   for (auto& blk_info  : track_file_blk_r_stat[_name]) {
     current_file_stat_r << blk_info.first << " " << blk_info.second << std::endl;
@@ -308,5 +348,30 @@ void TrackFile::close() {
   for (auto& blk_info  : track_file_blk_w_stat[_name]) {
     current_file_stat_w << blk_info.first << " " << blk_info.second << std::endl;
   }
+  
+  DPRINTF("Writing r blk access order stat\n");
+  // write blk access stat in a file
+  std::fstream current_file_trace_r;
+  std::string file_name_trace_r = _filename;
+  auto file_trace_stat_r = file_name_trace_r.append("_r_trace_stat");
+  current_file_trace_r.open(file_trace_stat_r, std::ios::out);
+  if (!current_file_trace_r) {DPRINTF("File for read trace stat collection not created!");}
+  auto const& blk_trace_info_r  = trace_read_blk_seq[_name]; 
+  for (auto const& blk_: blk_trace_info_r) {
+    current_file_trace_r << blk_ << std::endl;
+  }
+  
 
+  DPRINTF("Writing w blk access order stat\n");
+  // write blk access stat in a file
+  std::fstream current_file_trace_w;
+  std::string file_name_trace_w = _filename;
+  auto file_trace_stat_w = file_name_trace_w.append("_w_trace_stat");
+  current_file_trace_w.open(file_trace_stat_w, std::ios::out);
+  if (!current_file_trace_w) {DPRINTF("File for write trace stat collection not created!");}
+  // current_file_trace_w << _filename << " " << "Block no." << " " << "Frequency" << std::endl;
+  auto const& blk_trace_info_w = trace_write_blk_seq[_name];
+  for (auto const& blk_: blk_trace_info_w) {
+    current_file_trace_w << blk_ << std::endl;
+  }
 }
