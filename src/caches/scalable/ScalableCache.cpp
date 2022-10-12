@@ -97,7 +97,6 @@
 // #define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define MeMPRINTF(...)
 
-//#define MOVEDELTIME
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
 evictHisto(100),
@@ -321,22 +320,19 @@ bool ScalableCache::writeBlock(Request *req){
     //PPRINTF("DELIVERY TIME FOR BM: %p %lu\n", req, req->deliveryTime);
     req->time = Timer::getCurrentTime();
     bool ret = false;
+    //BM: added delivery time to metamap
+    _metaMap[req->fileIndex]->updateDeliveryTime(req->deliveryTime);
     if (req->originating == this) {
         DPRINTF("[JS] ScalableCache::writeBlock hit cleanup\n");
         //JS: Decrement our block usage
         _cacheLock->readerLock();
         _metaMap[req->fileIndex]->decBlockUsage(req->blkIndex);
-        //BM: added delivery time to metamap
-        _metaMap[req->fileIndex]->updateDeliveryTime(req->deliveryTime);
         _cacheLock->readerUnlock();
         delete req;
         ret = true;
     }
     else {
         DPRINTF("[JS] ScalableCache::writeBlock pass cleanup\n");
-        #ifdef MOVDELTIME
-        _metaMap[req->fileIndex]->updateDeliveryTime(req->deliveryTime);
-        #endif
         //JS: Write block to cache
         setBlock(req->fileIndex, req->blkIndex, req->data, req->size, req->skipWrite);
         if (_nextLevel) {
