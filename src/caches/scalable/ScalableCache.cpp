@@ -94,8 +94,8 @@
 #define DPRINTF(...)
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
-// #define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-#define MeMPRINTF(...)
+#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define MeMPRINTF(...)
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -358,6 +358,7 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
         MeMPRINTF("PARTITION INFO:%d:%d:%lu\n", met.first, met.second->getNumBlocks(), timeStamp);
         MeMPRINTF("UNITBENEFIT:%d:%.20lf:%lu\n", met.first, met.second->getUnitBenefit(), timeStamp);
         MeMPRINTF("UNITMARGINALBENEFIT:%d:%.20lf:%lu\n", met.first, met.second->getUnitMarginalBenefit(), timeStamp);
+        MeMPRINTF("UPPERLEVELMETRIC:%d:%.20lf:%lu\n", met.first, met.second->getUpperMetric(), timeStamp);
     }
 
     if (!req->size) { //JS: This get the blockSize from the file
