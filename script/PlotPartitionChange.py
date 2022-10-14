@@ -176,7 +176,7 @@ ax2.set_ylabel("Demand")
 
 for key in demandMetric:
     name = "File " + key + " Demand"
-    ax2.plot(partitionTimes, unitBenefits[key], linestyle='--', color=colorDict[key], label=filenames[key] + " Demand")
+    ax2.plot(partitionTimes, demandMetric[key], linestyle='--', color=colorDict[key], label=filenames[key] + " Demand")
 
 plt.legend(loc="upper right")
 
