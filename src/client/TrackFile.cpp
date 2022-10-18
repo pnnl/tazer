@@ -101,12 +101,14 @@
 #include <unistd.h>
 #include <cassert>
 #include <functional>
+#include <chrono>
 
+using namespace std::chrono;
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
 
 #define GATHERSTAT 1
-#define USE_HASH 1
+// #define USE_HASH 1
 #define ENABLE_TRACE 1
 
 TrackFile::TrackFile(std::string name, int fd, bool openFile) : 
@@ -162,34 +164,17 @@ void TrackFile::open() {
     trace_write_blk_seq.insert(std::make_pair(_name, std::vector<int>()));
   }
 
-
+  // open_file_start_time = high_resolution_clock::now();
 
 
   // #endif
   DPRINTF("Returning from trackfile open\n");
 
-    // _blkSize = Config::blockSizeForStat;
-
-    // if (_fileSize < _blkSize)
-    //     _blkSize = _fileSize;
-
-    // _numBlks = _fileSize / _blkSize;
-    // if (_fileSize % _blkSize != 0)
-    //     _numBlks++;
-    
-    // #endif
 }
 
 ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
   DPRINTF("In trackfile read count %u \n", count);
-  // struct stat sb;
-  // fstat(_fd_orig, &sb);
-  // auto total_size = sb.st_size;
-  // if (count > total_size - _filePos[index]) {
-  //   count = total_size - _filePos[index];
-  // }
-
-// #if 0
+ 
   unixread_t unixRead = (unixread_t)dlsym(RTLD_NEXT, "read");
   auto bytes_read = (*unixRead)(_fd_orig, buf, count);
 #ifdef GATHERSTAT
@@ -285,18 +270,6 @@ ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
     _filePos[index] += bytes_written;
     // _fileSize += bytes_written;  
   }
-  // if (bytes_written) {
-  //   struct stat sb;
-  //   fstat(_fd_orig, &sb);
-  //   auto total_size = sb.st_size;
-  //   _filePos[index] += count;
-  //   _fileSize = total_size;
-  //   // if (count > total_size) {
-  //   //   count = total_size;
-  //   // }
-  //   DPRINTF("File size after the write %u\n", total_size);
-  //   return count;
-  // }
   return bytes_written;
 }
 
@@ -343,6 +316,8 @@ void TrackFile::close() {
     DPRINTF("Closed file with fd %d with name %s successfully\n", _fd_orig, _name.c_str());
   }
     // }
+  // close_file_end_time = high_resolution_clock::now();
+  // auto elapsed_time = duration_cast<seconds>(close_file_end_time - open_file_start_time);
    // write blk access stat in a file
   DPRINTF("Writing r blk access stat\n");
   std::fstream current_file_stat_r;
