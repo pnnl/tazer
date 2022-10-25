@@ -116,6 +116,10 @@ private:
   int _fd_orig;
   std::string _filename;
   std::hash<int64_t> hashed;
+  std::chrono::high_resolution_clock::time_point open_file_start_time;
+  std::chrono::high_resolution_clock::time_point close_file_end_time;
+  std::chrono::seconds total_time_spent_read;
+  std::chrono::seconds total_time_spent_write;
 };
 
 
