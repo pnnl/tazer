@@ -12,6 +12,14 @@ private_size=$9
 shared_size=${10}
 block_size=${11}
 
+H_value=${12}
+Hb_value=${13}
+MC_value=${14}
+Sr_value=${15}
+Sth_value=${16}
+
+echo "H:${H_value}  Hb:${Hb_value} MC:${MC_value} Sr:${Sr_Value} Sth:${Sth_value}"
+
 #clean up from previous experiments
 rm -r /files/${USER}/tazer_output
 rm /dev/shm/*tazer*
@@ -45,7 +53,8 @@ for file in $file_names; do
     echo "[server]" >> ${file}.meta.in
     echo "host=${tazer_server}" >> ${file}.meta.in
     echo "port=6024" >> ${file}.meta.in
-    echo "file=${TAZER_ROOT}/script/${file}" >> ${file}.meta.in
+    echo "file=/files0/mutl832/tazer_files/${file}" >> ${file}.meta.in
+    #echo "file=${TAZER_ROOT}/script/${file}" >> ${file}.meta.in
 done
 
 #set up env variables for TAZER
@@ -58,7 +67,7 @@ export TAZER_SCALABLE_CACHE_NUM_BLOCKS=$((TAZER_PRIVATE_MEM_CACHE_SIZE/TAZER_BLO
 
 export TAZER_SHARED_MEM_CACHE=${shared}
 export TAZER_SHARED_MEM_CACHE_SIZE=$((shared_size*1024*1024))
-export TAZER_BOUNDED_FILELOCK_CACHE=$filemem
+export TAZER_BOUNDED_FILELOCK_CACHE=0
 mkdir ./FileCache/
 export TAZER_BOUNDED_FILELOCK_CACHE_PATH=${TAZER_ROOT}/script/Experiment3/Results_${exp_type}_${scalable}_${shared}_${filemem}/FileCache
 export TAZER_BOUNDED_FILELOCK_CACHE_SIZE=$((64*1024*1024))
@@ -67,9 +76,19 @@ export TAZER_BOUNDED_FILELOCK_CACHE_SIZE=$((64*1024*1024))
 #export TAZER_SHARED_MEM_CACHE_SIZE=
 #export TAZER_BOUNDED_FILELOCK_CACHE_SIZE=
 export TAZER_TRACE_HISTOGRAM=0
-export TAZER_UMB_THRESHOLD=20
+export TAZER_UMB_THRESHOLD=50
+###test parameters
+
+export TAZER_Hb_VALUE=${Hb_value}
+export TAZER_H_VALUE=${H_value}
+export TAZER_MC_VALUE=${MC_value}
+export TAZER_Sr_VALUE=${Sr_value}
+export TAZER_UMB_THRESHOLD=${Sth_value}
+
+
 TAZER_LIB_PATH=${TAZER_BUILD_DIR}src/client/libclient.so
 
+env 
 
 for trace in $traces; do
     exp_command="env LD_PRELOAD=${TAZER_LIB_PATH} ${WORKLOADSIM_PATH} -f ${TAZER_ROOT}/script/paper_experiments/${trace}.txt -i 10.0 -m .meta.in"

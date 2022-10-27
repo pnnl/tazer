@@ -209,6 +209,9 @@ class BoundedCache : public Cache {
     Cache * _scalableCache;
     virtual double getLastUMB(uint32_t fileIndex);
     virtual void setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList);
+    virtual void addBlocktoFileCacheCount(uint32_t index);
+    virtual void decBlocktoFileCacheCount(uint32_t index);
+    virtual uint32_t getFileCacheCount(uint32_t index);
 };
 
 #endif /* BoundedCache_H */

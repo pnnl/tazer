@@ -88,6 +88,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <cmath>
 
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DPRINTF(...)
@@ -95,7 +96,10 @@
 //#define PPRINTFB(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
 #define PPRINTF(...)
 #define PPRINTFB(...)
-
+//#define TPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+#define TPRINTF(...)
+//#define ShMeMPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+#define ShMeMPRINTF(...)
 template <class Lock>
 BoundedCache<Lock>::BoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, Cache * scalableCache) : Cache(cacheName,type),
                                                                                                                           _cacheSize(cacheSize),
@@ -195,6 +199,7 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::getBlock(uint32_t i
 
 template <class Lock>
 typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_t index, uint32_t fileIndex, Request* req) {
+    auto memTimeStamp = Timer::getCurrentTime();
     req->trace(_name)<<"searching for oldest block: "<<index<<" "<<fileIndex<<std::endl;
     BlockEntry* blkEntry = NULL;
     uint64_t minTime = -1; //this is max uint64_t
@@ -221,6 +226,10 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
         }
         if (blkEntry->status == BLK_EMPTY) { //The space is empty!!!
             req->trace(_name)<<"found  empty entry: "<<blockEntryStr(blkEntry)<<std::endl;
+            //add one to file cache size 
+            addBlocktoFileCacheCount(fileIndex);
+            ShMeMPRINTF("PARTITION INFO:%d:%d:%lu\n", fileIndex, getFileCacheCount(fileIndex), memTimeStamp);
+            ShMeMPRINTF("DEMAND INFO:%d:%lu:%lu\n", fileIndex, getLastUMB(fileIndex), memTimeStamp);
             return blkEntry;
         }
     }
@@ -302,11 +311,25 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
     if(_scalableCache){
         //Did we find a space --  it's possible none of the blocks were available, that case we skip this level for caching
         if (victimTime != (uint64_t)-1 && victimEntry && minTime != (uint64_t)-1 && minEntry) { 
-            double threshold = (100 - Config::UMBThreshold ) / 100.0; //percentage threshold turned into a multiplier (ex. 20% threshold --> 0.80)
+            double threshold = Config::UMBThreshold / 100.0; //percentage threshold
             auto incomingTime = Timer::getCurrentTime();
-            
+            TPRINTF("threshold: %f", threshold);
             double timeRatio = minTime*1.0 / incomingTime; //always between 0-1 
-            double umbRatio = victimMinUMB / askingUMB; // always positive , could be >1 
+            double umbRatio;
+            if(Config::Sr_parameter == 0){
+                TPRINTF("Sr_parameter is 0: using normal ratio\n");
+                umbRatio = (victimMinUMB) / (askingUMB); // always positive , could be >1 
+            }
+            else if(Config::Sr_parameter == 1){
+                TPRINTF("Sr_parameter is 1: using logged ratio\n");
+                umbRatio = log2(victimMinUMB) / log2(askingUMB); // always positive , could be >1 
+            }
+            else{
+                //undefined behavior
+                std::cerr << "[TAZER] Undefined value for Sr parameter "<< Config::Sr_parameter << std::endl;
+                raise(SIGSEGV);
+            }
+            
             PPRINTFB("mintime: %lu, incoming time: %lu, gettimestep(): %lu, getcurtime: %lu\n", minTime, incomingTime, Timer::getTimestamp() ,Timer::getCurrentTime());
             PPRINTFB("umbratio: %.10lf, timeratio: %.10lf\n", umbRatio, timeRatio);
 
@@ -320,6 +343,14 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
                     PPRINTFB("%.10lf, is kicking out oldest block %.10lf, with time:%lu\n" , askingUMB, getLastUMB(minEntry->fileIndex), minTime);
                     req->trace(_name)<<"evicting  entry: "<<blockEntryStr(minEntry)<<std::endl;
                     stats.addAmt(0, CacheStats::Metric::evictions, 1, thread_id);
+                    //update cache sizes here 
+                    addBlocktoFileCacheCount(fileIndex);
+                    decBlocktoFileCacheCount(minEntry->fileIndex);
+                    ShMeMPRINTF("PARTITION INFO:%d:%d:%lu\n", fileIndex, getFileCacheCount(fileIndex), memTimeStamp);
+                    ShMeMPRINTF("PARTITION INFO:%d:%d:%lu\n", minEntry->fileIndex, getFileCacheCount(minEntry->fileIndex), memTimeStamp);
+                    ShMeMPRINTF("DEMAND INFO:%d:%f:%lu\n", fileIndex, getLastUMB(fileIndex), memTimeStamp);
+                    ShMeMPRINTF("DEMAND INFO:%d:%f:%lu\n", minEntry->fileIndex, getLastUMB(minEntry->fileIndex), memTimeStamp);
+
                     return minEntry;
                 }
                 else{
@@ -335,6 +366,14 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
 
                     req->trace(_name)<<"evicting  entry: "<<blockEntryStr(minEntry)<<std::endl;
                     stats.addAmt(0, CacheStats::Metric::evictions, 1, thread_id);
+                    //update cache sizes here 
+                    addBlocktoFileCacheCount(fileIndex);
+                    decBlocktoFileCacheCount(minEntry->fileIndex);
+                    ShMeMPRINTF("PARTITION INFO:%d:%d:%lu\n", fileIndex, getFileCacheCount(fileIndex), memTimeStamp);
+                    ShMeMPRINTF("PARTITION INFO:%d:%d:%lu\n", minEntry->fileIndex, getFileCacheCount(minEntry->fileIndex), memTimeStamp);
+                    ShMeMPRINTF("demand: %f\n",getLastUMB(fileIndex) );
+                    ShMeMPRINTF("DEMAND INFO:%d:%f:%lu\n", fileIndex, getLastUMB(fileIndex), memTimeStamp);
+                    ShMeMPRINTF("DEMAND INFO:%d:%f:%lu\n", minEntry->fileIndex, getLastUMB(minEntry->fileIndex), memTimeStamp);
                     return minEntry;
                 }
             }
@@ -751,6 +790,15 @@ void BoundedCache<Lock>::setLastUMB(std::vector<std::tuple<uint32_t, double>> &U
     PPRINTF("********************* %s setLastUMB Nothing Here*********************\n", _name.c_str()); 
     return;
 }
+
+template <class Lock>
+     void BoundedCache<Lock>::addBlocktoFileCacheCount(uint32_t index){return;}
+
+    template <class Lock>
+     void BoundedCache<Lock>::decBlocktoFileCacheCount(uint32_t index){return;}
+
+    template <class Lock>
+     uint32_t BoundedCache<Lock>::getFileCacheCount(uint32_t index){return -5;}
 
 // template class BoundedCache<ReaderWriterLock>;
 template class BoundedCache<MultiReaderWriterLock>;

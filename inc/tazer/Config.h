@@ -261,6 +261,13 @@ const bool PrefetcherLog = false;
 
 //BM: turn on for Histogram trace
 const bool TraceHistogram = getenv("TAZER_TRACE_HISTOGRAM") ? atoi(getenv("TAZER_TRACE_HISTOGRAM")) : 0;
+
+
+//testing parameters
+const uint32_t Hb_parameter = getenv("TAZER_Hb_VALUE") ? atoi(getenv("TAZER_Hb_VALUE")) : 10;
+const uint32_t H_parameter = getenv("TAZER_H_VALUE") ? atoi(getenv("TAZER_H_VALUE")) : 0;
+const uint32_t MC_parameter = getenv("TAZER_MC_VALUE") ? atoi(getenv("TAZER_MC_VALUE")) : 0;
+const uint32_t Sr_parameter = getenv("TAZER_Sr_VALUE") ? atoi(getenv("TAZER_Sr_VALUE")) : 0;
 //threshold percentage for UMB retention / eviction policy. given as a percentage
 const double UMBThreshold = getenv("TAZER_UMB_THRESHOLD") ? atoi(getenv("TAZER_UMB_THRESHOLD")) : 0;
 

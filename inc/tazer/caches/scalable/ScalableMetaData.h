@@ -151,7 +151,7 @@ struct ScalableMetaData {
             partitionMissCost(0),
             numBlocks(0),
             //OCEANE: Number in the paranthesis sets the number of buckets for histogram [ missInterval(n) n--> number of buckets]
-            missInterval(10),
+            missInterval(Config::Hb_parameter),
             benefitHistogram(100,Config::TraceHistogram) {
                 blocks = new BlockEntry[totalBlocks];
                 for(unsigned int i=0; i<totalBlocks; i++) {

@@ -112,6 +112,9 @@ class SharedMemoryCache : public BoundedCache<MultiReaderWriterLock> {
     //JS: Metric piggybacking
     virtual double getLastUMB(uint32_t fileIndex);
     virtual void setLastUMB(std::vector<std::tuple<uint32_t, double>> &UMBList);
+    virtual void addBlocktoFileCacheCount(uint32_t index);
+    virtual void decBlocktoFileCacheCount(uint32_t index);
+    virtual uint32_t getFileCacheCount(uint32_t index);
 
   private:
     MemBlockEntry *_blkIndex;
@@ -121,6 +124,8 @@ class SharedMemoryCache : public BoundedCache<MultiReaderWriterLock> {
     ReaderWriterLock *_UMBLock;
     double * _UMB; //Unit Marginal Benifit
     unsigned int * _UMBC;
+
+    unsigned int * _bMemTrace;
     
 
   // JS: This is a hack.  I need to get the size of a MemBlockEntry to create a 

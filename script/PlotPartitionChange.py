@@ -186,3 +186,27 @@ plt.legend(loc="upper right")
 # plt.show()
 
 plt.savefig("Demand_"+output_figure)
+
+#############
+plt.figure(figsize=(27,8))
+colorDict = {}
+
+#for key in partitions.keys():
+for key in sorted(partitions):
+    #name = "File " + key
+    p=plt.plot(partitionTimes, marginalBenefits[key], "--", label=filenames[key])
+    
+
+
+plt.xlabel("Time")
+plt.ylabel("Unit Marginal Benefit")
+plt.legend(loc="upper left")
+ax1 = plt.gca()
+
+
+plt.legend(loc="upper right")
+
+plt.ylim(-0.01,0.01)
+plt.savefig("UMBonly_"+output_figure)
+
+#################

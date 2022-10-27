@@ -76,12 +76,18 @@
 #include "ScalableCache.h"
 #include <cmath>
 #include <cfloat>
+#include <csignal>
 
 #define DPRINTF(...)
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 #define PPRINTF(...)
 //#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+
+//#define TPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define TPRINTF(...)
+
+#define BPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
     auto blockEntry = &blocks[blockIndex];
@@ -234,30 +240,46 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex) {
     uint8_t * ret = NULL;
     metaLock.writerLock();
 
-    if(currentBlocks.size() > 1) {
-        DPRINTF("ScalableMetaData::oldestBlock CurrentBlock.size(): %d\n", currentBlocks.size());
-        sort(currentBlocks.begin(), currentBlocks.end(), 
-            [](BlockEntry* lhs, BlockEntry* rhs) {
-                return lhs->timeStamp.load() < rhs->timeStamp.load();
-            });
+    uint64_t minTime = std::numeric_limits<uint64_t>::max();
+    BlockEntry *minEntry = NULL;
+    uint64_t minIndex = std::numeric_limits<uint64_t>::max();
+
+    if(currentBlocks.size() > 1) { //we can't give up the only block file has
+        for(int i=0; i<currentBlocks.size(); i++) {
+            auto it = currentBlocks[i];
+            if ((it)->blkLock.cowardlyTryWriterLock()) { //this will tell us if the block is in use
+                if((it)->timeStamp.load() < minTime){
+                    minTime = (it)->timeStamp.load();
+                    minEntry = it;
+                    minIndex=i;
+                }
+                (it)->blkLock.writerUnlock();
+            }
+        }
+    }
+    else{
+        //what if file itself is doing a reuse?
+        BPRINTF("this file only has 1 block, cannot give it up..");
     }
 
-    for(auto it = currentBlocks.begin(); it != currentBlocks.end(); it++) {
-        //JS: Check the block is not being requested
-        if ((*it)->blkLock.cowardlyTryWriterLock()) {
-            //JS: For tracking...
-            blockIndex = (*it)->blockIndex;
+    BPRINTF("after oldestblock loop, minindex is: %u, total blocks: %d \n", minIndex,  currentBlocks.size());
+    if(minEntry != NULL){ //we found a min entry 
+
+        if (minEntry->blkLock.cowardlyTryWriterLock()) {
+            blockIndex = (minEntry)->blockIndex;
             DPRINTF("block: %lu timestamp: %lu\n", blockIndex, (*it)->timeStamp.load());
             //JS: Take its memory!!!
-            ret = (*it)->data;
-            (*it)->data.store(NULL);
-            (*it)->blkLock.writerUnlock();
+            ret = (minEntry)->data;
+            (minEntry)->data.store(NULL);
+            (minEntry)->blkLock.writerUnlock();
             numBlocks.fetch_sub(1);
             //turn recalc true
             recalc=true;
             //JS: And remove its existence...
-            currentBlocks.erase(it);
-            break;
+            currentBlocks.erase(currentBlocks.begin()+minIndex);
+        }
+        else{
+            //here our minentry block has become active since our loop, we need to do something? 
         }
     }
 
@@ -293,8 +315,23 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
             }
             accessPerInterval = 0;
             //OCEANE:This is where we add data to missInterval histogram . i is the time.
-            //we will test log(i) instead of inputting i 
-            missInterval.addData(i, 1);
+            //we will test log2(i) instead of inputting i 
+
+            //config::H_parameter holds the type of miss interval histogram logging
+            if(Config::H_parameter == 0){
+                TPRINTF("H_parameter=0: miss histogram use normal time\n");
+                missInterval.addData(i, 1);
+            }
+            else if(Config::H_parameter == 1){
+                TPRINTF("H_parameter=1: miss histogram use log time\n");
+                missInterval.addData(log2(i), 1);
+            }
+            else{
+                //undefined H variable
+                std::cerr << "[TAZER] Undefined value for H parameter "<< Config::H_parameter << std::endl;
+                raise(SIGSEGV);
+            }
+            
         }
         DPRINTF("SETTING: %lu = %lu\n", lastMissTimeStamp, timestamp);
         lastMissTimeStamp = timestamp;
@@ -317,13 +354,49 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     else if(lastDeliveryTime && recalc) {
         double t = ((double) time) / ((double) misses);
         //OCEANE: if we test log(i), send log(t) here instead of t
-        double Mh = missInterval.getValue(t);
+        double Mh;
+        if(Config::H_parameter == 0){
+            TPRINTF("H_parameter=0: miss histogram use normal time\n");
+            Mh = missInterval.getValue(t);
+        }
+        else if(Config::H_parameter == 1){
+            TPRINTF("H_parameter=1: miss histogram use log time\n");
+            Mh = missInterval.getValue(log2(t));
+        }
+        else{
+            //undefined H variable
+            std::cerr << "[TAZER] Undefined value for H parameter "<< Config::H_parameter << std::endl;
+            raise(SIGSEGV);
+        }
+
+        
         double Bh = benefitHistogram.getValue(t);
 
         unitBenefit = (Bh/Mh);///log2(t);
-        //OCEANE: cost is the part with log [log2(partitionMissCost/(partitionMissCount-1))]
-        // to have cost=1 , comment out the multiplication
-        upperLevelMetric = Mh;//*log2(partitionMissCost/(partitionMissCount-1));
+
+        TPRINTF("baskets for histogram: %d\n", Config::Hb_parameter);
+        //Config::MC_parameter hold the miss cost type 
+        if(Config::MC_parameter == 0){
+            //use cost as is  
+            TPRINTF("MC_parameter=0: miss cost is used as is\n");
+            upperLevelMetric = Mh*(partitionMissCost/(partitionMissCount-1));
+        }
+        else if(Config::MC_parameter == 1){
+            //use cost=1
+            TPRINTF("MC_parameter=1: miss cost is used as 1\n");
+            upperLevelMetric = Mh;
+        }
+        else if(Config::MC_parameter == 2){
+            //use cost = log(cost)
+            TPRINTF("MC_parameter=2: miss cost is used as log(cost)\n");
+            upperLevelMetric = Mh*log2(partitionMissCost/(partitionMissCount-1));
+        }
+        else{
+            //undefined MC value
+            std::cerr << "[TAZER] Undefined value for MC parameter "<< Config::MC_parameter << std::endl;
+            raise(SIGSEGV);
+        }
+
         auto curBlocks = numBlocks.load();
         if(curBlocks > prevSize){
             unitMarginalBenefit = unitBenefit - prevUnitBenefit;
@@ -342,6 +415,11 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         //ret = unitMarginalBenefit;
         ret = unitMarginalBenefit; // / ((double) numBlocks.load());
         //DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
+        
+        //////TEMPORARY CHANGE TO UPPERLEVELMETRIC  (upperlevelmetric=umb)
+        upperLevelMetric=unitMarginalBenefit;
+        //////END TEMPORARY
+
         if(isnan(unitMarginalBenefit)){
             PPRINTF("** nan! t: %f, misses: %d, Bh: %lf Mh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Bh, Mh , unitBenefit, unitMarginalBenefit,numBlocks.load());
             missInterval.printBins();

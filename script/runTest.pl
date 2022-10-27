@@ -14,7 +14,7 @@ my $dontRun = defined $options{d} ? 1 : 0;
 my $allocator = defined $options{a} ? $options{a} : -1;
 my $maxDigit = 10;
 
-my $path = "/people/mutl832/tazer-merged/build";
+my $path = "/people/mutl832/tazer-july/build";
 my $serverPath = $path . "/src/server/server";
 my $libPath = $path . "/src/client/libclient.so";
 my $closeServerPath = $path . "/test/CloseServer";

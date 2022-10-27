@@ -10,14 +10,23 @@ WORKLOADSIM_PATH=${HOME}/tazer-bigflowsim/workloadSim
 #--------------------------------------------
 
 #----------------EXP PARAMETERS--------------
-exp_type="E" #A: test1 , B: test2 linear, C: test2 random, D:Test1+test2random, E:test1+test2linear+test2random 
+#exp_type="D" #A: test1 , B: test2 linear, C: test2 random, D:Test1+test2random, E:test1+test2linear+test2random 
 scalable=1
-shared=1
-filemem=1
-private_size=8 #in MB
-shared_size=32 #in MB
-block_size=128 #in KB
+shared=0
+filemem=0
 
+
+H_value=$1
+Hb_value=$2
+MC_value=$3
+Sr_value=$4
+Sth_value=$5
+exp_type=$6
+private_size=$7 #in MB
+shared_size=$8 #in MB
+block_size=$9 #in KB
+
+echo "H:${H_value}  Hb:${Hb_value} MC:${MC_value} Sr:${Sr_value} Sth:${Sth_value} exp_type:$exp_type private_size:$private_size shared_size:$shared_size block_size:$block_size" 
 #-------------------------------------------
 
 #---------------CLEAN UP--------------------
@@ -47,12 +56,14 @@ CLOSE_SERVER=${TAZER_BUILD_DIR}test/CloseServer
 
 server_command="sbatch -A oddite -N1 -x node42,node12 --parsable ./launch_server.sh"
 tazer_server_task_id=$(${server_command})
+
+echo $tazer_server_task_id
 sleep 10
 
 tazer_server_nodes=`squeue -j ${tazer_server_task_id} -h -o "%N"`
 echo "server node: "$tazer_server_nodes
 
-client_command="sbatch -A oddite -N1 --exclude=node42 --parsable ./launch_exp.sh ${exp_type} ${tazer_server_nodes} ${TAZER_ROOT} ${TAZER_BUILD_DIR} ${WORKLOADSIM_PATH} ${scalable} ${shared} ${filemem} ${private_size} ${shared_size} ${block_size}"
+client_command="sbatch -A oddite -N1 --exclude=node42 --parsable ./launch_exp.sh ${exp_type} ${tazer_server_nodes} ${TAZER_ROOT} ${TAZER_BUILD_DIR} ${WORKLOADSIM_PATH} ${scalable} ${shared} ${filemem} ${private_size} ${shared_size} ${block_size} ${H_value} ${Hb_value} ${MC_value} ${Sr_value} ${Sth_value}"
 # echo $client_command
 client_task_id=$(${client_command}) 
 sleep 2

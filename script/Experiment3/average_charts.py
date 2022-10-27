@@ -13,13 +13,13 @@ def set_box_color(bp, color):
     plt.setp(bp['medians'], color=color)
 
 
-if(len(sys.argv)< 2):
-    print("please enter the folder prefixes for each experiment set\n")
+if(len(sys.argv)< 3):
+    print("please enter the png prefix and folder prefixes for each experiment set\n")
     sys.exit()
 
-
+prefname = sys.argv[1]
 exps = {}
-for i in range(1,len(sys.argv)):
+for i in range(2,len(sys.argv)):
     folder = sys.argv[i]
     #print(folder)
     exps[folder] = {}
@@ -142,7 +142,12 @@ n = 0.5
 width=0.4
 i=0
 dist = int(numexp/2 + 1.5)
-colors = ["pink", "blue", "red", "green", "violet","lightgreen",   "orange", "lightblue", "black", "pink"] #['cyan', 'lightblue', 'lightgreen', 'tan', 'pink']
+colors = ["pink", "blue", "red", "green", "violet",
+         "lightgreen", "orange", "lightblue", "black", "pink", 
+         "cyan", "tan", "lightblue", "firebrick", "gold", 
+         "magenta", "forestgreen", "coral", "c", "moccasin",
+         "pink", "blue", "red", "green", "violet",
+         "lightgreen", "orange", "lightblue", "black", "pink"] 
 caches = ["Private", "SharedMemory", "SharedFilesytem", "DataSource"]
 
 fig=plt.figure(figsize=(8,4)) #figsize=(15,10)
@@ -151,14 +156,18 @@ for key in hits.keys():
     locs = np.array(range(4)) * dist + n*i
     #vals = [np.log(hits[key]["private"]),np.log(hits[key]["shared"]), np.log(hits[key]["filelock"]),np.log(hits[key]["network"]) ]
     vals = [hits[key]["private"],hits[key]["shared"], hits[key]["filelock"],hits[key]["network"] ]
+    print(vals)
+    print(locs)
     bpl = plt.boxplot(vals, positions=locs, sym='', widths=width)#, patch_artist=True)
+    print(i)
     set_box_color(bpl, colors[i])
     plt.plot([], c=colors[i], label=key)
 
-plt.legend()
+plt.legend(bbox_to_anchor = (1.05, 1))
+plt.title(prefname + " overall results")
 plt.xticks(np.array(range(4))*dist+((i+1)/2*n), caches)
 plt.ylim(bottom=0)
-fig.savefig("D-experiment_results.png")
+fig.savefig(prefname + "-experiment_results.png", bbox_inches="tight")
 fig_width, fig_height = plt.gcf().get_size_inches()
 print(fig_width, fig_height)
 
@@ -172,10 +181,11 @@ for key in hits.keys():
     bpl = plt.boxplot(vals,positions=locs, sym='', widths=width)#, patch_artist=True)
     set_box_color(bpl, colors[i])
     plt.plot([], c=colors[i], label=key)
-plt.legend()
+plt.legend(bbox_to_anchor = (1.05, 1))
+plt.title(prefname)
 plt.xticks([(i+1)/2*n], ["SharedMemory"])
 #plt.ylim(21500,24500)
-fig.savefig("D-shared_results.png")
+fig.savefig(prefname + "-shared_results.png", bbox_inches="tight")
 
 fig= plt.figure()
 i=0
@@ -187,10 +197,11 @@ for key in hits.keys():
     bpl = plt.boxplot(vals,positions=locs, sym='', widths=width)#, patch_artist=True)
     set_box_color(bpl, colors[i])
     plt.plot([], c=colors[i], label=key)
-plt.legend()
+plt.legend(bbox_to_anchor = (1.05, 1))
+plt.title(prefname)
 plt.xticks([(i+1)/2*n], ["PrivateMemory"])
 #plt.ylim(217700,218000)
-fig.savefig("D-private_results.png")
+fig.savefig(prefname + "-private_results.png", bbox_inches="tight")
 
 fig= plt.figure()
 i=0
@@ -202,10 +213,11 @@ for key in hits.keys():
     bpl = plt.boxplot(vals,positions=locs, sym='', widths=width)#, patch_artist=True)
     set_box_color(bpl, colors[i])
     plt.plot([], c=colors[i], label=key)
-plt.legend()
+plt.legend(bbox_to_anchor = (1.05, 1))
+plt.title(prefname )
 plt.xticks([(i+1)/2*n], ["DataSource"])
 #plt.ylim(217700,218000)
-fig.savefig("D-network_results.png")
+fig.savefig(prefname + "-network_results.png", bbox_inches="tight")
 
 
 

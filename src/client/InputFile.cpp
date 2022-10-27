@@ -112,7 +112,7 @@
 #include <unistd.h>
 
 //JS: Turn this on to enable the NewSharedMemoryCache to use unit marginal benifit to decide what to evict
-// #define UMB_METRIC_PIGGYBACK_SM(a, b)
+//#define UMB_METRIC_PIGGYBACK_SM(a, b)
 #define UMB_METRIC_PIGGYBACK_SM(a, b) a = (ScalableCache*) b
 
 //JS: Turn this on to enable NewBoundedFilelockCache to use unit marginal benifit to decide what to evict
