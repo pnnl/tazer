@@ -247,87 +247,107 @@ int removeStr(char *s, const char *r) {
 }
 
 
+  // DPRINTF("Outside trackfile open\n");
+// #ifdef TRACKFILECHANGES
+//   char pattern[] = "*.h5";
+//   auto ret_val = fnmatch(pattern, name.c_str(), 0);
+//   if (ret_val == 0) {  
+//     DPRINTF("Opening a HDF5 file %s \n",  name.c_str());
+//     if (flags & O_WRONLY || flags & O_RDWR) { // file needs to exist for writing
+//     // check whether the file exists
+//       char buf[PATH_MAX]; 
+//       char *res = realpath(name.c_str(), buf);
+//       if (res == NULL) {
+// 	if(errno == ENOENT || errno == EBADF) { // file does not exist
+// 	  DPRINTF("Trying to create a non-existent file for writing\n");
+// 	  if (flags & O_WRONLY) 
+// 	    fd = (*unixopen64)(name.c_str(), O_CREAT | O_WRONLY | O_EXCL, 0644);
+// 	  else if (flags & O_RDWR) 
+// 	    fd = (*unixopen64)(name.c_str(), O_CREAT | O_RDWR | O_EXCL, 0666);
+// 	}  else {
+// 	  DPRINTF("Unknown error while checking whether the file exists\n");
+// 	  exit(-1);
+// 	}
+//       } else { // we found an existing file to write to
+// 	fd = (*unixopen64)(name.c_str(), flags, mode);
+//       }
+//     } else {
 
-/*Posix******************************************************************************************************/
+// else {
+// #endif
+// #ifdef TRACKFILECHANGES  
+//     DPRINTF("tazerOpen attempting to add new tazer file: %s %s %u\n", name.c_str(), metaName.c_str(), type);
 
-int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, const char *pathname, int flags, int mode) {
-  DPRINTF("tazerOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);
-  auto fd = -1;
-#ifdef TRACKFILECHANGES
-  char pattern[] = "*.h5";
-  auto ret_val = fnmatch(pattern, name.c_str(), 0);
-  if (ret_val == 0) {  
-    DPRINTF("Opening a HDF5 file %s \n",  name.c_str());
-    if (flags & O_WRONLY || flags & O_RDWR) { // file needs to exist for writing
-    // check whether the file exists
-      char buf[PATH_MAX]; 
-      char *res = realpath(name.c_str(), buf);
-      if (res == NULL) {
-	if(errno == ENOENT || errno == EBADF) { // file does not exist
-	  DPRINTF("Trying to create a non-existent file for writing\n");
-	  if (flags & O_WRONLY) 
-	    fd = (*unixopen64)(name.c_str(), O_CREAT | O_WRONLY | O_EXCL, 0644);
-	  else if (flags & O_RDWR) 
-	    fd = (*unixopen64)(name.c_str(), O_CREAT | O_RDWR | O_EXCL, 0666);
-	} else {
-	  DPRINTF("Unknown error while checking whether the file exists\n");
-	  exit(-1);
-	}
-      } else { // we found an existing file to write to
-	fd = (*unixopen64)(name.c_str(), flags, mode);
-      }
-      // } else {
-      //O_CREAT | O_RDWR | O_EXCL, 0644); // TODO: check open mode R/W? O_APPEND 0660
-    // if (fd == -1) {
-    //   if(errno == ENOENT) {
-    //   fd = (*unixopen64)(name.c_str(),  O_RDWR|O_CREAT|O_EXCL, 0666);
-    //   }
-    //   assert(fd != -1);
-    // }
-    } else {
-      fd = (*unixopen64)(name.c_str(), flags, mode);
-    }
+//       DPRINTF("tazerOpen add new tazer file success: %s %s fd%d\n", name.c_str(), metaName.c_str(), fd);
+  
+// }
+// #endif
+
+ // char pattern[] = "*.h5";
+  // auto ret_val = fnmatch(pattern, file->name().c_str(), 0);
+  // char pattern_2[] = "*.fits";
+  // auto ret_val_2 = fnmatch(pattern_2, file->name().c_str(), 0);
+  // char pattern_3[] = "*.vcf";
+  // auto ret_val_3 = fnmatch(pattern_3, file->name().c_str(), 0);
+  // if(ret_val == 0 || ret_val_2 == 0) {
+    // if (file->name().find("residue") != std::string::npos) {
+    // TrackFile* trackfile = reinterpret_cast<TrackFile*>(file) ; 
+ 
+
+int trackFileOpen(std::string name, std::string metaName, TazerFile::Type type, const char *pathname, int flags, int mode) {
+  DPRINTF("trackfileOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);
+  auto fd = (*unixopen64)(name.c_str(), flags, mode);
+  if (fd > 0) {  
     TazerFile *file = TazerFile::addNewTazerFile(type, name, name, fd, true);
     if (file) {
       TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
       DPRINTF("trackFileOpen add new  file success: %s , fd = %d\n", pathname, fd);
     } 
-    // else if (fd < 0) {
-    //   DPRINTF("trackFileOpen add new  file failed: %s  , fd = %d\n", pathname, fd);
-    //   (*unixclose)(fd);
-    //   fd = -1;
-    // }
-   } else {
-#endif
-    fd = (*unixopen64)(metaName.c_str(), O_RDONLY, 0);
-    TazerFile *file = TazerFile::addNewTazerFile(type, name, metaName, fd);
-    DPRINTF("tazerOpen attempting to add new tazer file: %s %s %u\n", name.c_str(), metaName.c_str(), type);
-    if (file) {
-      TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
-      DPRINTF("tazerOpen add new tazer file success: %s %s fd%d\n", name.c_str(), metaName.c_str(), fd);
-    } else if(fd != -1) {
-      DPRINTF("tazerOpen add new tazer file failed: %s %s %d\n", name.c_str(), metaName.c_str(), fd);
-      (*unixclose)(fd);
-      fd = -1;
-    }
-#ifdef TRACKFILECHANGES  
+  } else {
+    DPRINTF("fd value %d\n", fd);
   }
-#endif
+  return fd;
+}
+
+/*Posix******************************************************************************************************/
+
+int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, const char *pathname, int flags, int mode) {
+  auto fd = (*unixopen64)(metaName.c_str(), O_RDONLY, 0);
+  TazerFile *file = TazerFile::addNewTazerFile(type, name, metaName, fd);
+  if (file) {
+    TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
+  } else if(fd != -1) {
+    DPRINTF("tazerOpen add new tazer file failed: %s %s %d\n", name.c_str(), metaName.c_str(), fd);
+    (*unixclose)(fd);
+    fd = -1;
+  }
   return fd;
 }
 
 
 int open(const char *pathname, int flags, ...) {
-    int mode = 0;
-    va_list arg;
-    va_start(arg, flags);
-    mode = va_arg(arg, int);
-    va_end(arg);
+  DPRINTF("Open %s: \n", pathname);
+  int mode = 0;
+  va_list arg;
+  va_start(arg, flags);
+  mode = va_arg(arg, int);
+  va_end(arg);
 
-    Timer::Metric metric = (flags & O_WRONLY || flags & O_RDWR) ? Timer::Metric::out_open : Timer::Metric::in_open;
+  Timer::Metric metric = (flags & O_WRONLY || flags & O_RDWR) ? Timer::Metric::out_open : Timer::Metric::in_open;
+    
+  std::vector<std::string> patterns;
+  patterns.push_back("*.h5");
+  patterns.push_back("*.vcf");
+  for (auto pattern: patterns) {
+    auto ret_val = fnmatch(pattern.c_str(), pathname, 0);
+    if (ret_val == 0) {
+      DPRINTF("Firing off trackfileopen for %s \n ", pathname);
+      return outerWrapper("open", pathname, metric, trackFileOpen, unixopen, 
+			  pathname, flags, mode);
+    }
+  }
 
-    DPRINTF("Open %s: \n", pathname);
-    return outerWrapper("open", pathname, metric, tazerOpen, unixopen, pathname, flags, mode);
+  return outerWrapper("open", pathname, metric, tazerOpen, unixopen, pathname, flags, mode);
 }
 
 int open64(const char *pathname, int flags, ...) {
@@ -345,15 +365,17 @@ int open64(const char *pathname, int flags, ...) {
 int tazerClose(TazerFile *file, unsigned int fp, int fd) {
   DPRINTF("In tazer close \n");
 #ifdef TRACKFILECHANGES
-  char pattern[] = "*.h5";
-  auto ret_val = fnmatch(pattern, file->name().c_str(), 0);
-  if(ret_val == 0) {
-    // if (file->name().find("residue") != std::string::npos) {
-    // TrackFile* trackfile = reinterpret_cast<TrackFile*>(file) ; 
-    file->close();
-     //   if (closefile) {
-    DPRINTF("Successfully closed a file with fd %d\n", fd);
-	  //   }
+  std::vector<std::string> patterns;
+  patterns.push_back("*.fits");
+  patterns.push_back("*.h5");
+  patterns.push_back("*.vcf");
+  for (auto pattern: patterns) {
+    auto ret_val = fnmatch(pattern.c_str(), file->name().c_str(), 0);
+    if (ret_val == 0) {
+      file->close();
+      DPRINTF("Successfully closed a file with fd %d\n", fd);
+      break;
+    }
   }
 #endif
     TazerFile::removeTazerFile(file);
@@ -517,8 +539,23 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt) {
 
 /*Streaming**************************************************************************************************/
 
+FILE *trackFileFopen(std::string name, std::string metaName, TazerFile::Type type, const char *__restrict fileName, const char *__restrict modes) {
+  DPRINTF("trackFOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);
+  FILE *fp = (*unixfopen)(name.c_str(), modes);
+  if (fp) {
+    int fd = fileno(fp);
+    TazerFile *file = TazerFile::addNewTazerFile(type, name, metaName, fd);
+    if (file) {
+      TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
+      TazerFileStream::addStream(fp, fd);
+      DPRINTF("trackFileOpen add new  file success: %s , fd = %d\n", fileName, fd);
+    }
+  }
+  return fp;
+}
+
 FILE *tazerFopen(std::string name, std::string metaName, TazerFile::Type type, const char *__restrict fileName, const char *__restrict modes) {
-    DPRINTF("tazerOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);
+  DPRINTF("tazerFOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);
     char m = 'r';
     FILE *fp = (*unixfopen)(fileName, &m);
     if (fp) {
@@ -533,19 +570,55 @@ FILE *tazerFopen(std::string name, std::string metaName, TazerFile::Type type, c
 }
 
 FILE *fopen(const char *__restrict fileName, const char *__restrict modes) {
-    Timer::Metric metric = (modes[0] == 'r') ? Timer::Metric::in_fopen : Timer::Metric::out_fopen;
-    return outerWrapper("fopen", fileName, metric, tazerFopen, unixfopen, fileName, modes);
+  DPRINTF("Calling fopen on %s \n", fileName);  
+  Timer::Metric metric = (modes[0] == 'r') ? Timer::Metric::in_fopen : Timer::Metric::out_fopen;
+
+  std::vector<std::string> patterns;
+  patterns.push_back("*.fits");
+  for (auto pattern: patterns) {
+    auto ret_val = fnmatch(pattern.c_str(), fileName, 0);
+    if (ret_val == 0) {
+      return outerWrapper("fopen", fileName, metric, trackFileFopen, unixfopen, 
+			  fileName, modes);
+    }
+  }
+ 
+  return outerWrapper("fopen", fileName, metric, tazerFopen, unixfopen, fileName, modes);
 }
 
 FILE *fopen64(const char *__restrict fileName, const char *__restrict modes) {
-    Timer::Metric metric = (modes[0] == 'r') ? Timer::Metric::in_fopen : Timer::Metric::out_fopen;
+  DPRINTF("Calling fopen64 on %s \n", fileName);  
+  Timer::Metric metric = (modes[0] == 'r') ? Timer::Metric::in_fopen : Timer::Metric::out_fopen;
+  std::vector<std::string> patterns;
+  patterns.push_back("*.fits");
+  for (auto pattern: patterns) {
+    auto ret_val = fnmatch(pattern.c_str(), fileName, 0);
+    if (ret_val == 0) {
+      return outerWrapper("fopen64", fileName, metric, trackFileFopen, unixfopen64, 
+			  fileName, modes);
+    }
+  }  
+
     return outerWrapper("fopen64", fileName, metric, tazerFopen, unixfopen64, fileName, modes);
 }
 
 int tazerFclose(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
+  DPRINTF("In tazer fclose \n");
+#ifdef TRACKFILECHANGES
+  char pattern[] = "*.fits";
+  auto ret_val = fnmatch(pattern, file->name().c_str(), 0);
+  if(ret_val == 0) {
+   file->close();
+   DPRINTF("Successfully closed a file with fd %d\n", fd);
+  }
+#endif
     TazerFile::removeTazerFile(file);
     TazerFileDescriptor::removeTazerFileDescriptor(fd);
+#ifdef TRACKFILECHANGES
+    return 0;
+#else       
     return (*unixfclose)(fp);
+#endif
 }
 
 int fclose(FILE *fp) {

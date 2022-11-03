@@ -120,10 +120,14 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
 #ifdef TRACKFILECHANGES
   char pattern[] = "*.h5";
   auto ret_val = fnmatch(pattern, name.c_str(), 0);
+  char pattern_2[] = "*.fits";
+  auto ret_val_2 = fnmatch(pattern_2, name.c_str(), 0);
+  char pattern_3[] = "*.vcf";
+  auto ret_val_3 = fnmatch(pattern_3, name.c_str(), 0);
   //  std::string hdf_file_name(name);
     // auto found = hdf_file_name.find("residue");
     //if (hdf_file_name.find("residue") == std::string::npos) {
-  if (ret_val !=0 ) {
+  if (ret_val !=0 && ret_val_2 != 0 && ret_val_3 != 0) {
 #endif
     readMetaInfo();
 #ifdef TRACKFILECHANGES

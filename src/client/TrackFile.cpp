@@ -336,7 +336,7 @@ void TrackFile::close() {
   current_file_stat_r << _filename << " " << "Block no." << " " << "Frequency" << " " 
 		      << "Access size in byte" << std::endl;
 
-  auto sum_weight_r = 0;
+  auto sum_weight_r = 1; // TODO: Fix FPE
   auto cumulative_weighted_sum_r = 0;
   for (auto& blk_info  : track_file_blk_r_stat[_name]) {
     cumulative_weighted_sum_r += blk_info.second * track_file_blk_r_stat_size[_name][blk_info.first];
@@ -358,7 +358,7 @@ void TrackFile::close() {
   current_file_stat_w << _filename << " " << "Block no." << " " << "Frequency" << " " 
 		      << "Access size in byte" << std::endl;
   
-  auto sum_weight_w = 0;
+  auto sum_weight_w = 0; // TODO: Fix FPE
   auto cumulative_weighted_sum_w = 0;
   for (auto& blk_info  : track_file_blk_w_stat[_name]) {
     cumulative_weighted_sum_w += blk_info.second * track_file_blk_w_stat_size[_name][blk_info.first];
@@ -366,10 +366,11 @@ void TrackFile::close() {
     current_file_stat_w << blk_info.first << " " << blk_info.second << " " << track_file_blk_w_stat_size[_name][blk_info.first] << std::endl;
     //current_file_stat_w << std::get<0>(blk_info) << " " << std::get<1>(blk_info) << " " << std::get<2>(blk_info) << std::endl;
   }
-  
+
   auto write_io_rate = cumulative_weighted_sum_w / sum_weight_w; 
   auto write_request_rate =  elapsed_time / sum_weight_w;
-  auto io_intensity = (total_time_spent_read + total_time_spent_write)/elapsed_time;
+  // TODO: fix below: elapsed_time  // if (elapsed_time == 0) {elapsed_time = 1;}  
+  //  auto io_intensity = (total_time_spent_read + total_time_spent_write)/elapsed_time;
 
   DPRINTF("Writing r blk access order stat\n");
   // write blk access stat in a file

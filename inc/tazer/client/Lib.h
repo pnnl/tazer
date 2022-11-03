@@ -187,17 +187,19 @@ int removeStr(char *s, const char *r);
 inline bool checkMeta(const char *pathname, std::string &path, std::string &file, TazerFile::Type &type) {
 
 #ifdef TRACKFILECHANGES
-  char pattern[] = "*.h5";
-  auto ret_val = fnmatch(pattern, pathname, 0);
-  if (ret_val == 0) {
-    // DPRINTF("Filename matched with fnmatch %s\n", pathname);
-    std::string filename(pathname);
-    DPRINTF("Will be calling HDF5 branch for file %s\n", pathname);
-    type = TazerFile::TrackLocal;
-    file = filename;
-    path = filename;
-    return true;
-  }
+  // char pattern[] = "*.h5";
+  // auto ret_val = fnmatch(pattern, pathname, 0);
+  // char pattern_2[] = "*.fits";
+  // auto ret_val_2 = fnmatch(pattern_2, pathname, 0);
+  // if (ret_val == 0 || ret_val_2 == 0) {
+  //   // DPRINTF("Filename matched with fnmatch %s\n", pathname);
+  //   std::string filename(pathname);
+  //   DPRINTF("Will be calling HDF5 branch for file %s\n", pathname);
+  //   type = TazerFile::TrackLocal;
+  //   file = filename;
+  //   path = filename;
+  //   return true;
+  // }
 #endif
 
   DPRINTF("Checkmeta calling open on file %s\n", pathname);
@@ -341,6 +343,24 @@ inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun,
   if(test_tty.find("tty") != std::string::npos) {
     return posixFun(args...);
   }
+
+  std::vector<std::string> patterns;
+  patterns.push_back("*.fits");
+  patterns.push_back("*.h5");
+  patterns.push_back("*.vcf");
+  for (auto pattern: patterns) {
+    auto ret_val = fnmatch(pattern.c_str(), pathname, 0);
+    if (ret_val == 0) {
+      isTazerFile = true;
+      std::string filename(pathname);
+      type = TazerFile::TrackLocal;
+      file = filename;
+      path = filename;
+      DPRINTF("Calling HDF/FITS open: \n");
+      return tazerFun(file, path, type, args...);
+    }
+  }
+
   if (init && checkMeta(pathname, path, file, type)) {
     isTazerFile = true;
     // DPRINTF("tazerfun With file %s\n", pathname);
@@ -379,10 +399,6 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
   // DPRINTF("command %s\n", name);
 
   if (!init) {
-    // if (strcmp(name, "write") == 0) {
-    //   DPRINTF("In init for write calling in posix\n");
-    // }
-
       posixFun = (FuncPosix)dlsym(RTLD_NEXT, name);
       return posixFun(args...);
     }
@@ -397,11 +413,6 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
 
     //Check if a tazer meta-file
     bool isTazerFile = false;
-
-    //Do the work
-    // if (strcmp(name, "write") == 0) {
-    //   DPRINTF("Before calling innerwrapper for write\n");
-    // }
 
     auto retValue = innerWrapper(fileId, isTazerFile, tazerFun, posixFun, args...);
     if (ignore) {
