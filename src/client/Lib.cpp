@@ -247,52 +247,6 @@ int removeStr(char *s, const char *r) {
 }
 
 
-  // DPRINTF("Outside trackfile open\n");
-// #ifdef TRACKFILECHANGES
-//   char pattern[] = "*.h5";
-//   auto ret_val = fnmatch(pattern, name.c_str(), 0);
-//   if (ret_val == 0) {  
-//     DPRINTF("Opening a HDF5 file %s \n",  name.c_str());
-//     if (flags & O_WRONLY || flags & O_RDWR) { // file needs to exist for writing
-//     // check whether the file exists
-//       char buf[PATH_MAX]; 
-//       char *res = realpath(name.c_str(), buf);
-//       if (res == NULL) {
-// 	if(errno == ENOENT || errno == EBADF) { // file does not exist
-// 	  DPRINTF("Trying to create a non-existent file for writing\n");
-// 	  if (flags & O_WRONLY) 
-// 	    fd = (*unixopen64)(name.c_str(), O_CREAT | O_WRONLY | O_EXCL, 0644);
-// 	  else if (flags & O_RDWR) 
-// 	    fd = (*unixopen64)(name.c_str(), O_CREAT | O_RDWR | O_EXCL, 0666);
-// 	}  else {
-// 	  DPRINTF("Unknown error while checking whether the file exists\n");
-// 	  exit(-1);
-// 	}
-//       } else { // we found an existing file to write to
-// 	fd = (*unixopen64)(name.c_str(), flags, mode);
-//       }
-//     } else {
-
-// else {
-// #endif
-// #ifdef TRACKFILECHANGES  
-//     DPRINTF("tazerOpen attempting to add new tazer file: %s %s %u\n", name.c_str(), metaName.c_str(), type);
-
-//       DPRINTF("tazerOpen add new tazer file success: %s %s fd%d\n", name.c_str(), metaName.c_str(), fd);
-  
-// }
-// #endif
-
- // char pattern[] = "*.h5";
-  // auto ret_val = fnmatch(pattern, file->name().c_str(), 0);
-  // char pattern_2[] = "*.fits";
-  // auto ret_val_2 = fnmatch(pattern_2, file->name().c_str(), 0);
-  // char pattern_3[] = "*.vcf";
-  // auto ret_val_3 = fnmatch(pattern_3, file->name().c_str(), 0);
-  // if(ret_val == 0 || ret_val_2 == 0) {
-    // if (file->name().find("residue") != std::string::npos) {
-    // TrackFile* trackfile = reinterpret_cast<TrackFile*>(file) ; 
- 
 
 int trackFileOpen(std::string name, std::string metaName, TazerFile::Type type, const char *pathname, int flags, int mode) {
   DPRINTF("trackfileOpen: %s %s %u\n", name.c_str(), metaName.c_str(), type);

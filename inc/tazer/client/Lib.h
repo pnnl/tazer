@@ -186,21 +186,6 @@ int removeStr(char *s, const char *r);
 
 inline bool checkMeta(const char *pathname, std::string &path, std::string &file, TazerFile::Type &type) {
 
-#ifdef TRACKFILECHANGES
-  // char pattern[] = "*.h5";
-  // auto ret_val = fnmatch(pattern, pathname, 0);
-  // char pattern_2[] = "*.fits";
-  // auto ret_val_2 = fnmatch(pattern_2, pathname, 0);
-  // if (ret_val == 0 || ret_val_2 == 0) {
-  //   // DPRINTF("Filename matched with fnmatch %s\n", pathname);
-  //   std::string filename(pathname);
-  //   DPRINTF("Will be calling HDF5 branch for file %s\n", pathname);
-  //   type = TazerFile::TrackLocal;
-  //   file = filename;
-  //   path = filename;
-  //   return true;
-  // }
-#endif
 
   DPRINTF("Checkmeta calling open on file %s\n", pathname);
     int fd = (*unixopen)(pathname, O_RDONLY);
