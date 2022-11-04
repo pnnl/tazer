@@ -97,11 +97,17 @@ uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffse
         auto old = blockEntry->blkLock.readerLock();
         //JS: This means it is the first but we still need to see if the data is there
         reserve = old == 0;
-        blockEntry->timeStamp.store(timeStamp);
+        //blockEntry->timeStamp.store(timeStamp);
     }
 
     //JS: Look to see if the data is avail, notice this is after a reader lock
     uint8_t * ret = blockEntry->data.load();
+    
+    if(ret)
+    {
+        blockEntry->timeStamp.store((uint64_t)Timer::getCurrentTime());
+    }
+    
     //JS: We &= because we only want to reserve if we are the first and the data is empty
     reserve &= (!ret);
     // if(track) 
@@ -120,6 +126,7 @@ void ScalableMetaData::setBlock(uint64_t blockIndex, uint8_t * data) {
     currentBlocks.push_back(blockEntry);
     metaLock.writerUnlock();
 
+    blockEntry->timeStamp.store((uint64_t)Timer::getCurrentTime());
     //JS: Dec our usage. It was inc'ed in getBlock
     blockEntry->blkLock.readerUnlock();
 }
