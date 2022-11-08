@@ -333,6 +333,8 @@ inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun,
   patterns.push_back("*.fits");
   patterns.push_back("*.h5");
   patterns.push_back("*.vcf");
+  patterns.push_back("*.tar.gz");
+  patterns.push_back("*.txt");
   for (auto pattern: patterns) {
     auto ret_val = fnmatch(pattern.c_str(), pathname, 0);
     if (ret_val == 0) {
