@@ -109,7 +109,7 @@ SharedMemoryCache::SharedMemoryCache(std::string cacheName, CacheType type, uint
     stats.start(false, CacheStats::Metric::constructor);
     std::string filePath("/" + Config::tazer_id + "_" + _name + "_" + std::to_string(_cacheSize) + "_" + std::to_string(_blockSize) + "_" + std::to_string(_associativity));
     //uint64_t memSize = sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins) + sizeof(ReaderWriterLock) + (sizeof(double) + sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX;
-    uint64_t memSize = sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins) + sizeof(ReaderWriterLock) + (sizeof(double) + sizeof(unsigned int)+ sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX;
+    uint64_t memSize = sizeof(uint32_t) + _cacheSize + _numBlocks * sizeof(MemBlockEntry) + MultiReaderWriterLock::getDataSize(_numBins) + sizeof(ReaderWriterLock) + (sizeof(double) + sizeof(unsigned int) + sizeof(double) + sizeof(unsigned int)) * SCALEABLE_METRIC_FILE_MAX;
 
     bool created = true;
     //std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -138,13 +138,15 @@ SharedMemoryCache::SharedMemoryCache(std::string cacheName, CacheType type, uint
         uint8_t * lockAddr = binLockDataAddr + MultiReaderWriterLock::getDataSize(_numBins);
         uint8_t * UMBAddr = lockAddr + sizeof(ReaderWriterLock);
         uint8_t * UMBCAddr = UMBAddr + sizeof(double) * SCALEABLE_METRIC_FILE_MAX;
-        uint8_t * BMEMtraceAddr = UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX;
+        uint8_t * UMBsignAddr = UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX;
+        uint8_t * BMEMtraceAddr = UMBsignAddr + sizeof(double) * SCALEABLE_METRIC_FILE_MAX;
         if(BMEMtraceAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX != endPtr) {
             PRINTF("JS: REUSE: ERROR ON SHARED MEMORY POINTER ARITHMETIC!!! %s\n", filePath.c_str());
             PRINTF("JS: REUSE: %p - %p = %u\n", endPtr, UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX, endPtr - (UMBCAddr + sizeof(uint32_t) * SCALEABLE_METRIC_FILE_MAX));
         }
         _UMB = (double*)UMBAddr;
         _UMBC = (unsigned int*) UMBCAddr;
+        _UMBsign = (double*) UMBsignAddr;
         _bMemTrace = (unsigned int*) BMEMtraceAddr;
         if(created || *init==2) {
             PPRINTF("RESETING %s %d\n", filePath.c_str(), fd);
@@ -160,6 +162,7 @@ SharedMemoryCache::SharedMemoryCache(std::string cacheName, CacheType type, uint
             for(unsigned int i=0; i<SCALEABLE_METRIC_FILE_MAX; i++) {
                 _UMB[i] = 0;
                 _UMBC[i] = 0;
+                _UMBsign[i] = 0;
                 _bMemTrace[i] = 0;
             }
 
@@ -314,8 +317,29 @@ void SharedMemoryCache::setLastUMB(std::vector<std::tuple<uint32_t, double>> &UM
         uint32_t index = std::get<0>(UMB);
         double umb = std::get<1>(UMB);
         if(index < SCALEABLE_METRIC_FILE_MAX) {
-            _UMB[index] += umb;
-            _UMBC[index]++;
+            
+            double sigmoidx = (umb/(1.0+abs(umb)))+1;
+            //initial value is undefined:
+            if(!_UMBC[index]){
+                _UMB[index] += sigmoidx;
+                _UMBC[index]++;
+                _UMBsign[index]=umb; //to keep track of umb's sign
+            }   
+            //if umb is far from 0 
+            else if(abs(umb) > 0.01){
+                _UMB[index] += sigmoidx;
+                _UMBC[index]++;
+            }
+            //if sign of umb is changed 
+            else if((umb * _UMBsign[index]) < 0 ){
+                _UMB[index] += sigmoidx;
+                _UMBC[index]++;
+                _UMBsign[index]=umb;
+            }
+            else{
+                //we don't need to record the umb change
+                continue;
+            }
         }
     }
     _UMBLock->writerUnlock();

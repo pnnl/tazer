@@ -124,6 +124,7 @@ class SharedMemoryCache : public BoundedCache<MultiReaderWriterLock> {
     ReaderWriterLock *_UMBLock;
     double * _UMB; //Unit Marginal Benifit
     unsigned int * _UMBC;
+    double *_UMBsign;
 
     unsigned int * _bMemTrace;
     
