@@ -88,7 +88,7 @@
 #define TPRINTF(...)
 
 #define BPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-
+#define BPRINTF(...)
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
     auto blockEntry = &blocks[blockIndex];
     uint64_t timeStamp = trackAccess(blockIndex, fileOffset);
@@ -309,7 +309,7 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 partitionMissCost = partitionMissCost + lastDeliveryTime;
                 //check for division by zero 
                 double scaledMissCost = log2(partitionMissCost / (partitionMissCount-1));
-                benefitHistogram.addData(i, (((double) accessPerInterval/scaledMissCost)/blocks)/log2(i));
+                benefitHistogram.addData(log2(i), (((double) accessPerInterval/scaledMissCost)/blocks)/log2(i));
 
                 // double cost = log2(lastDeliveryTime);
                 // benefitHistogram.addData(i, accessPerInterval/cost/blocks);
@@ -377,7 +377,7 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         }
 
         
-        double Bh = benefitHistogram.getValue(t);
+        double Bh = benefitHistogram.getValue(log2(t));
 
         unitBenefit = (Bh/Mh);///log2(t);
 
