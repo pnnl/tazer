@@ -342,12 +342,12 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         //ret = unitMarginalBenefit;
         ret = unitMarginalBenefit; // / ((double) numBlocks.load());
         //DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
-        if(isnan(unitMarginalBenefit)){
+        if(std::isnan(unitMarginalBenefit)){
             PPRINTF("** nan! t: %f, misses: %d, Bh: %lf Mh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Bh, Mh , unitBenefit, unitMarginalBenefit,numBlocks.load());
             missInterval.printBins();
             benefitHistogram.printBins();
         }
-        if(isinf(unitMarginalBenefit)){
+        if(std::isinf(unitMarginalBenefit)){
             PPRINTF("* inf! t: %f, misses: %d, Bh: %lf Mh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Bh, Mh , unitBenefit, unitMarginalBenefit,numBlocks.load());
             missInterval.printBins();
             benefitHistogram.printBins();

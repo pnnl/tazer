@@ -147,6 +147,7 @@ std::map<std::string, std::vector<int> > trace_write_blk_seq;
 
 unixopen_t unixopen = NULL;
 unixopen_t unixopen64 = NULL;
+unixopenat_t unixopenat = NULL;
 unixclose_t unixclose = NULL;
 unixread_t unixread = NULL;
 unixwrite_t unixwrite = NULL;
@@ -444,6 +445,7 @@ auto outerWrapper(const char *name, FileId fileId, Timer::Metric metric, Func ta
 int tazerOpen(std::string name, std::string metaName, TazerFile::Type type, const char *pathname, int flags, int mode);
 int open(const char *pathname, int flags, ...);
 int open64(const char *pathname, int flags, ...);
+int openat(int dirfd, const char *pathname, int flags, ...);
 
 int tazerClose(TazerFile *file, unsigned int fp, int fd);
 int close(int fd);
@@ -513,3 +515,10 @@ int feof(FILE *fp) ADD_THROW;
 
 off_t tazerRewind(TazerFile *file, unsigned int pos, int fd, int fd2, off_t offset, int whence);
 void rewind(FILE *fp);
+
+
+int trackFileOpen(std::string name, std::string metaName, TazerFile::Type type, const char *pathname, int flags, int mode);
+int tazerOpenat(std::string name, std::string metaName, TazerFile::Type type, 
+		int dirfd, const char *pathname, int flags, int mode);
+int trackFileOpenat(std::string name, std::string metaName, TazerFile::Type type, 
+		    int dirfd, const char *pathname, int flags, int mode);

@@ -160,6 +160,7 @@ void __attribute__((constructor)) tazerInit(void) {
 
         unixopen = (unixopen_t)dlsym(RTLD_NEXT, "open");
         unixopen64 = (unixopen_t)dlsym(RTLD_NEXT, "open64");
+        unixopenat = (unixopenat_t)dlsym(RTLD_NEXT, "openat");
         unixclose = (unixclose_t)dlsym(RTLD_NEXT, "close");
         unixread = (unixread_t)dlsym(RTLD_NEXT, "read");
         unixwrite = (unixwrite_t)dlsym(RTLD_NEXT, "write");
@@ -334,6 +335,56 @@ int open64(const char *pathname, int flags, ...) {
     return outerWrapper("open64", pathname, metric, tazerOpen, unixopen64, pathname, flags, mode);
 }
 
+int tazerOpenat(std::string name, std::string metaName, TazerFile::Type type, 
+		int dirfd, const char *pathname, int flags, int mode) {
+  return (*unixopenat)(dirfd, name.c_str(), flags);
+}
+
+int trackFileOpenat(std::string name, std::string metaName, TazerFile::Type type, 
+		    int dirfd, const char *pathname, int flags, int mode) {
+  DPRINTF("trackfileOpenat: %s %s %u\n", name.c_str(), metaName.c_str(), type);
+  auto fd = (*unixopenat)(dirfd, name.c_str(), flags);
+  if (fd > 0) {  
+    TazerFile *file = TazerFile::addNewTazerFile(type, name, name, fd, true);
+    if (file) {
+      TazerFileDescriptor::addTazerFileDescriptor(fd, file, file->newFilePosIndex());
+      DPRINTF("trackFileOpen add new  file success: %s , fd = %d\n", pathname, fd);
+    } 
+  } else {
+    DPRINTF("fd value %d\n", fd);
+  }
+  return fd;
+}
+
+int openat(int dirfd, const char *pathname, int flags, ...) {
+  int mode = 0;
+  va_list arg;
+  va_start(arg, flags);
+  mode = va_arg(arg, int);
+  va_end(arg);
+  
+  Timer::Metric metric = (flags & O_WRONLY || flags & O_RDWR) ? 
+    Timer::Metric::out_open : Timer::Metric::in_open;
+
+  DPRINTF("Openat %s: \n", pathname);
+  std::vector<std::string> patterns;
+  patterns.push_back("*.h5");
+  patterns.push_back("*.vcf");
+  patterns.push_back("*.tar.gz");
+  patterns.push_back("*.txt");
+  for (auto pattern: patterns) {
+    auto ret_val = fnmatch(pattern.c_str(), pathname, 0);
+    if (ret_val == 0) {
+      DPRINTF("Firing off trackfileopen for %s \n ", pathname);
+      return outerWrapper("openat", pathname, metric, trackFileOpenat, unixopenat, 
+			  dirfd, pathname, flags, mode);
+    }
+  }
+
+  return outerWrapper("openat", pathname, metric, tazerOpenat, unixopenat, dirfd, 
+		      pathname, flags, mode);
+}
+
 int tazerClose(TazerFile *file, unsigned int fp, int fd) {
   DPRINTF("In tazer close \n");
 #ifdef TRACKFILECHANGES
@@ -365,6 +416,11 @@ int close(int fd) {
     DPRINTF("Trying to close file with fd %d\n", fd);
     return outerWrapper("close", fd, Timer::Metric::close, tazerClose, unixclose, fd);
 }
+
+// void exit(int status) {
+//     DPRINTF("Calling exit \n");
+//     return outerWrapper("exit", fd, Timer::Metric::close, tazerClose, unixclose, fd);
+// }
 
 ssize_t tazerRead(TazerFile *file, unsigned int fp, int fd, void *buf, size_t count) {
   ssize_t ret = file->read(buf, count, fp);

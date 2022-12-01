@@ -96,6 +96,7 @@
 #include <string>
 #include <tuple>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <system_error>
 #include <thread>
 #include <unistd.h>
@@ -324,12 +325,17 @@ void TrackFile::close() {
     DPRINTF("Closed file with fd %d with name %s successfully\n", _fd_orig, _name.c_str());
   }
     // }
+
+  auto pid = std::to_string(getpid());
+  
   close_file_end_time = high_resolution_clock::now();
   auto elapsed_time = duration_cast<seconds>(close_file_end_time - open_file_start_time);
    // write blk access stat in a file
   DPRINTF("Writing r blk access stat\n");
   std::fstream current_file_stat_r;
   std::string file_name_r = _filename;
+  file_name_r.append("_");
+  file_name_r.append(pid);
   auto file_stat_r = file_name_r.append("_r_stat");
   current_file_stat_r.open(file_stat_r, std::ios::out);
   if (!current_file_stat_r) { DPRINTF("File for read stat collection not created!");}
@@ -352,6 +358,8 @@ void TrackFile::close() {
   // write blk access stat in a file
   std::fstream current_file_stat_w;
   std::string file_name_w = _filename;
+  file_name_w.append("_");
+  file_name_w.append(pid);
   auto file_stat_w = file_name_w.append("_w_stat");
   current_file_stat_w.open(file_stat_w, std::ios::out);
   if (!current_file_stat_w) {DPRINTF("File for write stat collection not created!");}
@@ -376,6 +384,8 @@ void TrackFile::close() {
   // write blk access stat in a file
   std::fstream current_file_trace_r;
   std::string file_name_trace_r = _filename;
+  file_name_trace_r.append("_");
+  file_name_trace_r.append(pid);
   auto file_trace_stat_r = file_name_trace_r.append("_r_trace_stat");
   current_file_trace_r.open(file_trace_stat_r, std::ios::out);
   if (!current_file_trace_r) {DPRINTF("File for read trace stat collection not created!");}
@@ -389,6 +399,8 @@ void TrackFile::close() {
   // write blk access stat in a file
   std::fstream current_file_trace_w;
   std::string file_name_trace_w = _filename;
+  file_name_trace_w.append("_");
+  file_name_trace_w.append(pid);
   auto file_trace_stat_w = file_name_trace_w.append("_w_trace_stat");
   current_file_trace_w.open(file_trace_stat_w, std::ios::out);
   if (!current_file_trace_w) {DPRINTF("File for write trace stat collection not created!");}

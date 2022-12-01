@@ -79,6 +79,7 @@
 
 typedef int (*unixopen_t)(const char *path, int flags, ...);
 typedef int (*unixclose_t)(int fd);
+typedef int (*unixopenat_t)(int dirfd, const char *pathname, int flags, ...);
 
 typedef ssize_t (*unixread_t)(int fd, void *buf, size_t count);
 typedef ssize_t (*unixwrite_t)(int fd, const void *buf, size_t count);
