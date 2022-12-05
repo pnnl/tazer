@@ -89,6 +89,16 @@ class Trackable {
         return _id;
     }
 
+  static auto begin() {
+    auto _iter =  _active.begin();
+    return _iter;
+  }
+  static auto end() {return _active.end();}
+   static auto next(auto _iter){ 
+   std::advance(_iter, 1);
+   return _iter;
+  }
+
   protected:
     Trackable() : _id(_total.fetch_add(1)),
                   _users(0) {
@@ -175,13 +185,14 @@ class Trackable {
         _activeMutex.writerUnlock();
     }
 
-  private:
-    int _id;
-    std::atomic_uint _users;
 
-    static std::atomic_int _total;
-    static ReaderWriterLock _activeMutex;
-    static std::unordered_map<Key, Value> _active;
+private:
+  int _id;
+  std::atomic_uint _users;
+
+  static std::atomic_int _total;
+  static ReaderWriterLock _activeMutex;
+  static std::unordered_map<Key, Value> _active;
 };
 
 template <class Key, class Value>

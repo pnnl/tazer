@@ -128,11 +128,13 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
   auto ret_val_4 = fnmatch(pattern_4, name.c_str(), 0);
   char pattern_5[] = "*.txt";
   auto ret_val_5 = fnmatch(pattern_5, name.c_str(), 0);
+  char pattern_6[] = "*.lht";
+  auto ret_val_6 = fnmatch(pattern_6, name.c_str(), 0);
   //  std::string hdf_file_name(name);
     // auto found = hdf_file_name.find("residue");
     //if (hdf_file_name.find("residue") == std::string::npos) {
   if (ret_val !=0 && ret_val_2 != 0 && ret_val_3 != 0 
-        && ret_val_4 != 0 && ret_val_5 != 0) {
+        && ret_val_4 != 0 && ret_val_5 != 0 && ret_val_6 !=0) {
 #endif
     readMetaInfo();
 #ifdef TRACKFILECHANGES

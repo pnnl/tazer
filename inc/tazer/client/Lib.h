@@ -177,6 +177,7 @@ unixfflush_t unixfflush = NULL;
 unixfeof_t unixfeof = NULL;
 unixreadv_t unixreadv = NULL;
 unixwritev_t unixwritev = NULL;
+unixexit_t unixexit = NULL;
 
 bool write_printf = false;
 bool open_printf = false;
@@ -336,6 +337,7 @@ inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun,
   patterns.push_back("*.vcf");
   patterns.push_back("*.tar.gz");
   patterns.push_back("*.txt");
+  patterns.push_back("*.lht");
   for (auto pattern: patterns) {
     auto ret_val = fnmatch(pattern.c_str(), pathname, 0);
     if (ret_val == 0) {
