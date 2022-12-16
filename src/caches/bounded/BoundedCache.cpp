@@ -96,8 +96,8 @@
 //#define PPRINTFB(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
 #define PPRINTF(...)
 #define PPRINTFB(...)
-//#define TPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
-#define TPRINTF(...)
+#define TPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+//#define TPRINTF(...)
 
 template <class Lock>
 BoundedCache<Lock>::BoundedCache(std::string cacheName, CacheType type, uint64_t cacheSize, uint64_t blockSize, uint32_t associativity, Cache * scalableCache) : Cache(cacheName,type),
@@ -241,6 +241,7 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
         askingUMB = getLastUMB(fileIndex);
 
         //first loop to find the min umb in the cache
+        
         for (uint32_t i = 0; i < _associativity; i++) {
             blkEntry = blkEntries[i];
             auto umbblock = getLastUMB(blkEntry->fileIndex);
@@ -249,7 +250,9 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
             }
         }
     }
-    double sigmoidThreshold = 0.1;
+    
+    double sigmoidThreshold = Config::UMBThreshold;
+    //std::cout<<"sigmoid threshold: "<<sigmoidThreshold<<std::endl;
 
     for (uint32_t i = 0; i < _associativity; i++) { //loop to find oldest block and block with lowest umb(if scalable piggyback is on)
         blkEntry = blkEntries[i];
@@ -715,7 +718,7 @@ void BoundedCache<Lock>::addFile(uint32_t index, std::string filename, uint64_t 
     // log(this) /*debug()*/<< "adding file: " << filename << " " << (void *)this << " " << (void *)_nextLevel << std::endl;
     // log(this) /*debug()*/ <<  _name << " " << filename << " " << fileSize << " " << blockSize << std::endl;
     trackBlock(_name, "[ADD_FILE]", index, blockSize, fileSize);
-
+    std::cout<<"ADDFILE in"<<_name<<" "<<index<<":"<<filename<<std::endl;
     _localLock->writerLock();
     if (_fileMap.count(index) == 0) {
         std::string hashstr(_name + filename); //should cause each level of the cache to have different indicies for a given file

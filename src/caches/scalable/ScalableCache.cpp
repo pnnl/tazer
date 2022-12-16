@@ -92,10 +92,11 @@
 #define DEADLOCK_SAFEGUARD 100
 
 #define DPRINTF(...)
-// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 //#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define MeMPRINTF(...)
+
 
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
@@ -250,7 +251,7 @@ void ScalableCache::setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * 
         //JS: Try to reuse my oldest block
         if(!dest) {
             MeMPRINTF("REUSE for file: %d\n", fileIndex);
-            dest = meta->oldestBlock(sourceBlockIndex);
+            dest = meta->oldestBlock(sourceBlockIndex, true);
             if(dest) {
                 DPRINTF("[JS] ScalableCache::setBlock Reusing block\n");
                 trackBlockEviction(fileIndex, sourceBlockIndex);
@@ -736,7 +737,7 @@ uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, u
         if(index != allocateForFileIndex) {
             //5% difference condition is introduced to prevent 'ping-pong'ing between files
             if(value < allocateForFileRank) {
-                if( _metaMap[index]->getNumBlocks()>1 ){
+               if( _metaMap[index]->getNumBlocks()>1 ){
                     //MeMPRINTF("victim Index: %d has %d blocks, and umb is %f\n", index, _metaMap[index]->getNumBlocks(), value);
                     block = _metaMap[index]->oldestBlock(sourceBlockIndex);
                     if(block) {

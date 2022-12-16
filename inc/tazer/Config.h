@@ -269,7 +269,7 @@ const uint32_t H_parameter = getenv("TAZER_H_VALUE") ? atoi(getenv("TAZER_H_VALU
 const uint32_t MC_parameter = getenv("TAZER_MC_VALUE") ? atoi(getenv("TAZER_MC_VALUE")) : 0;
 const uint32_t Sr_parameter = getenv("TAZER_Sr_VALUE") ? atoi(getenv("TAZER_Sr_VALUE")) : 0;
 //threshold percentage for UMB retention / eviction policy. given as a percentage
-const double UMBThreshold = getenv("TAZER_UMB_THRESHOLD") ? atoi(getenv("TAZER_UMB_THRESHOLD")) : 0;
+const double UMBThreshold = getenv("TAZER_UMB_THRESHOLD") ? atof(getenv("TAZER_UMB_THRESHOLD")) : 0;
 
 #define FILE_CACHE_WRITE_THROUGH 1
 

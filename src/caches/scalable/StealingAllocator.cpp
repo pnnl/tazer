@@ -83,6 +83,7 @@
 
 // #define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
+
 void StealingAllocator::setCache(ScalableCache * cache) {
     scalableCache = cache;
 }
@@ -94,7 +95,6 @@ TazerAllocator * StealingAllocator::addStealingAllocator(uint64_t blockSize, uin
 }
 
 uint8_t * StealingAllocator::allocateBlock(uint32_t allocateForFileIndex, bool must) {
-
     #ifdef CALC_UMBS
     double temp;
     scalableCache->updateRanks(allocateForFileIndex, temp);
@@ -110,7 +110,6 @@ uint8_t * StealingAllocator::allocateBlock(uint32_t allocateForFileIndex, bool m
     }
     _availBlocks.fetch_add(1);
     DPRINTF("[JS] StealingAllocator::allocateBlock MUST STEAL %lu\n", _availBlocks.load());
-
     //JS: Try to take from closed files first
     uint8_t * ret = NULL;
     allocLock.writerLock();
@@ -130,8 +129,9 @@ uint8_t * StealingAllocator::allocateBlock(uint32_t allocateForFileIndex, bool m
     if(!ret) {
         ret = stealBlock(allocateForFileIndex, sourceBlockIndex, sourceFileIndex, must);
         DPRINTF("[JS] StealingAllocator::allocateBlock trying to steal %p %lu %u\n", ret, sourceBlockIndex, sourceFileIndex);
-        if(ret)
+        if(ret){
             scalableCache->trackBlockEviction(sourceFileIndex, sourceBlockIndex);
+        }
     }
     return ret;
 }

@@ -2,12 +2,12 @@
 
 pystring32=""
 pystring64=""
-exp_type="E"
+exp_type="D"
 for index in  1; do
     for Hb_v in 10; do
         for H_v in 1; do
             for MC_v in 2; do
-                for Sth_v in 100; do
+                for Sth_v in "0.0001"; do
                     for smsize in 32; do
                         Hb_value=${Hb_v} #histogram buckets
                         H_value=${H_v} #0:time, 1:log(time0)

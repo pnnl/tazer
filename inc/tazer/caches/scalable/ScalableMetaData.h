@@ -143,8 +143,8 @@ struct ScalableMetaData {
             lastMissTimeStamp(0),
             unitBenefit(0),
             prevUnitBenefit(0),
-            prevSize(0),
             unitMarginalBenefit(0),
+            prevSize(0),
             upperLevelMetric(std::numeric_limits<double>::min()),//default value
             lastDeliveryTime(-1.0),
             partitionMissCount(0),
@@ -152,7 +152,7 @@ struct ScalableMetaData {
             numBlocks(0),
             //OCEANE: Number in the paranthesis sets the number of buckets for histogram [ missInterval(n) n--> number of buckets]
             missInterval(Config::Hb_parameter),
-            benefitHistogram(100,Config::TraceHistogram) {
+            benefitHistogram(Config::Hb_parameter,Config::TraceHistogram) {
                 blocks = new BlockEntry[totalBlocks];
                 for(unsigned int i=0; i<totalBlocks; i++) {
                     blocks[i].data.store(NULL);
@@ -168,7 +168,7 @@ struct ScalableMetaData {
 
         //JS: These are huristics to support cache/allocators
         bool checkPattern(Cache * cache=NULL, uint32_t fileIndex=0);
-        uint8_t * oldestBlock(uint64_t &blockIndex);
+        uint8_t * oldestBlock(uint64_t &blockIndex, bool reuse=false);
         uint8_t * randomBlock(uint64_t &blockIndex);
         uint64_t getLastTimeStamp();
         uint64_t getNumBlocks();

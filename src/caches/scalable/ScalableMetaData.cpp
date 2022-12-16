@@ -87,7 +87,7 @@
 //#define TPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define TPRINTF(...)
 
-#define BPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define BPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define BPRINTF(...)
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
     auto blockEntry = &blocks[blockIndex];
@@ -243,7 +243,7 @@ uint8_t * ScalableMetaData::randomBlock(uint64_t &blockIndex) {
     return ret;
 }
 
-uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex) {
+uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex, bool reuse) {
     uint8_t * ret = NULL;
     metaLock.writerLock();
 
@@ -251,7 +251,8 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex) {
     BlockEntry *minEntry = NULL;
     uint64_t minIndex = std::numeric_limits<uint64_t>::max();
 
-    if(currentBlocks.size() > 1) { //we can't give up the only block file has
+
+    if(reuse || currentBlocks.size() > 1) { //we can't give up the only block file has but it can reuse it itself
         for(int i=0; i<currentBlocks.size(); i++) {
             auto it = currentBlocks[i];
             if ((it)->blkLock.cowardlyTryWriterLock()) { //this will tell us if the block is in use
@@ -265,7 +266,6 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex) {
         }
     }
     else{
-        //what if file itself is doing a reuse?
         BPRINTF("this file only has 1 block, cannot give it up..");
     }
 
@@ -309,8 +309,17 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 partitionMissCost = partitionMissCost + lastDeliveryTime;
                 //check for division by zero 
                 double scaledMissCost = log2(partitionMissCost / (partitionMissCount-1));
-                benefitHistogram.addData(log2(i), (((double) accessPerInterval/scaledMissCost)/blocks)/log2(i));
-
+                if(Config::H_parameter == 0){
+                    benefitHistogram.addData(i, (((double) accessPerInterval/scaledMissCost)/blocks)/i);
+                }
+                else if(Config::H_parameter == 1){
+                    benefitHistogram.addData(log2(i), (((double) accessPerInterval/scaledMissCost)/blocks)/log2(i));
+                }
+                else{
+                    //undefined H variable
+                    std::cerr << "[TAZER] Undefined value for H parameter "<< Config::H_parameter << std::endl;
+                    raise(SIGSEGV);
+                }
                 // double cost = log2(lastDeliveryTime);
                 // benefitHistogram.addData(i, accessPerInterval/cost/blocks);
                 
@@ -362,22 +371,22 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         double t = ((double) time) / ((double) misses);
         //OCEANE: if we test log(i), send log(t) here instead of t
         double Mh;
+        double Bh;
         if(Config::H_parameter == 0){
             TPRINTF("H_parameter=0: miss histogram use normal time\n");
             Mh = missInterval.getValue(t);
+            Bh = benefitHistogram.getValue(t);
         }
         else if(Config::H_parameter == 1){
             TPRINTF("H_parameter=1: miss histogram use log time\n");
             Mh = missInterval.getValue(log2(t));
+            Bh = benefitHistogram.getValue(log2(t));
         }
         else{
             //undefined H variable
             std::cerr << "[TAZER] Undefined value for H parameter "<< Config::H_parameter << std::endl;
             raise(SIGSEGV);
         }
-
-        
-        double Bh = benefitHistogram.getValue(log2(t));
 
         unitBenefit = (Bh/Mh);///log2(t);
 
@@ -424,7 +433,7 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         //DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
         
         //////TEMPORARY CHANGE TO UPPERLEVELMETRIC  (upperlevelmetric=umb)
-        upperLevelMetric=unitMarginalBenefit;
+        //upperLevelMetric=unitMarginalBenefit;
         //////END TEMPORARY
 
         if(isnan(unitMarginalBenefit)){
