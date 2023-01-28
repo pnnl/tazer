@@ -133,12 +133,14 @@ class ScalableCache : public Cache {
     std::atomic<uint64_t> access;
     std::atomic<uint64_t> misses;
     uint64_t startTimeStamp;
+    std::atomic<uint64_t> resizeNumbers;
+    uint64_t resizePercentage;
+    uint64_t resizeAmount;
 
     //JS: This is to make sure there will exist a block that is not requested
     std::atomic<uint64_t> oustandingBlocksRequested;
     std::atomic<uint64_t> maxOutstandingBlocks;
     std::atomic<uint64_t> maxBlocksInUse;
-
 
   private:
     uint8_t * getBlockData(uint32_t fileIndex, uint64_t blockIndex, uint64_t fileOffset);
@@ -146,10 +148,12 @@ class ScalableCache : public Cache {
     void setBlock(uint32_t fileIndex, uint64_t blockIndex, uint8_t * data, uint64_t dataSize, bool writeOptional);
     void checkMaxBlockInUse(std::string msg, bool die);
     void checkMaxInFlightRequests(uint64_t index);
-
+    void adaptMemorySize();
+    
     //JS: Metric piggybacking
     ReaderWriterLock * _lastVictimFileIndexLock;
     std::vector<std::tuple<uint32_t, double>> _UMBList;
+    std::vector<std::tuple<uint32_t, double>> _localUMBs;
     std::unordered_map<Cache*, bool> _UMBDirty;
 
     std::once_flag first_miss;

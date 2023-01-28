@@ -114,6 +114,8 @@ class TazerAllocator : public Trackable<std::string, TazerAllocator *>
         virtual void closeFile(ScalableMetaData * meta) { }
         virtual void openFile(ScalableMetaData * meta) { }
         bool canReturnEmpty() { return _canFail; }
+        virtual void addAvailableBlocks (int addBlocks){}
+        virtual void removeBlocks (int removeBlocks){}
 };
 
 //JS: This is an example of the simplest allocator I can think of

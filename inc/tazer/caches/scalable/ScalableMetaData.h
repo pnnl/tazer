@@ -131,6 +131,11 @@ struct ScalableMetaData {
         std::deque<std::array<uint64_t, 3>> window;
         std::vector<BlockEntry*> currentBlocks;
 
+        //for Z calculations 
+        std::atomic<uint64_t> blockAccessCounter; 
+        uint64_t lastAccessedBlock;
+        uint64_t maxAccessInMissInterval;
+
     public:
         ScalableMetaData(uint64_t bSize, uint64_t fSize):
             fileSize(fSize),
@@ -150,9 +155,12 @@ struct ScalableMetaData {
             partitionMissCount(0),
             partitionMissCost(0),
             numBlocks(0),
-            //OCEANE: Number in the paranthesis sets the number of buckets for histogram [ missInterval(n) n--> number of buckets]
             missInterval(Config::Hb_parameter),
-            benefitHistogram(Config::Hb_parameter,Config::TraceHistogram) {
+            benefitHistogram(Config::Hb_parameter,Config::TraceHistogram),
+            blockAccessCounter(0),
+            lastAccessedBlock(0),
+            maxAccessInMissInterval(0)
+             {
                 blocks = new BlockEntry[totalBlocks];
                 for(unsigned int i=0; i<totalBlocks; i++) {
                     blocks[i].data.store(NULL);
@@ -186,6 +194,8 @@ struct ScalableMetaData {
         double getUnitBenefit();
         double getUpperMetric();
         void printHistLogs(int i){benefitHistogram.printLog(i);}
+
+        void trackZValue(uint32_t index);
     private:
         uint64_t trackAccess(uint64_t blockIndex, uint64_t readIndex);
 };

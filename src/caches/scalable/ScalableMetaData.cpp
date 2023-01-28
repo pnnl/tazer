@@ -301,6 +301,7 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     accessPerInterval++;
     int blocks = numBlocks.load();
     if(miss) {
+        BPRINTF("  calculating after a miss: access:%d, Zvalue: %d\n", accessPerInterval, maxAccessInMissInterval); 
         partitionMissCount++;
         if(lastMissTimeStamp) {
             double i = (double)(timestamp - lastMissTimeStamp);
@@ -309,19 +310,31 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 partitionMissCost = partitionMissCost + lastDeliveryTime;
                 //check for division by zero 
                 double scaledMissCost = log2(partitionMissCost / (partitionMissCount-1));
+
+                //quick fix for z value calculations 
+                //(we end up counting 1 extra access.So subtract one here. We check for 0 because on the very first block access we don't count the extra 1,so Z can be calculated as 0)
+                if(maxAccessInMissInterval > 0 ){
+                    maxAccessInMissInterval -= 1;
+                }
+                if(accessPerInterval<maxAccessInMissInterval){
+                    //we can't have accesses less than single block accesses, somethings wrong
+                    std::cerr << "[TAZER] Error in Z value calculations [access: "<< accessPerInterval << " z value: "<< maxAccessInMissInterval << std::endl;
+                    raise(SIGSEGV);
+                }
+                BPRINTF("  calculating after a miss: access:%d, Zvalue: %d\n", accessPerInterval, maxAccessInMissInterval); 
                 if(Config::H_parameter == 0){
-                    benefitHistogram.addData(i, (((double) accessPerInterval/scaledMissCost)/blocks)/i);
+                    double ApZp = 1000000*32*( (double)accessPerInterval - maxAccessInMissInterval);
+                    benefitHistogram.addData(i, ((ApZp/scaledMissCost)/blocks)/i);
                 }
                 else if(Config::H_parameter == 1){
-                    benefitHistogram.addData(log2(i), (((double) accessPerInterval/scaledMissCost)/blocks)/log2(i));
+                    double ApZp = 32*( (double)accessPerInterval - maxAccessInMissInterval);
+                    benefitHistogram.addData(log2(i), ((ApZp/scaledMissCost)/blocks)/log2(i));
                 }
                 else{
                     //undefined H variable
                     std::cerr << "[TAZER] Undefined value for H parameter "<< Config::H_parameter << std::endl;
                     raise(SIGSEGV);
                 }
-                // double cost = log2(lastDeliveryTime);
-                // benefitHistogram.addData(i, accessPerInterval/cost/blocks);
                 
                 //here we are guaranteed to have at least two misses, and data in the histograms, so we can call recalc marginal benefit for the partition
                 recalc = true;
@@ -330,8 +343,6 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 PPRINTF("BM: We have a second miss but no deliverytime yet! \n");
             }
             accessPerInterval = 0;
-            //OCEANE:This is where we add data to missInterval histogram . i is the time.
-            //we will test log2(i) instead of inputting i 
 
             //config::H_parameter holds the type of miss interval histogram logging
             if(Config::H_parameter == 0){
@@ -351,6 +362,8 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
         }
         DPRINTF("SETTING: %lu = %lu\n", lastMissTimeStamp, timestamp);
         lastMissTimeStamp = timestamp;
+        // after a miss, reset Z value counters 
+        maxAccessInMissInterval=0;
     }
     metaLock.writerUnlock();
 }
@@ -507,4 +520,25 @@ double ScalableMetaData::getUpperMetric(){
     ret = upperLevelMetric;
     metaLock.readerUnlock();
     return ret;
+}
+
+void ScalableMetaData::trackZValue(uint32_t index){
+    
+    BPRINTF("Z val tracking. BEFORE: lastblock: %d, curaccess:%d, maxaccesses:%d\n",lastAccessedBlock, blockAccessCounter.load(), maxAccessInMissInterval);
+    if(lastAccessedBlock == index){
+        blockAccessCounter.fetch_add(1);
+    }
+    else{
+        BPRINTF("new block accessed, curaccess: %d, max: %d \n", blockAccessCounter.load(), maxAccessInMissInterval);
+        if(maxAccessInMissInterval < blockAccessCounter.load()){
+            maxAccessInMissInterval = blockAccessCounter.load();
+        }
+        else{
+            BPRINTF(" .  ended up in else\n");
+        }
+        blockAccessCounter.store(1);
+        lastAccessedBlock = index;
+    }
+    BPRINTF("Z val tracking. AFTER: lastblock: %d, curaccess:%d, maxaccesses:%d\n",lastAccessedBlock, blockAccessCounter.load(), maxAccessInMissInterval);
+    
 }

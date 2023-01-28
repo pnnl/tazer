@@ -78,7 +78,7 @@
 #include "ScalableMetaData.h"
 #include "ScalableAllocator.h"
 #include "ScalableCache.h"
-
+#define BPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 class StealingAllocator : public TazerAllocator
 {
     private:
@@ -96,6 +96,8 @@ class StealingAllocator : public TazerAllocator
                 return meta->oldestBlock(sourceBlockIndex);
             return NULL;
         }
+        virtual void addAvailableBlocks (int addBlocks){};
+        virtual void removeBlocks (int removeBlocks){};
 
     public:
         StealingAllocator(uint64_t blockSize, uint64_t maxSize):
@@ -202,12 +204,53 @@ class AdaptiveForceWithUMBAllocator : public StealingAllocator
             
             //calculates UMBs for each file in cache
             double allocateForFileRank;
+            BPRINTF("Before updateranks for file %d\n", allocateForFileIndex);
             scalableCache->updateRanks(allocateForFileIndex, allocateForFileRank);
+            BPRINTF("After updateranks for file %d umb:%.15lf\n", allocateForFileIndex, allocateForFileRank);
             //looks for a victim cache starting from the lowest UMB
             //if must is set, we try to steal from everyone, if must isn't set we can steal from ones that have lower UMB 
             allocateForFileRank = must ? std::numeric_limits<double>::max() : allocateForFileRank;
+            BPRINTF("after must check for umb:%.15lf\n", allocateForFileRank);
             return scalableCache->findBlockFromCachedUMB(allocateForFileIndex, sourceFileIndex, sourceBlockIndex, allocateForFileRank);
 
+        }
+
+        virtual void addAvailableBlocks(int addBlocks){
+            _availBlocks.fetch_add(addBlocks);
+            std::cout<<"RESIZE DEBUG:after grow:current avail blocks:"<<_availBlocks.load()<<std::endl;
+
+        }
+        virtual void removeBlocks (int removeBlocks){
+            BPRINTF("in removeblocks\n");
+            //first check if there are any availabe empty blocks 
+            if ( _availBlocks.load() >= removeBlocks){
+                BPRINTF("some blocks are available %d\n", _availBlocks.load());
+                _availBlocks.fetch_sub(removeBlocks);
+                BPRINTF("after reduce availblocks:%d\n",_availBlocks.load());
+                return;
+            }
+            //if there are some available blocks but not enough , remove them first
+            removeBlocks -= _availBlocks.load();
+            _availBlocks.store(0);
+            BPRINTF("first we remove availblocks:%d, left to reduce:%d\n",_availBlocks.load(), removeBlocks);
+            
+            //here steal until we have enough blocks freed 
+            while(removeBlocks){
+                BPRINTF("In the while loop for reduceblock:%d\n", removeBlocks);
+                double allocateForFileRank; //unused, here for the function call 
+                scalableCache->updateRanks(0, allocateForFileRank); //0 for dummy input 
+                uint32_t sourceFileIndex=0; //dummy variables for steal function
+                uint64_t sourceBlockIndex=0;
+                auto* blockToFree = scalableCache->findBlockFromCachedUMB(0, sourceFileIndex, sourceBlockIndex, std::numeric_limits<double>::max());
+                if(blockToFree){
+                    removeBlocks--;
+                    // delete[] blockToFree;
+                }
+                else{
+                    BPRINTF("steal unsuccessful for removeblock:%d\n", removeBlocks);
+                }
+            }
+            std::cout<<"RESIZE DEBUG:after shrink:current avail blocks:"<<_availBlocks.load()<<std::endl;
         }
 
     public:
