@@ -120,4 +120,7 @@ typedef ssize_t (*unixreadv_t)(int fd, const struct iovec *iov, int iovcnt);
 typedef ssize_t (*unixwritev_t)(int fd, const struct iovec *iov, int iovcnt);
 
 typedef void (*unixexit_t)(int status);
+typedef void (*unix_exit_t)(int status);
+typedef void (*unix_Exit_t)(int status);
+typedef void (*unix_exit_group_t)(int status);
 #endif /* UNIXIO_H_ */

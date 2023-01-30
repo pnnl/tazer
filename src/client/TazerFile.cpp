@@ -130,11 +130,18 @@ TazerFile::TazerFile(TazerFile::Type type, std::string name, std::string metaNam
   auto ret_val_5 = fnmatch(pattern_5, name.c_str(), 0);
   char pattern_6[] = "*.lht";
   auto ret_val_6 = fnmatch(pattern_6, name.c_str(), 0);
+  char pattern_7[] = "*.fna";
+  auto ret_val_7 = fnmatch(pattern_7, name.c_str(), 0);
+  char pattern_8[] = "*.*.bt2";
+  auto ret_val_8 = fnmatch(pattern_8, name.c_str(), 0);
+  char pattern_9[] = "*.fastq";
+  auto ret_val_9 = fnmatch(pattern_9, name.c_str(), 0);
   //  std::string hdf_file_name(name);
     // auto found = hdf_file_name.find("residue");
     //if (hdf_file_name.find("residue") == std::string::npos) {
   if (ret_val !=0 && ret_val_2 != 0 && ret_val_3 != 0 
-        && ret_val_4 != 0 && ret_val_5 != 0 && ret_val_6 !=0) {
+      && ret_val_4 != 0 && ret_val_5 != 0 && ret_val_6 !=0
+      && ret_val_7 !=0 && ret_val_8 !=0 && ret_val_9 !=0) {
 #endif
     readMetaInfo();
 #ifdef TRACKFILECHANGES

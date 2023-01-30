@@ -111,8 +111,8 @@
 
 #define ADD_THROW __THROW
 
-// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
-#define DPRINTF(...)
+#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define DPRINTF(...)
 // #define MYPRINTF(...) fprintf(stderr, __VA_ARGS__)
 
 #define TRACKFILECHANGES 1
@@ -178,6 +178,9 @@ unixfeof_t unixfeof = NULL;
 unixreadv_t unixreadv = NULL;
 unixwritev_t unixwritev = NULL;
 unixexit_t unixexit = NULL;
+unix_exit_t unix_exit = NULL;
+unix_Exit_t unix_Exit = NULL;
+unix_exit_group_t unix_exit_group = NULL;
 
 bool write_printf = false;
 bool open_printf = false;
@@ -335,6 +338,9 @@ inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun,
   patterns.push_back("*.fits");
   patterns.push_back("*.h5");
   patterns.push_back("*.vcf");
+  patterns.push_back("*.fna");
+  patterns.push_back("*.*.bt2");
+  patterns.push_back("*.fastq");
   patterns.push_back("*.tar.gz");
   patterns.push_back("*.txt");
   patterns.push_back("*.lht");

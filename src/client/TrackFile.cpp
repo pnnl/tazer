@@ -105,12 +105,14 @@
 #include <chrono>
 
 using namespace std::chrono;
-// #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
-#define DPRINTF(...)
+#define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
+// #define DPRINTF(...)
 
 #define GATHERSTAT 1
 // #define USE_HASH 1
 #define ENABLE_TRACE 1
+// #define WRITE_STAT_EACH 1
+
 
 TrackFile::TrackFile(std::string name, int fd, bool openFile) : 
   TazerFile(TazerFile::Type::TrackLocal, name, name, fd),
@@ -169,7 +171,6 @@ void TrackFile::open() {
 
   open_file_start_time = high_resolution_clock::now();
 
-
   // #endif
   DPRINTF("Returning from trackfile open\n");
 
@@ -225,6 +226,9 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
     DPRINTF("Successfully read the TrackFile\n");
     _filePos[index] += bytes_read;
   }
+#ifdef WRITE_STAT_EACH
+  close();
+#endif
   return bytes_read;
   //  return 0;
 }
@@ -316,14 +320,15 @@ off_t TrackFile::seek(off_t offset, int whence, uint32_t index) {
 
 
 void TrackFile::close() {
+  // #if 0  
   DPRINTF("Calling TrackFile close \n");
   // if (!_closed) {
-  unixclose_t unixClose = (unixclose_t)dlsym(RTLD_NEXT, "close");
-  auto close_success = (*unixClose)(_fd_orig);
-  if (close_success) {
-    // _closed = true;
-    DPRINTF("Closed file with fd %d with name %s successfully\n", _fd_orig, _name.c_str());
-  }
+  // unixclose_t unixClose = (unixclose_t)dlsym(RTLD_NEXT, "close");
+  // auto close_success = (*unixClose)(_fd_orig);
+  // if (close_success) {
+  //   // _closed = true;
+  //   DPRINTF("Closed file with fd %d with name %s successfully\n", _fd_orig, _name.c_str());
+  // }
     // }
 
   auto pid = std::to_string(getpid());
@@ -337,12 +342,12 @@ void TrackFile::close() {
   file_name_r.append("_");
   file_name_r.append(pid);
   auto file_stat_r = file_name_r.append("_r_stat");
-  current_file_stat_r.open(file_stat_r, std::ios::out);
+  current_file_stat_r.open(file_stat_r, std::ios::out | std::ios::app);
   if (!current_file_stat_r) { DPRINTF("File for read stat collection not created!");}
   current_file_stat_r << _filename << " " << "Block no." << " " << "Frequency" << " " 
 		      << "Access size in byte" << std::endl;
 
-  auto sum_weight_r = 1; // TODO: Fix FPE
+  auto sum_weight_r = 0; // TODO: Fix FPE
   auto cumulative_weighted_sum_r = 0;
   for (auto& blk_info  : track_file_blk_r_stat[_name]) {
     cumulative_weighted_sum_r += blk_info.second * track_file_blk_r_stat_size[_name][blk_info.first];
@@ -351,9 +356,10 @@ void TrackFile::close() {
 			<< track_file_blk_r_stat_size[_name][blk_info.first] << std::endl;
   }
 
-  auto read_io_rate = cumulative_weighted_sum_r / sum_weight_r; // per byte
-  auto read_request_rate = elapsed_time / sum_weight_r;
-
+  if (sum_weight_r !=0 ) {
+    auto read_io_rate = cumulative_weighted_sum_r / sum_weight_r; // per byte
+    auto read_request_rate = elapsed_time / sum_weight_r;
+  }
   DPRINTF("Writing w blk access stat\n");
   // write blk access stat in a file
   std::fstream current_file_stat_w;
@@ -361,7 +367,7 @@ void TrackFile::close() {
   file_name_w.append("_");
   file_name_w.append(pid);
   auto file_stat_w = file_name_w.append("_w_stat");
-  current_file_stat_w.open(file_stat_w, std::ios::out);
+  current_file_stat_w.open(file_stat_w, std::ios::out | std::ios::app);
   if (!current_file_stat_w) {DPRINTF("File for write stat collection not created!");}
   current_file_stat_w << _filename << " " << "Block no." << " " << "Frequency" << " " 
 		      << "Access size in byte" << std::endl;
@@ -375,11 +381,12 @@ void TrackFile::close() {
     //current_file_stat_w << std::get<0>(blk_info) << " " << std::get<1>(blk_info) << " " << std::get<2>(blk_info) << std::endl;
   }
 
-  auto write_io_rate = cumulative_weighted_sum_w / sum_weight_w; 
-  auto write_request_rate =  elapsed_time / sum_weight_w;
+  if (sum_weight_w !=0 ) {
+    auto write_io_rate = cumulative_weighted_sum_w / sum_weight_w; 
+    auto write_request_rate =  elapsed_time / sum_weight_w;
   // TODO: fix below: elapsed_time  // if (elapsed_time == 0) {elapsed_time = 1;}  
   //  auto io_intensity = (total_time_spent_read + total_time_spent_write)/elapsed_time;
-
+  }
   DPRINTF("Writing r blk access order stat\n");
   // write blk access stat in a file
   std::fstream current_file_trace_r;
@@ -387,7 +394,7 @@ void TrackFile::close() {
   file_name_trace_r.append("_");
   file_name_trace_r.append(pid);
   auto file_trace_stat_r = file_name_trace_r.append("_r_trace_stat");
-  current_file_trace_r.open(file_trace_stat_r, std::ios::out);
+  current_file_trace_r.open(file_trace_stat_r, std::ios::out | std::ios::app);
   if (!current_file_trace_r) {DPRINTF("File for read trace stat collection not created!");}
   auto const& blk_trace_info_r  = trace_read_blk_seq[_name]; 
   for (auto const& blk_: blk_trace_info_r) {
@@ -402,11 +409,12 @@ void TrackFile::close() {
   file_name_trace_w.append("_");
   file_name_trace_w.append(pid);
   auto file_trace_stat_w = file_name_trace_w.append("_w_trace_stat");
-  current_file_trace_w.open(file_trace_stat_w, std::ios::out);
+  current_file_trace_w.open(file_trace_stat_w, std::ios::out | std::ios::app);
   if (!current_file_trace_w) {DPRINTF("File for write trace stat collection not created!");}
   // current_file_trace_w << _filename << " " << "Block no." << " " << "Frequency" << std::endl;
   auto const& blk_trace_info_w = trace_write_blk_seq[_name];
   for (auto const& blk_: blk_trace_info_w) {
     current_file_trace_w << blk_ << std::endl;
   }
+  // #endif
 }
