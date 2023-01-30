@@ -765,7 +765,7 @@ uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, u
         if(index != allocateForFileIndex) {
             MeMPRINTF("asking file: &d (%.25lf), looking at: %d  (%.25lf), threshold: %.25lf \n",allocateForFileIndex, allocateForFileRank, index, value, (value*1.05) );
             //5% difference condition is introduced to prevent 'ping-pong'ing between files
-            if(value*1.05 < allocateForFileRank) {
+            if(allocateForFileRank > value && ( std::abs(allocateForFileRank-value) >= std::abs(value*0.05))) {
                if( _metaMap[index]->getNumBlocks()>1 ){
                     MeMPRINTF("victim Index: %d has %d blocks, and umb is %f\n", index, _metaMap[index]->getNumBlocks(), value);
                     block = _metaMap[index]->oldestBlock(sourceBlockIndex);
