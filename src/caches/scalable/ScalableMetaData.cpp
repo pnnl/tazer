@@ -321,7 +321,8 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                     std::cerr << "[TAZER] Error in Z value calculations [access: "<< accessPerInterval << " z value: "<< maxAccessInMissInterval << std::endl;
                     raise(SIGSEGV);
                 }
-                BPRINTF("  calculating after a miss: access:%d, Zvalue: %d\n", accessPerInterval, maxAccessInMissInterval); 
+                double newZ = maxAccessInMissInterval + (maxAccessInMissInterval*1.0)/(maxAccessInMissInterval+1);
+                BPRINTF("  calculating after a miss: access:%d, Zvalue: %d, newZ: %f\n", accessPerInterval, maxAccessInMissInterval, newZ); 
                 if(Config::H_parameter == 0){
                     double ApZp = 1000000*32*( (double)accessPerInterval - maxAccessInMissInterval);
                     benefitHistogram.addData(i, ((ApZp/scaledMissCost)/blocks)/i);
