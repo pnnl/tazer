@@ -125,6 +125,7 @@
 #define BPRINTF(...)
 #define TIMEON(...) __VA_ARGS__
 //#define TIMEON(...)
+#define SPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 #define RESERVESIZE ((_compress) ? LZ4_compressBound(_blkSize) + _blkSize : _blkSize)
 
@@ -148,6 +149,18 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
             UMB_METRIC_PIGGYBACK_SM(scForSM, c);
             UMB_METRIC_PIGGYBACK_FC(scForFC, c);
             std::cerr << "[TAZER] " << "scalable cache: " << (void *)c << std::endl;
+
+            SPRINTF("SCALABLE PARAMETERS:\n");
+            SPRINTF("*Scalable?: %d\n", Config::useScalableCache);
+            SPRINTF("*PrivateSize: %d\n", Config::memoryCacheSize);
+            SPRINTF("*Scalable NumBlocks: %d\n",Config::scalableCacheNumBlocks);
+            SPRINTF("*BlockSize: %d\n", Config::maxBlockSize);
+            SPRINTF("*Private Associativity: %d\n", Config::memoryCacheAssociativity);
+            SPRINTF("*HB: %d\n",Config::Hb_parameter );
+            SPRINTF("*H: %d\n",Config::H_parameter );
+            SPRINTF("*MC: %d\n",Config::MC_parameter );
+            SPRINTF("*Sigmoid Threshold (Sth): %f\n",Config::UMBThreshold );
+            SPRINTF("*StealThreshold: %f\n",Config::StealThreshold );
         }
         else {
             c = MemoryCache::addMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);

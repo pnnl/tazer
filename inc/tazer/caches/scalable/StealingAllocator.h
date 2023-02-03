@@ -78,7 +78,7 @@
 #include "ScalableMetaData.h"
 #include "ScalableAllocator.h"
 #include "ScalableCache.h"
-#define BPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define BPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 class StealingAllocator : public TazerAllocator
 {
     private:
