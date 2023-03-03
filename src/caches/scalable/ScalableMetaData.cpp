@@ -252,7 +252,8 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex, bool reuse) {
     uint64_t minIndex = std::numeric_limits<uint64_t>::max();
 
 
-    if(reuse || currentBlocks.size() > 1) { //we can't give up the only block file has but it can reuse it itself
+    //if(reuse || currentBlocks.size() > 1) { //we can't give up the only block file has but it can reuse it itself
+    if(true){
         for(int i=0; i<currentBlocks.size(); i++) {
             auto it = currentBlocks[i];
             if ((it)->blkLock.cowardlyTryWriterLock()) { //this will tell us if the block is in use
@@ -299,12 +300,14 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     metaLock.writerLock();
     access++;
     accessPerInterval++;
+    lastAccessTimeStamp=timestamp;
     int blocks = numBlocks.load();
     if(miss) {
         BPRINTF("  calculating after a miss: access:%d, Zvalue: %d\n", accessPerInterval, maxAccessInMissInterval); 
         partitionMissCount++;
         if(lastMissTimeStamp) {
             double i = (double)(timestamp - lastMissTimeStamp);
+            totalMissIntervals += i; 
             if(lastDeliveryTime > 0 && blocks ){ //check to make sure we recorded a deliverytime
                 //partitionMissCount++;
                 partitionMissCost = partitionMissCost + lastDeliveryTime;
@@ -324,11 +327,11 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 double newZ = maxAccessInMissInterval + (maxAccessInMissInterval*1.0)/(maxAccessInMissInterval+1);
                 BPRINTF("  calculating after a miss: access:%d, Zvalue: %d, newZ: %f\n", accessPerInterval, maxAccessInMissInterval, newZ); 
                 if(Config::H_parameter == 0){
-                    double ApZp = 1000000*32*( (double)accessPerInterval - maxAccessInMissInterval);
+                    double ApZp = 64*1000000000*( (double)accessPerInterval - maxAccessInMissInterval);
                     benefitHistogram.addData(i, ((ApZp/scaledMissCost)/blocks)/i);
                 }
                 else if(Config::H_parameter == 1){
-                    double ApZp = 32*( (double)accessPerInterval - maxAccessInMissInterval);
+                    double ApZp = 64*64*( (double)accessPerInterval - maxAccessInMissInterval);
                     benefitHistogram.addData(log2(i), ((ApZp/scaledMissCost)/blocks)/log2(i));
                 }
                 else{
@@ -465,6 +468,13 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     // else{
     //     PPRINTF("we have blocks but no misstime yet \n");
     // }
+
+    //*** PREDICT OLDEST ***//
+    auto curBlocks = numBlocks.load();
+    oldestPredicted = lastAccessTimeStamp - (totalMissIntervals/(partitionMissCount))*(curBlocks-1);
+    PPRINTF("Oldest Timestamp Predicted As:%lf  numblocks:%d  lastaccess:%ld  averagemissinterval:%.10lf\n",oldestPredicted, curBlocks, lastAccessTimeStamp,(totalMissIntervals/(partitionMissCount)) );
+    // END PREDICT OLDEST //
+
     metaLock.writerUnlock();
     return ret;
 }

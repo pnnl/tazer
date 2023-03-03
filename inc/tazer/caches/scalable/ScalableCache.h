@@ -108,7 +108,7 @@ class ScalableCache : public Cache {
     //looking for blocks.
     uint8_t * findBlockFromCachedUMB(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex, double allocateForFileRank);
     uint8_t * findBlockFromOldestFile(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex);
-
+    uint8_t * findBlockFromCachedUMBandOldestPrediction(uint32_t allocateForFileIndex, uint32_t &sourceFileIndex, uint64_t &sourceBlockIndex, double allocateForFileRank);
     //JS: For tracking
     void trackBlockEviction(uint32_t fileIndex, uint64_t blockIndex);
     void trackPattern(uint32_t fileIndex, std::string pattern);
@@ -136,6 +136,8 @@ class ScalableCache : public Cache {
     std::atomic<uint64_t> resizeNumbers;
     uint64_t resizePercentage;
     uint64_t resizeAmount;
+    std::array<uint32_t, 11> splice_hits;
+    std::array<uint32_t, 11> splice_misses;
 
     //JS: This is to make sure there will exist a block that is not requested
     std::atomic<uint64_t> oustandingBlocksRequested;

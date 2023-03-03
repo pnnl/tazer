@@ -121,6 +121,9 @@ struct ScalableMetaData {
         double lastDeliveryTime;
         int partitionMissCount;
         double partitionMissCost;
+        uint64_t lastAccessTimeStamp;
+        double oldestPredicted;
+        uint64_t totalMissIntervals;
 
         std::atomic<uint64_t> numBlocks;
         
@@ -154,6 +157,9 @@ struct ScalableMetaData {
             lastDeliveryTime(-1.0),
             partitionMissCount(0),
             partitionMissCost(0),
+            lastAccessTimeStamp(0),
+            oldestPredicted(0),
+            totalMissIntervals(0),
             numBlocks(0),
             missInterval(Config::Hb_parameter),
             benefitHistogram(Config::Hb_parameter,Config::TraceHistogram),
@@ -194,6 +200,7 @@ struct ScalableMetaData {
         double getUnitBenefit();
         double getUpperMetric();
         void printHistLogs(int i){benefitHistogram.printLog(i);}
+        double getOldestPrediction(){ return oldestPredicted;}
 
         void trackZValue(uint32_t index);
     private:

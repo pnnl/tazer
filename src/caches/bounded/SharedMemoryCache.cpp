@@ -318,22 +318,22 @@ void SharedMemoryCache::setLastUMB(std::vector<std::tuple<uint32_t, double>> &UM
         double umb = std::get<1>(UMB);
         if(index < SCALEABLE_METRIC_FILE_MAX) {
             
-            double sigmoidx = (umb/(1.0+abs(umb)))+1;
+            //double sigmoidx = (umb/(1.0+abs(umb)))+1;
             
             //initial value is undefined:
             if(!_UMBC[index]){
-                _UMB[index] += sigmoidx;
+                _UMB[index] += umb;
                 _UMBC[index]++;
                 _UMBsign[index]=umb; //to keep track of umb's sign
             }   
             //if umb is far from 0 (for demand we don;t use a threshold here so we compare w/ 0)
             else if(abs(umb) > 0){
-                _UMB[index] += sigmoidx;
+                _UMB[index] += umb;
                 _UMBC[index]++;
             }
             //if sign of umb is changed 
             else if((umb * _UMBsign[index]) < 0 ){
-                _UMB[index] += sigmoidx;
+                _UMB[index] += umb;
                 _UMBC[index]++;
                 _UMBsign[index]=umb;
             }

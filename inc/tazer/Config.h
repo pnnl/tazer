@@ -140,7 +140,7 @@ const uint64_t maxBlockSize = getenv("TAZER_BLOCKSIZE") ? atol(getenv("TAZER_BLO
 //Memory Cache Parameters
 const bool useMemoryCache = true;
 static uint64_t memoryCacheSize = getenv("TAZER_PRIVATE_MEM_CACHE_SIZE") ? atol(getenv("TAZER_PRIVATE_MEM_CACHE_SIZE")) : 60 * 1024 * 1024UL;
-const uint32_t memoryCacheAssociativity = 16UL;
+const uint32_t memoryCacheAssociativity =  0;// 16UL; //0
 const uint64_t memoryCacheBlocksize = maxBlockSize;
 
 //Scalable Cache Parameters
@@ -153,7 +153,7 @@ const uint32_t scalableCacheAllocator = getenv("TAZER_SCALABLE_CACHE_ALLOCATOR")
 //Shared Memory Cache Parameters
 const bool useSharedMemoryCache = getenv("TAZER_SHARED_MEM_CACHE") ? atoi(getenv("TAZER_SHARED_MEM_CACHE")) : 0;
 static uint64_t sharedMemoryCacheSize = getenv("TAZER_SHARED_MEM_CACHE_SIZE") ? atol(getenv("TAZER_SHARED_MEM_CACHE_SIZE")) : 1 * 1024 * 1024 * 1024UL;
-const uint32_t sharedMemoryCacheAssociativity = 16UL;
+const uint32_t sharedMemoryCacheAssociativity = 16UL; // 0; //16UL;
 const uint64_t sharedMemoryCacheBlocksize = maxBlockSize;
 
 //BurstBuffer Cache Parameters
@@ -270,10 +270,11 @@ const uint32_t MC_parameter = getenv("TAZER_MC_VALUE") ? atoi(getenv("TAZER_MC_V
 const uint32_t Sr_parameter = getenv("TAZER_Sr_VALUE") ? atoi(getenv("TAZER_Sr_VALUE")) : 0;
 //threshold percentage for UMB retention / eviction policy. given as a percentage
 const double UMBThreshold = getenv("TAZER_UMB_THRESHOLD") ? atof(getenv("TAZER_UMB_THRESHOLD")) : 0;
-
+const double StealThreshold = getenv("TAZER_STEAL_THRESHOLD") ? atof(getenv("TAZER_STEAL_THRESHOLD")) : 0.01; //1 percent default threashold for UMB stealing
 #define FILE_CACHE_WRITE_THROUGH 1
 
 //#define PRINTF(...) fprintf(stderr, __VA_ARGS__)
+
 #define PRINTF(...)
 
 } // namespace Config

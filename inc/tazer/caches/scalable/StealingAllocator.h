@@ -211,7 +211,7 @@ class AdaptiveForceWithUMBAllocator : public StealingAllocator
             //if must is set, we try to steal from everyone, if must isn't set we can steal from ones that have lower UMB 
             allocateForFileRank = must ? std::numeric_limits<double>::max() : allocateForFileRank;
             BPRINTF("after must check for umb:%.15lf\n", allocateForFileRank);
-            return scalableCache->findBlockFromCachedUMB(allocateForFileIndex, sourceFileIndex, sourceBlockIndex, allocateForFileRank);
+            return scalableCache->findBlockFromCachedUMBandOldestPrediction(allocateForFileIndex, sourceFileIndex, sourceBlockIndex, allocateForFileRank);
 
         }
 
