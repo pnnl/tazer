@@ -181,6 +181,7 @@ unixexit_t unixexit = NULL;
 unix_exit_t unix_exit = NULL;
 unix_Exit_t unix_Exit = NULL;
 unix_exit_group_t unix_exit_group = NULL;
+unix_vfprintf_t unix_vfprintf = NULL;
 
 bool write_printf = false;
 bool open_printf = false;
@@ -278,11 +279,11 @@ inline auto innerWrapper(int fd, bool &isTazerFile, Func tazerFun, FuncLocal loc
     TazerFile *file = NULL;
     unsigned int fp = 0;
 
-    // DPRINTF("[Tazer] in innerwrapper 3 init val: %d , fd val %d \n", init, fd);
+    DPRINTF("[Tazer] in innerwrapper 3 init val: %d , fd val %d \n", init, fd);
 
     
     if (init && TazerFileDescriptor::lookupTazerFileDescriptor(fd, file, fp)) {
-      // DPRINTF("Found a file with fd %d\n", fd);
+      DPRINTF("Found a file with fd %d\n", fd);
         isTazerFile = true;
 	DPRINTF("calling Tazer function\n");	
         return tazerFun(file, fp, args...);
@@ -291,7 +292,7 @@ inline auto innerWrapper(int fd, bool &isTazerFile, Func tazerFun, FuncLocal loc
     // do track
     
     //}
-    // DPRINTF("[Tazer] in innerwrapper 3 for write calling localfun\n");
+    DPRINTF("[Tazer] in innerwrapper 3 for write calling localfun\n");
 
     return localFun(args...);
 }
@@ -340,12 +341,19 @@ inline auto innerWrapper(const char *pathname, bool &isTazerFile, Func tazerFun,
   patterns.push_back("*.vcf");
   patterns.push_back("*.fna");
   patterns.push_back("*.*.bt2");
-  patterns.push_back("*.fastq");
+  patterns.push_back("*.fastaq");
   patterns.push_back("*.tar.gz");
   patterns.push_back("*.txt");
   patterns.push_back("*.lht");
+  patterns.push_back("*.fasta.amb");
+  patterns.push_back("*.fasta.sa");
+  patterns.push_back("*.fasta.bwt");
+  patterns.push_back("*.fasta.pac");
+  patterns.push_back("*.fasta.ann");
+  patterns.push_back("*.fasta");
   for (auto pattern: patterns) {
     auto ret_val = fnmatch(pattern.c_str(), pathname, 0);
+    DPRINTF("PATTERN: %s PATHNAME: %s \n", pattern.c_str(), pathname);
     if (ret_val == 0) {
       isTazerFile = true;
       std::string filename(pathname);

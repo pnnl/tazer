@@ -469,3 +469,8 @@ uint64_t OutputFileInner::fileSize() {
     }
     return fileSize;
 }
+
+int OutputFileInner::vfprintf(unsigned int pos, int count) {
+  exit(-1);
+  return 0;
+}

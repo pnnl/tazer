@@ -194,6 +194,7 @@ void __attribute__((constructor)) tazerInit(void) {
 	unix_exit = (unix_exit_t)dlsym(RTLD_NEXT, "_exit");
 	unix_Exit = (unix_Exit_t)dlsym(RTLD_NEXT, "_Exit");
 	unix_exit_group = (unix_exit_group_t)dlsym(RTLD_NEXT, "exit_group");
+	unix_vfprintf = (unix_vfprintf_t)dlsym(RTLD_NEXT, "vfprintf");
 
         //enable if running into issues with an application that launches child shells
         bool unsetLib = getenv("TAZER_UNSET_LIB") ? atoi(getenv("TAZER_UNSET_LIB")) : 0;
@@ -301,6 +302,12 @@ int open(const char *pathname, int flags, ...) {
   patterns.push_back("*.tar.gz");
   patterns.push_back("*.txt");
   patterns.push_back("*.lht");
+  patterns.push_back("*.fasta.amb");
+  patterns.push_back("*.fasta.sa");
+  patterns.push_back("*.fasta.bwt");
+  patterns.push_back("*.fasta.pac");
+  patterns.push_back("*.fasta.ann");
+  patterns.push_back("*.fasta");
   for (auto pattern: patterns) {
     auto ret_val = fnmatch(pattern.c_str(), pathname, 0);
     if (ret_val == 0) {
@@ -328,6 +335,14 @@ int open64(const char *pathname, int flags, ...) {
     patterns.push_back("*.tar.gz");
     patterns.push_back("*.txt");
     patterns.push_back("*.lht");
+    patterns.push_back("*.stf");
+    patterns.push_back("*.out");
+    patterns.push_back("*.fasta.amb");
+    patterns.push_back("*.fasta.sa");
+    patterns.push_back("*.fasta.bwt");
+    patterns.push_back("*.fasta.pac");
+    patterns.push_back("*.fasta.ann");
+    patterns.push_back("*.fasta");
 
     for (auto pattern: patterns) {
         auto ret_val = fnmatch(pattern.c_str(), pathname, 0);
@@ -379,6 +394,12 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
   patterns.push_back("*.vcf");
   patterns.push_back("*.tar.gz");
   patterns.push_back("*.txt");
+    patterns.push_back("*.fasta.amb");
+    patterns.push_back("*.fasta.sa");
+    patterns.push_back("*.fasta.bwt");
+    patterns.push_back("*.fasta.pac");
+    patterns.push_back("*.fasta.ann");
+    patterns.push_back("*.fasta");
   for (auto pattern: patterns) {
     auto ret_val = fnmatch(pattern.c_str(), pathname, 0);
     if (ret_val == 0) {
@@ -403,6 +424,12 @@ int tazerClose(TazerFile *file, unsigned int fp, int fd) {
   patterns.push_back("*.tar.gz");
   patterns.push_back("*.txt");
   patterns.push_back("*.lht");
+    patterns.push_back("*.fasta.amb");
+    patterns.push_back("*.fasta.sa");
+    patterns.push_back("*.fasta.bwt");
+    patterns.push_back("*.fasta.pac");
+    patterns.push_back("*.fasta.ann");
+    patterns.push_back("*.fasta");
 
   for (auto pattern: patterns) {
     auto ret_val = fnmatch(pattern.c_str(), file->name().c_str(), 0);
@@ -487,6 +514,7 @@ ssize_t tazerWrite(TazerFile *file, unsigned int fp, int fd, const void *buf, si
 }
 
 ssize_t write(int fd, const void *buf, size_t count) {
+    printf("Printing fd in write %d and count %u\n", fd, count);
     vLock.readerLock();
     DPRINTF("Printing fd in write %d and count %u\n", fd, count);
     auto ret = outerWrapper("write", fd, Timer::Metric::write, tazerWrite, unixwrite, fd, buf, count);
@@ -650,6 +678,12 @@ FILE *fopen(const char *__restrict fileName, const char *__restrict modes) {
   patterns.push_back("*.*.bt2");
   patterns.push_back("*.fastq");
   patterns.push_back("*.lht");
+    patterns.push_back("*.fasta.amb");
+    patterns.push_back("*.fasta.sa");
+    patterns.push_back("*.fasta.bwt");
+    patterns.push_back("*.fasta.pac");
+    patterns.push_back("*.fasta.ann");
+    patterns.push_back("*.fasta");
   for (auto pattern: patterns) {
     auto ret_val = fnmatch(pattern.c_str(), fileName, 0);
     if (ret_val == 0) {
@@ -669,6 +703,12 @@ FILE *fopen64(const char *__restrict fileName, const char *__restrict modes) {
   patterns.push_back("*.*.bt2");
   patterns.push_back("*.fastq");
   patterns.push_back("*.lht");
+    patterns.push_back("*.fasta.amb");
+    patterns.push_back("*.fasta.sa");
+    patterns.push_back("*.fasta.bwt");
+    patterns.push_back("*.fasta.pac");
+    patterns.push_back("*.fasta.ann");
+    patterns.push_back("*.fasta");
   for (auto pattern: patterns) {
     auto ret_val = fnmatch(pattern.c_str(), fileName, 0);
     if (ret_val == 0) {
@@ -688,6 +728,12 @@ int tazerFclose(TazerFile *file, unsigned int pos, int fd, FILE *fp) {
   patterns.push_back("*.lht");
   patterns.push_back("*.*.bt2");
   patterns.push_back("*.fastq");
+  patterns.push_back("*.fasta.amb");
+  patterns.push_back("*.fasta.sa");
+  patterns.push_back("*.fasta.bwt");
+  patterns.push_back("*.fasta.pac");
+  patterns.push_back("*.fasta.ann");
+  patterns.push_back("*.fasta");
   for (auto pattern: patterns) {
     auto ret_val = fnmatch(pattern.c_str(), file->name().c_str(), 0);
     if (ret_val == 0) {
@@ -711,13 +757,13 @@ int fclose(FILE *fp) {
 }
 
 size_t tazerFread(TazerFile *file, unsigned int pos, int fd, void *__restrict ptr, size_t size, size_t n, FILE *__restrict fp) {
-    auto read_bytes = (size_t)read(fd, ptr, size * n);
+    auto read_bytes = (size_t)file->read(ptr, size * n, pos);
     if (read_bytes >= size){return n;}
     else return (size_t) (size / n) ;
 }
 
 size_t fread(void *__restrict ptr, size_t size, size_t n, FILE *__restrict fp) {
-  DPRINTF("Invoking fread\n");
+  DPRINTF("fread Invoking fread\n");
   auto ret_val = outerWrapper("fread", fp, Timer::Metric::read, 
 			      tazerFread, unixfread, ptr, size, n, fp);
   DPRINTF("fread return value %d\n", ret_val);
@@ -725,13 +771,30 @@ size_t fread(void *__restrict ptr, size_t size, size_t n, FILE *__restrict fp) {
 }
 
 size_t tazerFwrite(TazerFile *file, unsigned int pos, int fd, const void *__restrict ptr, size_t size, size_t n, FILE *__restrict fp) {
-    auto written_bytes = (size_t)write(fd, ptr, size * n);
+    DPRINTF("Invoking fwrite %d %d \n", size * n, fd);
+    auto written_bytes = (size_t)file->write(ptr, size * n, pos);
     if (written_bytes >= size) return n;
     else return (size_t) (size / n);
 }
 
 size_t fwrite(const void *__restrict ptr, size_t size, size_t n, FILE *__restrict fp) {
-    return outerWrapper("fwrite", fp, Timer::Metric::read, tazerFwrite, unixfwrite, ptr, size, n, fp);
+  printf("fwrite Invoking fread\n");
+    //return outerWrapper("fwrite", fp, Timer::Metric::read, tazerFwrite, unixfwrite, ptr, size, n, fp);
+    return outerWrapper("fwrite", fp, Timer::Metric::write, tazerFwrite, unixfwrite, ptr, size, n, fp);
+}
+
+int tazerVfprintf(TazerFile *file, unsigned int pos, int fd, FILE * stream, 
+		     const char * format, ...) {
+  va_list args;
+  va_start(args, format);
+  auto count = unix_vfprintf(stream, format, args);
+  auto i = file->vfprintf(pos, count);
+  return count;
+}
+int vfprintf(FILE * stream, const char * format, va_list arg ) {
+  DPRINTF("Invoking vfprintf\n");
+  return outerWrapper("vfprintf", stream, Timer::Metric::write, tazerVfprintf, 
+		      unix_vfprintf, stream, format, arg);
 }
 
 long int tazerFtell(TazerFile *file, unsigned int pos, int fd, FILE *fp) {

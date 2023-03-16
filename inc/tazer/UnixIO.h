@@ -123,4 +123,6 @@ typedef void (*unixexit_t)(int status);
 typedef void (*unix_exit_t)(int status);
 typedef void (*unix_Exit_t)(int status);
 typedef void (*unix_exit_group_t)(int status);
+
+typedef int (*unix_vfprintf_t)(FILE * stream, const char * format, va_list arg);
 #endif /* UNIXIO_H_ */

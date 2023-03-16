@@ -95,7 +95,7 @@ class LocalFile : public TazerFile {
     ssize_t read(void *buf, size_t count, uint32_t index = 0);
     ssize_t write(const void *buf, size_t count, uint32_t index = 0);
     off_t seek(off_t offset, int whence, uint32_t index = 0);
-
+    int vfprintf(unsigned int pos, int count); 
     static Cache *_cache;
 
   private:

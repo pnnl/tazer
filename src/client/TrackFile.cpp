@@ -184,6 +184,7 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
   auto read_file_end_time = high_resolution_clock::now();
   auto duration = duration_cast<seconds>(read_file_end_time - read_file_start_time); 
   total_time_spent_read += duration;
+  DPRINTF("bytes_read: %ld _fd_orig: %d _name: %s \n", bytes_read, _fd_orig, _name.c_str());
 #ifdef GATHERSTAT
   if (bytes_read != -1) { // Only update stats if nonzero byte counts are read
     auto blockSizeForStat = Config::blockSizeForStat;
@@ -195,6 +196,7 @@ ssize_t TrackFile::read(void *buf, size_t count, uint32_t index) {
     if (((diff + bytes_read) % blockSizeForStat)) {
       endBlockForStat++;
     }
+    DPRINTF("r startBlockForStat: %d endBlockForStat: %d \n", startBlockForStat, endBlockForStat);
 
     for (auto i = startBlockForStat; i <= endBlockForStat; i++) {
       auto index = i;
@@ -240,6 +242,7 @@ ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
   DPRINTF("About to write %u count to file with fd %d and file_name: %s\n", 
 	  count, _fd_orig, _filename.c_str());
   auto bytes_written = (*unixWrite)(_fd_orig, buf, count);
+  DPRINTF("bytes_written: %ld _fd_orig: %d _name: %s \n", bytes_written, _fd_orig, _name.c_str());
   auto write_file_end_time = high_resolution_clock::now();
   auto duration = duration_cast<seconds>(write_file_end_time - write_file_start_time);
   total_time_spent_write += duration;
@@ -253,6 +256,7 @@ ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
       endBlockForStat++;
     }
 
+    DPRINTF("w startBlockForStat: %d endBlockForStat: %d \n", startBlockForStat, endBlockForStat);
     for (auto i = startBlockForStat; i <= endBlockForStat; i++) {
       auto index = i;
 #ifdef USE_HASH
@@ -261,10 +265,12 @@ ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
 	// index = sample;
 #endif      
 	if (track_file_blk_w_stat[_name].find(index) == track_file_blk_w_stat[_name].end()) {
+	  DPRINTF("%s: 1 \n",_name.c_str());
 	  track_file_blk_w_stat[_name].insert(std::make_pair(index, 1)); // not thread-safe
 	track_file_blk_w_stat_size[_name].insert(std::make_pair(i, bytes_written)); // not thread-safe
         }
         else {
+	  DPRINTF("%s: 2 \n",_name.c_str());
 	  track_file_blk_w_stat[_name][index]++;
         }
 
@@ -284,6 +290,43 @@ ssize_t TrackFile::write(const void *buf, size_t count, uint32_t index) {
     // _fileSize += bytes_written;  
   }
   return bytes_written;
+}
+
+int TrackFile::vfprintf(unsigned int pos, int count) {
+  DPRINTF("In trackfile vfprintf\n");
+#ifdef GATHERSTAT
+  if (count != -1) {
+    auto diff = _filePos[pos]; //  - _filePos[0];
+    auto precNumBlocks = diff / _blkSize;
+    uint32_t startBlockForStat = precNumBlocks; 
+    uint32_t endBlockForStat = (diff + count) / _blkSize; 
+    if (((diff + count) % _blkSize)) {
+      endBlockForStat++;
+    }
+
+    DPRINTF("w startBlockForStat: %d endBlockForStat: %d \n", startBlockForStat, endBlockForStat);
+    for (auto i = startBlockForStat; i <= endBlockForStat; i++) {
+      auto index = i;
+      if (track_file_blk_w_stat[_name].find(index) == track_file_blk_w_stat[_name].end()) {
+	track_file_blk_w_stat[_name].insert(std::make_pair(index, 1)); // not thread-safe
+	track_file_blk_w_stat_size[_name].insert(std::make_pair(i, count)); // not thread-safe
+      }
+      else {
+	DPRINTF("%s: 2 \n",_name.c_str());
+	track_file_blk_w_stat[_name][index]++;
+      }
+
+      trace_write_blk_seq[_name].push_back(index);
+    }
+  }
+
+  if (count != -1) {
+    DPRINTF("Successfully wrote to the TrackFile\n");
+    _filePos[pos] += count;
+    // _fileSize += bytes_written;  
+  }
+#endif
+  return count;
 }
 
 uint64_t TrackFile::fileSize() {

@@ -95,6 +95,7 @@ class OutputFileInner : public TazerFile {
 
     ssize_t read(void *buf, size_t count, uint32_t index);
     ssize_t write(const void *buf, size_t count, uint32_t index);
+    int vfprintf(unsigned int pos, int count);
 
     off_t seek(off_t offset, int whence, uint32_t index);
     uint64_t fileSize();

@@ -607,6 +607,11 @@ ssize_t InputFile::write(const void *buf, size_t count, uint32_t index) {
     return 0;
 }
 
+int InputFile::vfprintf(unsigned int pos, int count) {
+  exit(-1);
+  return 0;
+}
+
 uint64_t InputFile::fileSizeFromServer() {
     uint64_t fileSize = 0;
     bool created;

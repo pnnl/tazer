@@ -118,6 +118,11 @@ off_t OutputFile::seek(off_t offset, int whence, uint32_t index) {
     return (*_outputFiles)[getThreadFileDescriptor()]->seek(offset, whence, index);
 }
 
+int OutputFile::vfprintf(unsigned int pos, int count) {
+  exit(-1);
+  return 0;
+}
+
 uint64_t OutputFile::fileSize() {
     return (*_outputFiles)[getThreadFileDescriptor()]->fileSize();
 }
