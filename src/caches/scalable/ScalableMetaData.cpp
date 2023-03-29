@@ -89,6 +89,7 @@
 
 //#define BPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define BPRINTF(...)
+#define ZPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
     auto blockEntry = &blocks[blockIndex];
     uint64_t timeStamp = trackAccess(blockIndex, fileOffset);
@@ -301,9 +302,11 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     access++;
     accessPerInterval++;
     lastAccessTimeStamp=timestamp;
+    ZPRINTF(" miss?:%d accessPerInterval:%d z:%d\n", miss, accessPerInterval, maxAccessInMissInterval);
     int blocks = numBlocks.load();
     if(miss) {
         BPRINTF("  calculating after a miss: access:%d, Zvalue: %d\n", accessPerInterval, maxAccessInMissInterval); 
+        ZPRINTF("  calculating after a miss: access:%d, Zvalue: %d\n", accessPerInterval, maxAccessInMissInterval);
         partitionMissCount++;
         if(lastMissTimeStamp) {
             double i = (double)(timestamp - lastMissTimeStamp);
@@ -347,7 +350,7 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                 PPRINTF("BM: We have a second miss but no deliverytime yet! \n");
             }
             accessPerInterval = 0;
-
+            maxAccessInMissInterval=0;
             //config::H_parameter holds the type of miss interval histogram logging
             if(Config::H_parameter == 0){
                 TPRINTF("H_parameter=0: miss histogram use normal time\n");
@@ -367,7 +370,9 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
         DPRINTF("SETTING: %lu = %lu\n", lastMissTimeStamp, timestamp);
         lastMissTimeStamp = timestamp;
         // after a miss, reset Z value counters 
+        accessPerInterval = 0;
         maxAccessInMissInterval=0;
+        blockAccessCounter.store(1);
     }
     metaLock.writerUnlock();
 }
@@ -471,8 +476,8 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
 
     //*** PREDICT OLDEST ***//
     auto curBlocks = numBlocks.load();
-    oldestPredicted = lastAccessTimeStamp - (totalMissIntervals/(partitionMissCount))*(curBlocks-1);
-    PPRINTF("Oldest Timestamp Predicted As:%lf  numblocks:%d  lastaccess:%ld  averagemissinterval:%.10lf\n",oldestPredicted, curBlocks, lastAccessTimeStamp,(totalMissIntervals/(partitionMissCount)) );
+    oldestPredicted = lastAccessTimeStamp - (totalMissIntervals*1.0/(partitionMissCount))*(curBlocks-1);
+    PPRINTF("Oldest Timestamp Predicted As:%lf  numblocks:%d  lastaccess:%ld totalmissintervals:%lu  partitionMissCount:%lu, averagemissinterval:%.10lf\n",oldestPredicted, curBlocks, lastAccessTimeStamp, totalMissIntervals, partitionMissCount,(totalMissIntervals*1.0/(partitionMissCount)) );
     // END PREDICT OLDEST //
 
     metaLock.writerUnlock();
