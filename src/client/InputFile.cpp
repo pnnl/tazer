@@ -159,8 +159,9 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
             SPRINTF("*HB: %d\n",Config::Hb_parameter );
             SPRINTF("*H: %d\n",Config::H_parameter );
             SPRINTF("*MC: %d\n",Config::MC_parameter );
-            SPRINTF("*Sigmoid Threshold (Sth): %f\n",Config::UMBThreshold );
-            SPRINTF("*StealThreshold: %f\n",Config::StealThreshold );
+            SPRINTF("*k: %f\n", Config::k_parameter);
+            SPRINTF("*Private Threshold : %f\n",Config::PrivateThreshold );
+            SPRINTF("*Shared Threshold: %f\n",Config::SharedThreshold );
         }
         else {
             c = MemoryCache::addMemoryCache(MEMORYCACHENAME, CacheType::privateMemory, Config::memoryCacheSize, Config::memoryCacheBlocksize, Config::memoryCacheAssociativity);

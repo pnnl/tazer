@@ -269,8 +269,9 @@ const uint32_t H_parameter = getenv("TAZER_H_VALUE") ? atoi(getenv("TAZER_H_VALU
 const uint32_t MC_parameter = getenv("TAZER_MC_VALUE") ? atoi(getenv("TAZER_MC_VALUE")) : 0;
 const uint32_t Sr_parameter = getenv("TAZER_Sr_VALUE") ? atoi(getenv("TAZER_Sr_VALUE")) : 0;
 //threshold percentage for UMB retention / eviction policy. given as a percentage
-const double UMBThreshold = getenv("TAZER_UMB_THRESHOLD") ? atof(getenv("TAZER_UMB_THRESHOLD")) : 0;
-const double StealThreshold = getenv("TAZER_STEAL_THRESHOLD") ? atof(getenv("TAZER_STEAL_THRESHOLD")) : 0.01; //1 percent default threashold for UMB stealing
+const double SharedThreshold = getenv("TAZER_SHARED_THRESHOLD") ? atof(getenv("TAZER_SHARED_THRESHOLD")) : 0.01; //default 1 percent threshold for UMB stealing
+const double PrivateThreshold = getenv("TAZER_PRIVATE_THRESHOLD") ? atof(getenv("TAZER_PRIVATE_THRESHOLD")) : 0.05; //5 percent default threashold for shared stealing
+const double k_parameter = getenv("TAZER_k_VALUE") ? atof(getenv("TAZER_k_VALUE")) : 5; //k=5 default staleness parameter 
 #define FILE_CACHE_WRITE_THROUGH 1
 
 //#define PRINTF(...) fprintf(stderr, __VA_ARGS__)

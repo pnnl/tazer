@@ -251,8 +251,7 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
         }
     }
     
-    double sigmoidThreshold = Config::UMBThreshold;
-    //std::cout<<"sigmoid threshold: "<<sigmoidThreshold<<std::endl;
+    double sharedThreshold = Config::SharedThreshold;
 
     for (uint32_t i = 0; i < _associativity; i++) { //loop to find oldest block and block with lowest umb(if scalable piggyback is on)
         blkEntry = blkEntries[i];
@@ -260,22 +259,14 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
             if(_scalableCache) {
                 auto umbblock = getLastUMB(blkEntry->fileIndex);
                 PPRINTFB("%d:%d, INCOMING file:%d umb:%.10lf, BLOCK file:%d umb:%.10lf time:%lu\n",
-                    binIndex,i, fileIndex, askingUMB, blkEntry->fileIndex,umbblock, blkEntry->timeStamp);
-
-                if(umbblock <= minUMBInCache + sigmoidThreshold){ //we found a possible victim block
+                        binIndex,i, fileIndex, askingUMB, blkEntry->fileIndex,umbblock, blkEntry->timeStamp);
+                if(umbblock <= minUMBInCache*(1+sharedThreshold)){ //we found a possible victim block
                     if (!anyUsers(blkEntry,req)  &&  (blkEntry->timeStamp < victimTime)){ //pick the oldest among minUMB + threshold
                         victimTime = blkEntry->timeStamp;
                         victimMinUMB = umbblock;
                         victimEntry = blkEntry;
                     }
                 }
-                // else if(umbblock == victimMinUMB){ //check if this block is older, then select this block as victim 
-                //     if (!anyUsers(blkEntry,req) &&  (blkEntry->timeStamp < victimTime)) {
-                //             victimTime = blkEntry->timeStamp;
-                //             victimMinUMB = umbblock;
-                //             victimEntry = blkEntry;
-                //     }
-                // }
             }
 
             //LRU
@@ -319,7 +310,7 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
         //Did we find a space --  it's possible none of the blocks were available, that case we skip this level for caching
         if (victimTime != (uint64_t)-1 && victimEntry && minTime != (uint64_t)-1 && minEntry) { 
 
-            if(askingUMB + sigmoidThreshold >= victimMinUMB ){
+            if(askingUMB >= victimMinUMB*(1+sharedThreshold) ){ //if incoming UMB is significantly(at least sharedthreshold percentage) higher than victim 
                 //evict lowest umb 
                 minTime = victimTime;
                 minEntry = victimEntry;

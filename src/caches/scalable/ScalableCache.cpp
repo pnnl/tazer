@@ -783,7 +783,7 @@ uint8_t * ScalableCache::findBlockFromCachedUMB(uint32_t allocateForFileIndex, u
         
         if(index != allocateForFileIndex) {
             
-            double stealThr = Config::StealThreshold; 
+            double stealThr = Config::PrivateThreshold; 
             if(allocateForFileRank > value && ( std::abs(allocateForFileRank-value) >= std::abs(value*stealThr))) {
                 if(_metaMap[index]->getOldestPrediction() < _metaMap[allocateForFileIndex]->getOldestPrediction() ){  
                     
@@ -836,7 +836,7 @@ uint8_t * ScalableCache::findBlockFromCachedUMBandOldestPrediction(uint32_t allo
             continue;
         StealPRINTF("CurFile: %d, CurUMB:%.10lf, CurOldest: %.10lf\n", cur_index, cur_umb, _metaMap[cur_index]->getOldestPrediction());
         //if UMB is within a percentage of the minimum UMB, we consider them equivalent 
-        if(std::abs(cur_umb-minUMB) <= std::abs(minUMB*Config::StealThreshold) && _metaMap[cur_index]->getNumBlocks()>0){
+        if(std::abs(cur_umb-minUMB) <= std::abs(minUMB*Config::PrivateThreshold) && _metaMap[cur_index]->getNumBlocks()>0){
             //here we find the partition that has minimum equivalent UMB and the oldest prediction 
             if( _metaMap[cur_index]->getOldestPrediction() < victim_u_time){
                 victim_u = cur_index;
@@ -858,7 +858,7 @@ uint8_t * ScalableCache::findBlockFromCachedUMBandOldestPrediction(uint32_t allo
     auto localMisses = misses.load();
     double average_miss = ((double)timestamp-startTimeStamp) / localMisses;
     //if(allocateForFileRank > std::get<1>(_localUMBs[victim_u]) && ( std::abs(allocateForFileRank-std::get<1>(_localUMBs[victim_u])) >= std::abs(std::get<1>(_localUMBs[victim_u])*Config::StealThreshold))) {
-    auto sth = Config::StealThreshold;
+    auto sth = Config::PrivateThreshold;
     auto vic_umb = std::get<1>(_localUMBs[victim_u]);
     //if we found a umb victim && asking file's umb is higher than victim && asking file's umb is significantly higher && victim has bloks)
     if(victim_u>0 && allocateForFileRank > vic_umb && ( std::abs(allocateForFileRank-vic_umb) >= std::abs(vic_umb*sth)) && _metaMap[victim_u]->getNumBlocks()>0) {
@@ -871,7 +871,7 @@ uint8_t * ScalableCache::findBlockFromCachedUMBandOldestPrediction(uint32_t allo
             }
         }
     }
-    else if(victim_w > 0 &&  victim_w_time < timestamp - (5*average_miss) ){ //if oldest predicted block is older than 5*average-miss we consider it stale 
+    else if(victim_w > 0 &&  victim_w_time < timestamp - (Config::k_parameter*average_miss) ){ //if oldest predicted block is older than 5*average-miss we consider it stale 
         StealPRINTF("In the else if; stealing from victim_w: %d\n", victim_w);
         block = _metaMap[victim_w]->oldestBlock(sourceBlockIndex);
         if(block){
