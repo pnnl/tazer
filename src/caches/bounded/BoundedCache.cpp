@@ -310,7 +310,7 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
         //Did we find a space --  it's possible none of the blocks were available, that case we skip this level for caching
         if (victimTime != (uint64_t)-1 && victimEntry && minTime != (uint64_t)-1 && minEntry) { 
 
-            if(askingUMB >= victimMinUMB*(1+sharedThreshold) ){ //if incoming UMB is significantly(at least sharedthreshold percentage) higher than victim 
+            if(askingUMB >= victimMinUMB ){ //if incoming UMB is higher than victim 
                 //evict lowest umb 
                 minTime = victimTime;
                 minEntry = victimEntry;

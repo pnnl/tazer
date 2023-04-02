@@ -861,6 +861,9 @@ uint8_t * ScalableCache::findBlockFromCachedUMBandOldestPrediction(uint32_t allo
     auto sth = Config::PrivateThreshold;
     auto vic_umb = std::get<1>(_localUMBs[victim_u]);
     //if we found a umb victim && asking file's umb is higher than victim && asking file's umb is significantly higher && victim has bloks)
+    int numPartitions = _metaMap.size();
+    int k = (_numBlocks / numPartitions) + (_numBlocks % numPartitions != 0); 
+    StealPRINTF("k val is: %d, numblocks:%d, partitions:%d\n", k, _numBlocks, numPartitions);
     if(victim_u>0 && allocateForFileRank > vic_umb && ( std::abs(allocateForFileRank-vic_umb) >= std::abs(vic_umb*sth)) && _metaMap[victim_u]->getNumBlocks()>0) {
         StealPRINTF("In the first if; stealing from victim_u: %d\n", victim_u);
         if(_metaMap[allocateForFileIndex]->getNumBlocks() == 0 || victim_u_time < allocateForFileTime){
@@ -871,7 +874,7 @@ uint8_t * ScalableCache::findBlockFromCachedUMBandOldestPrediction(uint32_t allo
             }
         }
     }
-    else if(victim_w > 0 &&  victim_w_time < timestamp - (Config::k_parameter*average_miss) ){ //if oldest predicted block is older than 5*average-miss we consider it stale 
+    else if(victim_w > 0 &&  victim_w_time < timestamp - (k*average_miss) ){ //if oldest predicted block is older than 5*average-miss we consider it stale 
         StealPRINTF("In the else if; stealing from victim_w: %d\n", victim_w);
         block = _metaMap[victim_w]->oldestBlock(sourceBlockIndex);
         if(block){
