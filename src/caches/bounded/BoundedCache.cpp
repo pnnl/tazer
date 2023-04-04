@@ -96,7 +96,7 @@
 //#define PPRINTFB(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
 #define PPRINTF(...)
 #define PPRINTFB(...)
-#define TPRINTF(...) fprintf(stdout, __VA_ARGS__); fflush(stdout)
+#define TPRINTF(...) //fprintf(stdout, __VA_ARGS__); fflush(stdout)
 //#define TPRINTF(...)
 
 template <class Lock>
@@ -326,17 +326,17 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
                 return minEntry;
             }
             else{
-                //skip caching for this block 
-                log(this)<< _name << " No available spots for this UMB value " << std::endl;
-                req->trace(_name)<<"no entries found for UMB"<<std::endl;
-                PPRINTFB("skipping %lf for this cache\n" , askingUMB);
-                return NULL;
+                // //skip caching for this block 
+                // log(this)<< _name << " No available spots for this UMB value " << std::endl;
+                // req->trace(_name)<<"no entries found for UMB"<<std::endl;
+                // PPRINTFB("skipping %lf for this cache\n" , askingUMB);
+                // return NULL;
             }
         }
-        log(this)<< _name << " No available spots for this UMB value " << std::endl;
-        req->trace(_name)<<"no entries found for UMB"<<std::endl;
-        PPRINTFB("skipping %lf for this cache\n" , askingUMB);
-        return NULL;
+        // log(this)<< _name << " No available spots for this UMB value " << std::endl;
+        // req->trace(_name)<<"no entries found for UMB"<<std::endl;
+        // PPRINTFB("skipping %lf for this cache\n" , askingUMB);
+        // return NULL;
     } //end of scalable piggyback section
 
     if (minTime != (uint64_t)-1 && minEntry) { //LRU version -- Did we find a space
