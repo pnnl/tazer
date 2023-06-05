@@ -161,6 +161,7 @@ void /*__attribute__((constructor))*/ InputFile::cache_init(void) {
             SPRINTF("*MC: %d\n",Config::MC_parameter );
             SPRINTF("*Private Threshold : %f\n",Config::PrivateThreshold );
             SPRINTF("*Shared Threshold: %f\n",Config::SharedThreshold );
+            SPRINTF("*ThresholdT %f\n", Config::ThresholdT);
             SPRINTF("*PRIVATE ASSOCIATIVITY: %d\n", Config::memoryCacheAssociativity);
             SPRINTF("*SHARED ASSOCIATIVITY: %d\n", Config::sharedMemoryCacheAssociativity);
         }

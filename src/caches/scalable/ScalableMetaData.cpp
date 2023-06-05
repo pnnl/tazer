@@ -81,8 +81,8 @@
 #define DPRINTF(...)
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
-#define PPRINTF(...)
-//#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define PPRINTF(...)
+#define PPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 //#define TPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define TPRINTF(...)
@@ -90,6 +90,7 @@
 //#define BPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define BPRINTF(...)
 #define ZPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define HPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
     auto blockEntry = &blocks[blockIndex];
     uint64_t timeStamp = trackAccess(blockIndex, fileOffset);
@@ -258,6 +259,7 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex, bool reuse) {
         for(int i=0; i<currentBlocks.size(); i++) {
             auto it = currentBlocks[i];
             if ((it)->blkLock.cowardlyTryWriterLock()) { //this will tell us if the block is in use
+                //ZPRINTF("---block:%d timestamp:%lu\n", i, (it)->timeStamp.load());
                 if((it)->timeStamp.load() < minTime){
                     minTime = (it)->timeStamp.load();
                     minEntry = it;
@@ -271,7 +273,8 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex, bool reuse) {
         BPRINTF("this file only has 1 block, cannot give it up..");
     }
 
-    BPRINTF("after oldestblock loop, minindex is: %u, total blocks: %d \n", minIndex,  currentBlocks.size());
+    ZPRINTF("after oldestblock loop, minindex is: %u, total blocks: %d \n", minIndex,  currentBlocks.size());
+    PPRINTF("-Oldest block actual timestamp: %lu\n",minTime);
     if(minEntry != NULL){ //we found a min entry 
 
         if (minEntry->blkLock.cowardlyTryWriterLock()) {
@@ -286,6 +289,7 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex, bool reuse) {
             recalc=true;
             //JS: And remove its existence...
             currentBlocks.erase(currentBlocks.begin()+minIndex);
+            ZPRINTF("-block stolen\n");
         }
         else{
             //here our minentry block has become active since our loop, we need to do something? 
@@ -302,14 +306,19 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     access++;
     accessPerInterval++;
     lastAccessTimeStamp=timestamp;
-    ZPRINTF(" miss?:%d accessPerInterval:%d z:%d\n", miss, accessPerInterval, maxAccessInMissInterval);
+    if(!firstAccessTimeStamp){
+        firstAccessTimeStamp = timestamp;
+        PPRINTF("set first access timestamp\n");
+    }
+   // ZPRINTF(" miss?:%d accessPerInterval:%d z:%d\n", miss, accessPerInterval, maxAccessInMissInterval);
     int blocks = numBlocks.load();
     if(miss) {
         BPRINTF("  calculating after a miss: access:%d, Zvalue: %d\n", accessPerInterval, maxAccessInMissInterval); 
-        ZPRINTF("  calculating after a miss: access:%d, Zvalue: %d\n", accessPerInterval, maxAccessInMissInterval);
+     //   ZPRINTF("  calculating after a miss: access:%d, Zvalue: %d\n", accessPerInterval, maxAccessInMissInterval);
         partitionMissCount++;
         if(lastMissTimeStamp) {
             double i = (double)(timestamp - lastMissTimeStamp);
+            HPRINTF("updatestats::%lf\n", i);
             totalMissIntervals += i; 
             if(lastDeliveryTime > 0 && blocks ){ //check to make sure we recorded a deliverytime
                 //partitionMissCount++;
@@ -388,10 +397,11 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         prevUnitBenefit=0;
         prevSize=0;
         ret = unitMarginalBenefit = 0;
+        oldestPredicted=0;
     }
     else if(lastDeliveryTime && recalc) {
         double t = ((double) time) / ((double) misses);
-        //OCEANE: if we test log(i), send log(t) here instead of t
+        HPRINTF("calcrank::%lf\n", t);
         double Mh;
         double Bh;
         if(Config::H_parameter == 0){
@@ -468,18 +478,40 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
             missInterval.printBins();
             benefitHistogram.printBins();
         }
+
+        //*** PREDICT OLDEST ***//
+        //auto curBlocks = numBlocks.load();
+        auto avmiss = 1.0*(lastAccessTimeStamp - firstAccessTimeStamp)/(partitionMissCount-1);
+        oldestPredicted = lastAccessTimeStamp - (avmiss*(curBlocks-1));
+        // END PREDICT OLDEST 
+
+
         recalc = false;
     }
     // else{
     //     PPRINTF("we have blocks but no misstime yet \n");
     // }
 
-    //*** PREDICT OLDEST ***//
-    auto curBlocks = numBlocks.load();
-    oldestPredicted = lastAccessTimeStamp - (totalMissIntervals*1.0/(partitionMissCount))*(curBlocks-1);
-    PPRINTF("Oldest Timestamp Predicted As:%lf  numblocks:%d  lastaccess:%ld totalmissintervals:%lu  partitionMissCount:%lu, averagemissinterval:%.10lf\n",oldestPredicted, curBlocks, lastAccessTimeStamp, totalMissIntervals, partitionMissCount,(totalMissIntervals*1.0/(partitionMissCount)) );
-    // END PREDICT OLDEST //
 
+    //FOR DEBUG PURPOSES:
+    // oldestPredicted = lastAccessTimeStamp - (totalMissIntervals*1.0/(partitionMissCount))*(curBlocks-1);
+    
+    // auto avmiss = 1.0*(lastAccessTimeStamp - firstAccessTimeStamp)/(partitionMissCount-1);
+    // newPrediction = lastAccessTimeStamp - (avmiss*(curBlocks-1));
+
+    // uint64_t minTimeP = std::numeric_limits<uint64_t>::max();
+    // uint64_t maxTimeP = std::numeric_limits<uint64_t>::min();
+    // for(int i=0; i<currentBlocks.size(); i++) {
+    //     auto it = currentBlocks[i];
+    //     if((it)->timeStamp.load() < minTimeP){
+    //         minTimeP = (it)->timeStamp.load();
+    //     }  
+    //     if((it)->timeStamp.load() > maxTimeP){
+    //         maxTimeP = (it)->timeStamp.load();
+    //     }      
+    // }
+    // PPRINTF("Actual oldest timestamp: %lu. 1st way timestamp: %lf.  2nd way timestamp: %lf curblocks:%d, newest timestamp: %lu\n", minTimeP, oldestPredicted, newPrediction,curBlocks, maxTimeP );
+    //END DEBUG SECTION
     metaLock.writerUnlock();
     return ret;
 }
@@ -557,4 +589,27 @@ void ScalableMetaData::trackZValue(uint32_t index){
     }
     BPRINTF("Z val tracking. AFTER: lastblock: %d, curaccess:%d, maxaccesses:%d\n",lastAccessedBlock, blockAccessCounter.load(), maxAccessInMissInterval);
     
+}
+
+void ScalableMetaData::ResetStats(){
+    access=0;
+    accessPerInterval=0;
+    lastMissTimeStamp=0;
+    unitBenefit=0;
+    prevUnitBenefit=0;
+    unitMarginalBenefit=0;
+    prevSize=0;
+    upperLevelMetric=0;
+    lastDeliveryTime=-1;
+    partitionMissCount=0;
+    partitionMissCost=0;
+    lastAccessTimeStamp=0;
+    firstAccessTimeStamp=0;
+    oldestPredicted=0;
+    totalMissIntervals=0;
+    blockAccessCounter=0;
+    lastAccessedBlock=0;
+    maxAccessInMissInterval=0;
+    missInterval.clearBins();
+    benefitHistogram.clearBins();
 }

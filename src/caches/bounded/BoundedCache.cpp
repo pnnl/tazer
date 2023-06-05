@@ -326,14 +326,14 @@ typename BoundedCache<Lock>::BlockEntry* BoundedCache<Lock>::oldestBlock(uint32_
                 return minEntry;
             }
             else{
-                // //skip caching for this block 
+                //skip caching for this block 
                 // log(this)<< _name << " No available spots for this UMB value " << std::endl;
                 // req->trace(_name)<<"no entries found for UMB"<<std::endl;
                 // PPRINTFB("skipping %lf for this cache\n" , askingUMB);
                 // return NULL;
             }
         }
-        // log(this)<< _name << " No available spots for this UMB value " << std::endl;
+        log(this)<< _name << " No available spots for this UMB value " << std::endl;
         // req->trace(_name)<<"no entries found for UMB"<<std::endl;
         // PPRINTFB("skipping %lf for this cache\n" , askingUMB);
         // return NULL;

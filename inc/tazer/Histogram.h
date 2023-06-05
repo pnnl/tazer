@@ -227,6 +227,7 @@ class Histogram {
 
         double sum(double key) {
             double s = 0;
+
             if(key < _min) {
                 return s;
             }
@@ -241,7 +242,8 @@ class Histogram {
             //To go below we could guess half of bin zero based
             //on paper assumption.
             if(key < std::get<0>(_bins.front())) {
-                return std::get<1>(_bins.front()) / 2;
+                s = std::get<1>(_bins.front()) / 2;
+                return s;
             }
 
             if(key > std::get<0>(_bins.back())) {
@@ -315,10 +317,42 @@ class Histogram {
             
             if(_bins.size() > 1){
                 if(key > _max){
-                    ret = sum(_max) - sum(_max-range);
+                    //ret = sum(_max) - sum(_max-range);
+                    double maxVal = getValue(_max);
+                    double z = maxVal/_max; 
+                    double diff = std::abs(_max-key);
+                    double t2 = _max-diff;
+                    if(t2 < 0){
+                        ret = 0;
+                    }
+                    else{
+                        ret = maxVal*t2/_max;
+                    }
+                    // std::cout<<"maxval: "<<maxVal<<std::endl;
+                    // std::cout<<"z: "<<z<<std::endl;
+                    // std::cout<<"diff: "<<diff<<std::endl;
+                    // std::cout<<"t2: "<<t2<<std::endl;
+                    // std::cout<<"High Extrapolation key:"<<key<<" val:"<<ret<<std::endl;
                 }
                 else if(key < _min){
-                    ret = sum(_min+range) - sum(_min);
+                    //std::cout<<"low extrapolation:"<<key<<" range:"<<range<<std::endl;
+                    //ret = sum(_min+range) - sum(_min);
+                    //std::cout<<ret<<std::endl;
+                    double minVal = getValue(_min);
+                    double z = minVal/_min; 
+                    double diff = std::abs(_min-key);
+                    double t2 = _min+diff; 
+                    // if (t2<0){
+                    //     ret = 0;
+                    // }
+                    //else{
+                        ret = minVal * t2 / _min;
+                    //}
+                    // std::cout<<"minval: "<<minVal<<std::endl;
+                    // std::cout<<"z: "<<z<<std::endl;
+                    // std::cout<<"diff: "<<diff<<std::endl;
+                    // std::cout<<"t2: "<<t2<<std::endl;
+                    // std::cout<<"Low Extrapolation key:"<<key<<" val:"<<ret<<std::endl;
                 }
                 else{
                     ret = sum(key+range) - sum(key-range);
@@ -375,6 +409,9 @@ class Histogram {
             }
             }
             lock.readerUnlock();
+        }
+        void clearBins(){
+            _bins.clear();
         }
 };
 

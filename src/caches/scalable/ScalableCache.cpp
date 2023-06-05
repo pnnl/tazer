@@ -99,6 +99,7 @@
 #define BPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 //#define BPRINTF(...)
 #define StealPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define EPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 ScalableCache::ScalableCache(std::string cacheName, CacheType type, uint64_t blockSize, uint64_t maxCacheSize) : 
 Cache(cacheName, type),
 evictHisto(100),
@@ -403,7 +404,6 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
         
         // std::cerr << " [JS] readBlock " << buff << " " << reserve << std::endl;
         if(buff) {
-
             stats.end(prefetch, CacheStats::Metric::ovh, thread_id); //read
             stats.start(prefetch, CacheStats::Metric::hits, thread_id); //ovh
             DPRINTF("[JS] ScalableCache::readBlock hit\n");
@@ -432,7 +432,6 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
             std::call_once(first_miss, [this]() { startTimeStamp = (uint64_t)Timer::getCurrentTime(); });
             misses.fetch_add(1);
             stats.addAmt(prefetch, CacheStats::Metric::misses, 1, thread_id);
-            
 
             if (reserve || full) { //JS: We reserved block
                 //calcrank on this partition after the miss
@@ -817,8 +816,21 @@ uint8_t * ScalableCache::findBlockFromCachedUMBandOldestPrediction(uint32_t allo
     _lastVictimFileIndexLock->readerLock();
 
     double allocateForFileTime = _metaMap[allocateForFileIndex]->getOldestPrediction();
-    StealPRINTF("asking file oldest:%.5lf\n", allocateForFileTime);
-    auto minUMB =  std::get<1>(_localUMBs[0]);
+
+    auto minUMB =  std::numeric_limits<double>::max();
+    bool found_min_UMB=false;
+    //find the partition with min umb (that isn't the asking partition and has any blocks to give up)
+    for(const auto &UMB : _localUMBs) {
+        int ind = std::get<0>(UMB);
+        if(ind != allocateForFileIndex && _metaMap[ind]->getNumBlocks()){
+            if(std::get<1>(UMB) < minUMB){
+                minUMB = std::get<1>(UMB);
+                found_min_UMB=true;
+                break;
+            }
+        }
+    }
+
 
     uint32_t victim_u, victim_w; 
     double victim_u_time, victim_w_time;
@@ -834,55 +846,87 @@ uint8_t * ScalableCache::findBlockFromCachedUMBandOldestPrediction(uint32_t allo
         double cur_umb = std::get<1>(UMB);
         if(cur_index == allocateForFileIndex)
             continue;
-        StealPRINTF("CurFile: %d, CurUMB:%.10lf, CurOldest: %.10lf\n", cur_index, cur_umb, _metaMap[cur_index]->getOldestPrediction());
+        StealPRINTF("CurFile: %d, CurUMB:%.10lf, CurOldest: %.10lf, blocks:%d\n", cur_index, cur_umb, _metaMap[cur_index]->getOldestPrediction(),_metaMap[cur_index]->getNumBlocks());
+
+        StealPRINTF("std::abs(cur_umb-minUMB)--%.5lf  std::abs(minUMB*Config::PrivateThreshold)--%.5lf\n", std::abs(cur_umb-minUMB), std::abs(minUMB*Config::PrivateThreshold));
         //if UMB is within a percentage of the minimum UMB, we consider them equivalent 
-        if(std::abs(cur_umb-minUMB) <= std::abs(minUMB*Config::PrivateThreshold) && _metaMap[cur_index]->getNumBlocks()>0){
+        if(found_min_UMB && std::abs(cur_umb-minUMB) <= std::abs(minUMB*Config::PrivateThreshold) && _metaMap[cur_index]->getNumBlocks()>0){
             //here we find the partition that has minimum equivalent UMB and the oldest prediction 
             if( _metaMap[cur_index]->getOldestPrediction() < victim_u_time){
+                StealPRINTF("-New victimU: %d\n", cur_index);
                 victim_u = cur_index;
                 victim_u_time = _metaMap[cur_index]->getOldestPrediction();
             }
         }
         //the partition with the oldest prediction
-        StealPRINTF("Current index:%d, current blocks:%d\n", cur_index,_metaMap[cur_index]->getNumBlocks() );
-        if( _metaMap[cur_index]->getOldestPrediction() < victim_w_time && _metaMap[cur_index]->getNumBlocks()>0 ){
-            StealPRINTF("-New victimw! \n");
+        //StealPRINTF("Current index:%d, current blocks:%d\n", cur_index,_metaMap[cur_index]->getNumBlocks() );
+        if( _metaMap[cur_index]->getLastAccessTime() < victim_w_time && _metaMap[cur_index]->getNumBlocks()>0 ){
+            StealPRINTF("-New victimw!  %d\n", cur_index);
             victim_w = cur_index;
-            victim_w_time = _metaMap[cur_index]->getOldestPrediction();
+            victim_w_time = _metaMap[cur_index]->getLastAccessTime();
         }
     }
+    StealPRINTF("Asking File %d, asking time: %.15lf\n",allocateForFileIndex, allocateForFileTime);
     StealPRINTF("After loop: victim_u: %d, victim_u_time: %.15lf\n",victim_u,victim_u_time  );
     StealPRINTF("After loop: victim_w: %d, victim_w_time: %.15lf\n",victim_w,victim_w_time  );
-
     uint64_t timestamp = Timer::getCurrentTime();
     auto localMisses = misses.load();
-    double average_miss = ((double)timestamp-startTimeStamp) / localMisses;
-    //if(allocateForFileRank > std::get<1>(_localUMBs[victim_u]) && ( std::abs(allocateForFileRank-std::get<1>(_localUMBs[victim_u])) >= std::abs(std::get<1>(_localUMBs[victim_u])*Config::StealThreshold))) {
+    double average_miss = ((double)timestamp-startTimeStamp) / (localMisses-1);
+    int k = _numBlocks-1; 
+    double thrT = Config::ThresholdT;
+    EPRINTF("cache accesses:%d, cache misses:%d, local misses:%d\n", access.load(), misses.load(), localMisses);
+    
     auto sth = Config::PrivateThreshold;
-    auto vic_umb = std::get<1>(_localUMBs[victim_u]);
-    //if we found a umb victim && asking file's umb is higher than victim && asking file's umb is significantly higher && victim has bloks)
-    int numPartitions = _metaMap.size();
-    int k = (_numBlocks / numPartitions) + (_numBlocks % numPartitions != 0); 
-    StealPRINTF("k val is: %d, numblocks:%d, partitions:%d\n", k, _numBlocks, numPartitions);
-    if(victim_u>0 && allocateForFileRank > vic_umb && ( std::abs(allocateForFileRank-vic_umb) >= std::abs(vic_umb*sth)) && _metaMap[victim_u]->getNumBlocks()>0) {
-        StealPRINTF("In the first if; stealing from victim_u: %d\n", victim_u);
-        if(_metaMap[allocateForFileIndex]->getNumBlocks() == 0 || victim_u_time < allocateForFileTime){
+    
+
+    if(victim_u>0){
+        auto vic_umb = _metaMap[victim_u]->getUnitMarginalBenefit();
+        //[ALG:line 24] if asking file has high enough umb and victim has blocks to give (if must: asking file has double max as umb )
+        if(allocateForFileRank > vic_umb && ( std::abs(allocateForFileRank-vic_umb) >= std::abs(vic_umb*sth)) && _metaMap[victim_u]->getNumBlocks()>0){
+            StealPRINTF("In the first if; stealing from victim_u: %d\n", victim_u);
             block = _metaMap[victim_u]->oldestBlock(sourceBlockIndex);
             if (block){
+                StealPRINTF("-Steal was successfull\n");
                 _metaMap[victim_u]->calcRank(timestamp-startTimeStamp, localMisses);
                 sourceFileIndex = victim_u;
             }
+            else{
+                StealPRINTF("victimu didn't give up blocks\n");
+            }
+        }
+        //[ALG: line 26] if partition with the oldest recent access is oldesr than  (thrT*k*average_miss) old
+        else if(victim_w > 0 &&  victim_w_time < (timestamp - (thrT*k*average_miss))){
+            StealPRINTF("In the else if; stealing from victim_w: %d\n", victim_w);
+            StealPRINTF("victims estimated time:%d\n", victim_w_time);
+            block = _metaMap[victim_w]->oldestBlock(sourceBlockIndex);
+            if(block){
+                //_metaMap[victim_w]->calcRank(timestamp-startTimeStamp, localMisses);
+                _metaMap[victim_w]->ResetStats(); //reset stale partition's stats 
+                MeMPRINTF("Stealing because %d is stale. victim_w_time:%lf, (timestamp - (1*k*average_miss): %lf, k:%d, average_miss:%lf\n", victim_w,victim_w_time,(timestamp - (1*k*average_miss)), k, average_miss );
+                sourceFileIndex = victim_w;
+            }
+            else{
+                StealPRINTF("victimw didn't give up blocks\n");
+            }
         }
     }
-    else if(victim_w > 0 &&  victim_w_time < timestamp - (k*average_miss) ){ //if oldest predicted block is older than 5*average-miss we consider it stale 
-        StealPRINTF("In the else if; stealing from victim_w: %d\n", victim_w);
-        block = _metaMap[victim_w]->oldestBlock(sourceBlockIndex);
-        if(block){
-            _metaMap[victim_w]->calcRank(timestamp-startTimeStamp, localMisses);
-            sourceFileIndex = victim_w;
+    else{
+        //no valid victimU - check for victimW
+        if(victim_w > 0 &&  victim_w_time < (timestamp - (thrT*k*average_miss))){
+            StealPRINTF("stealing from victim_w: %d\n", victim_w);
+            StealPRINTF("victims estimated time:%d\n", victim_w_time);
+            block = _metaMap[victim_w]->oldestBlock(sourceBlockIndex);
+            if(block){
+                _metaMap[victim_w]->calcRank(timestamp-startTimeStamp, localMisses);
+                //_metaMap[victim_w]->ResetStats(); //reset stale partition's stats 
+                MeMPRINTF("Stealing because %d is stale. victim_w_time:%lf, (timestamp - (1*k*average_miss): %lf, k:%d, average_miss:%lf\n", victim_w,victim_w_time,(timestamp - (1*k*average_miss)), k, average_miss );
+                sourceFileIndex = victim_w;
+            }
+            else{
+                StealPRINTF("victimw didn't give up blocks\n");
+            }
         }
     }
-
 
     _lastVictimFileIndexLock->readerUnlock();
     _cacheLock->readerUnlock();
