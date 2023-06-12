@@ -96,7 +96,7 @@ class Histogram {
         double _min;
         double _max;
         unsigned int _maxBuckets;
-        std::vector<std::tuple<double, double>> _bins;
+        std::vector<std::tuple<double, double, int>> _bins; //<key,sum,count>
 
         //BM: for extrapolation trace
         int numGetVals;
@@ -180,14 +180,15 @@ class Histogram {
             //JS: Check if there exists an exact bin
             auto binIndex = findBinMatch(key);
             if(binIndex >= 0) {
-                auto newValue = std::get<1>(_bins[binIndex]) + value;
-                _bins[binIndex] = std::make_tuple(key, newValue);
+                auto count = std::get<2>(_bins[binIndex]); 
+                double newValue = (std::get<1>(_bins[binIndex])*count + value ) / (count+1);
+                _bins[binIndex] = std::make_tuple(key, newValue, (count+1));
             }
             else {
                 //JS: Add new bin
-                _bins.push_back(std::tuple<double, double>{key, value});
+                _bins.push_back(std::tuple<double, double, int>{key, value, 1});
                 std::sort(_bins.begin(), _bins.end(), 
-                    [](const std::tuple<double, double> &s1, const std::tuple<double, double> &s2) -> bool { 
+                    [](const std::tuple<double, double, int> &s1, const std::tuple<double, double, int> &s2) -> bool { 
                         return std::get<0>(s1) < std::get<0>(s2); 
                     });
 
@@ -207,13 +208,17 @@ class Histogram {
                     //JS: Average the bins
                     double qi = std::get<0>(_bins[minDiffIndex-1]);
                     double ki = std::get<1>(_bins[minDiffIndex-1]);
+                    double ci = std::get<2>(_bins[minDiffIndex-1]);
                     double qi_1 = std::get<0>(_bins[minDiffIndex]);
                     double ki_1 = std::get<1>(_bins[minDiffIndex]);
+                    double ci_1 = std::get<2>(_bins[minDiffIndex]);
                     double newKey =  (qi * ki + qi_1 * ki_1) / (ki + ki_1);
-                    double newValue = ki + ki_1;
+                    //double newValue = ki + ki_1;
+                    double newValue = (ki * ci + ki_1 * ci_1) / (ci + ci_1);
+                    int newCount = ci+ci_1;
 
                     //JS: Insert new bin and remove old
-                    _bins[minDiffIndex] = std::make_tuple(newKey, newValue);
+                    _bins[minDiffIndex] = std::make_tuple(newKey, newValue, newCount);
                     _bins.erase(_bins.begin() + minDiffIndex - 1);
                 }
 
@@ -227,31 +232,33 @@ class Histogram {
 
         double sum(double key) {
             double s = 0;
+            int c = 0;
 
             if(key < _min) {
                 return s;
             }
             
             if(key >= _max) {
-                for(size_t i = 0; i < _bins.size(); ++i)
+                for(size_t i = 0; i < _bins.size(); ++i){
                     s+=std::get<1>(_bins[i]);
+                }
                 return s;
             }
 
-            //JS: The paper only calcs bins within the bin keys
-            //To go below we could guess half of bin zero based
-            //on paper assumption.
-            if(key < std::get<0>(_bins.front())) {
-                s = std::get<1>(_bins.front()) / 2;
-                return s;
-            }
+            // //JS: The paper only calcs bins within the bin keys
+            // //To go below we could guess half of bin zero based
+            // //on paper assumption.
+            // if(key < std::get<0>(_bins.front())) {
+            //     s = std::get<1>(_bins.front()) / 2;
+            //     return s;
+            // }
 
-            if(key > std::get<0>(_bins.back())) {
-                for(size_t i = 0; i < _bins.size() - 1; ++i)
-                    s+=std::get<1>(_bins[i]);
-                s+=std::get<1>(_bins.back()) / 2;
-                return s;
-            }
+            // if(key > std::get<0>(_bins.back())) {
+            //     for(size_t i = 0; i < _bins.size() - 1; ++i)
+            //         s+=std::get<1>(_bins[i]);
+            //     s+=std::get<1>(_bins.back()) / 2;
+            //     return s;
+            // }
 
             auto binIndex = findBin(key);
 
@@ -260,19 +267,24 @@ class Histogram {
             
             double pi = std::get<0>(itup);
             double mi = std::get<1>(itup);
+            double ci = std::get<2>(itup);
             double pi_1 = std::get<0>(itup_1);
             double mi_1 = std::get<1>(itup_1);
+            double ci_1 = std::get<2>(itup_1);
 
             //JS: This calculates the area of an imaginary trapizaoid
             double mb = mi + ( ( (mi_1 - mi) / (pi_1 - pi) ) * (key - pi) );
             s = ( (mi + mb) / 2 ) * ( (key - pi) / (pi_1 - pi) );
 
             //JS: Add up all the bins below us
-            for(int i = 0; i < binIndex; ++i)
+            for(int i = 0; i < binIndex; ++i){
+                //s += std::get<1>(_bins[i]);
                 s += std::get<1>(_bins[i]);
+            }
 
             //JS: Paper assumes that half the bin is above and below this number
             s += mi / 2;
+
             return s;
         }
 
@@ -314,48 +326,67 @@ class Histogram {
                         extrapolationInfo += tempLine; 
                 }
             }
-            
-            if(_bins.size() > 1){
+            //std::cout<<key<<" "<<range<<std::endl;
+
+            if(_bins.size() == 1){
                 if(key > _max){
                     //ret = sum(_max) - sum(_max-range);
                     double maxVal = getValue(_max);
                     double z = maxVal/_max; 
                     double diff = std::abs(_max-key);
-                    double t2 = _max-diff;
-                    if(t2 < 0){
-                        ret = 0;
-                    }
-                    else{
-                        ret = maxVal*t2/_max;
-                    }
-                    // std::cout<<"maxval: "<<maxVal<<std::endl;
-                    // std::cout<<"z: "<<z<<std::endl;
-                    // std::cout<<"diff: "<<diff<<std::endl;
-                    // std::cout<<"t2: "<<t2<<std::endl;
-                    // std::cout<<"High Extrapolation key:"<<key<<" val:"<<ret<<std::endl;
+                    double t2 = _max+diff;
+                    // if(t2 < 0){
+                    //     ret = 0;
+                    // }
+                    // else{
+                        ret = z*t2;
+                    //}
                 }
                 else if(key < _min){
-                    //std::cout<<"low extrapolation:"<<key<<" range:"<<range<<std::endl;
-                    //ret = sum(_min+range) - sum(_min);
-                    //std::cout<<ret<<std::endl;
                     double minVal = getValue(_min);
                     double z = minVal/_min; 
                     double diff = std::abs(_min-key);
-                    double t2 = _min+diff; 
-                    // if (t2<0){
-                    //     ret = 0;
-                    // }
-                    //else{
-                        ret = minVal * t2 / _min;
-                    //}
-                    // std::cout<<"minval: "<<minVal<<std::endl;
-                    // std::cout<<"z: "<<z<<std::endl;
-                    // std::cout<<"diff: "<<diff<<std::endl;
-                    // std::cout<<"t2: "<<t2<<std::endl;
-                    // std::cout<<"Low Extrapolation key:"<<key<<" val:"<<ret<<std::endl;
+                    double t2 = _min-diff; 
+                    if (t2<0){
+                        ret = 0;
+                    }
+                    else{
+                        ret = z*t2;
+                    }
                 }
                 else{
-                    ret = sum(key+range) - sum(key-range);
+                    ret = sum(_max);
+                }
+            }
+            else if(_bins.size() > 1){
+                if(key > _max){
+
+                    double x1, x2, y1, y2; 
+
+                    x1 = std::get<0>(_bins[_bins.size()-2]);
+                    y1 = std::get<1>(_bins[_bins.size()-2]) ;
+                    x2 = std::get<0>(_bins.back());
+                    y2 = std::get<1>(_bins.back());
+
+                    //y = m*x + b
+                    double m = (y2-y1) / (x2-x1); 
+                    double b = y1 - m*x1;
+                    ret = m * key + b; 
+
+                }
+                else if(key < _min){
+                    double x1, x2, y1,y2; 
+
+                    x1 = std::get<0>(_bins[0]);
+                    y1 = std::get<1>(_bins[0]); 
+                    x2 = std::get<0>(_bins[1]);
+                    y2 = std::get<1>(_bins[1]);
+                    double m = (y2-y1) / (x2-x1); 
+                    double b = y1 - m*x1;
+                    ret = m * key + b;         
+                }
+                else{
+                    ret = sum(key+range/2) - sum(key-range/2);
                 }
             }
             else {
@@ -376,7 +407,7 @@ class Histogram {
             // It could be interesting to play with this and see how
             // it effects the quality of results
             if(_bins.size() > 1)
-                ret = getValue(key, (_max + _min)/(_bins.size() - 1), false);
+                ret = getValue(key, (_max - _min)/(_bins.size() - 1), false);
             else
                 ret = getValue(key, 0.5, false);
                 
@@ -388,9 +419,10 @@ class Histogram {
         void printBins() {
             lock.readerLock();
             for(size_t i = 0; i < _bins.size(); ++i)
-                PRINTF("histo i: %u %lf %lf\n", i, std::get<0>(_bins[i]), std::get<1>(_bins[i]));
+                PRINTF("histo i: %u %lf %lf %d\n", i, std::get<0>(_bins[i]), std::get<1>(_bins[i]), std::get<2>(_bins[i]));
             lock.readerUnlock();
         }
+
         void printLog(int id){
             lock.readerLock();
             if(_trace){
@@ -410,6 +442,7 @@ class Histogram {
             }
             lock.readerUnlock();
         }
+        
         void clearBins(){
             _bins.clear();
         }
