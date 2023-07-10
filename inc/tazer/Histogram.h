@@ -406,6 +406,8 @@ class Histogram {
             // This is the hueristic that was suggested by Nathan.
             // It could be interesting to play with this and see how
             // it effects the quality of results
+            //BM: updated the range from the explanation above. 
+            // (max-min)/(buckets-1) gives us an average distance between buckets
             if(_bins.size() > 1)
                 ret = getValue(key, (_max - _min)/(_bins.size() - 1), false);
             else
@@ -416,8 +418,9 @@ class Histogram {
             return ret;
         }
 
-        void printBins() {
+        void printBins(int id=0) {
             lock.readerLock();
+            PRINTF("**Bin info for file:%d\n", id);
             for(size_t i = 0; i < _bins.size(); ++i)
                 PRINTF("histo i: %u %lf %lf %d\n", i, std::get<0>(_bins[i]), std::get<1>(_bins[i]), std::get<2>(_bins[i]));
             lock.readerUnlock();

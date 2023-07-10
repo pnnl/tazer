@@ -171,6 +171,7 @@ ScalableCache::~ScalableCache() {
     stats.print(_name);
     if(Config::TraceHistogram){
         for ( auto met : _metaMap ){
+            //std::cout<<"met first "<<met.first<<std::endl;
             met.second->printHistLogs(met.first);
         }
     }
@@ -418,6 +419,7 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
             trackBlock(_name, "[BLOCK_READ_HIT]", fileIndex, index, priority);
             BPRINTF("FILE:%d hit\n", fileIndex);
             _metaMap[fileIndex]->trackZValue(index);
+            _metaMap[fileIndex]->trackLinearAccessDistance(index);
             _metaMap[fileIndex]->updateStats(false, timeStamp);
             int temp = resizeNumbers.load();
             splice_hits[spl]++;
@@ -443,6 +445,7 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
 
                 BPRINTF("FILE:%d miss\n", fileIndex);
                 //_metaMap[fileIndex]->trackZValue(index);
+                _metaMap[fileIndex]->trackLinearAccessDistance(index);
                 _metaMap[fileIndex]->updateStats(true, timeStamp);
                 splice_misses[spl]++;
                 BPRINTF("FILE:%d returned from updates\n", fileIndex);
@@ -483,6 +486,7 @@ void ScalableCache::readBlock(Request *req, std::unordered_map<uint32_t, std::sh
 
                     BPRINTF("FILE:%d future\n", fileIndex);
                     _metaMap[fileIndex]->trackZValue(blockIndex);
+                    _metaMap[fileIndex]->trackLinearAccessDistance(blockIndex);
                     _metaMap[fileIndex]->updateStats(false, timeStamp);
                     splice_hits[spl]++;
                     BPRINTF("FILE:%d returned from updates\n", fileIndex);
@@ -874,7 +878,7 @@ uint8_t * ScalableCache::findBlockFromCachedUMBandOldestPrediction(uint32_t allo
     double average_miss = ((double)timestamp-startTimeStamp) / (localMisses-1);
     int k = _numBlocks-1; 
     double thrT = Config::ThresholdT;
-    EPRINTF("cache accesses:%d, cache misses:%d, local misses:%d\n", access.load(), misses.load(), localMisses);
+    //EPRINTF("cache accesses:%d, cache misses:%d, local misses:%d\n", access.load(), misses.load(), localMisses);
     
     auto sth = Config::PrivateThreshold;
     

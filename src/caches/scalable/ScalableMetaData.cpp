@@ -84,13 +84,11 @@
 //#define PPRINTF(...)
 #define PPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
-//#define TPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-#define TPRINTF(...)
+#define TPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 //#define BPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define BPRINTF(...)
 #define ZPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
-#define HPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
     auto blockEntry = &blocks[blockIndex];
     uint64_t timeStamp = trackAccess(blockIndex, fileOffset);
@@ -310,78 +308,75 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
         firstAccessTimeStamp = timestamp;
         PPRINTF("set first access timestamp\n");
     }
-   // ZPRINTF(" miss?:%d accessPerInterval:%d z:%d\n", miss, accessPerInterval, maxAccessInMissInterval);
     int blocks = numBlocks.load();
     if(miss) {
         BPRINTF("  calculating after a miss: access:%d, Zvalue: %d\n", accessPerInterval, maxAccessInMissInterval); 
-     //   ZPRINTF("  calculating after a miss: access:%d, Zvalue: %d\n", accessPerInterval, maxAccessInMissInterval);
         partitionMissCount++;
-        if(lastMissTimeStamp) {
-            double i = (double)(timestamp - lastMissTimeStamp);
-            HPRINTF("updatestats::%lf\n", i);
-            totalMissIntervals += i; 
-            if(lastDeliveryTime > 0 && blocks ){ //check to make sure we recorded a deliverytime
-                //partitionMissCount++;
-                partitionMissCost = partitionMissCost + lastDeliveryTime;
-                //check for division by zero 
-                double scaledMissCost = log2(partitionMissCost / (partitionMissCount-1));
+        if(partitionMissCount % missCountForInterval == 0){ //check every N misses
+            TPRINTF("In the if check. misses:%d mcfi:%d\n", partitionMissCount, missCountForInterval);
+            if(lastMissInInterval) {
+                double i = (double)(timestamp - lastMissInInterval);
+                totalMissIntervals += i; 
+                if(lastDeliveryTime > 0 && blocks ){ //check to make sure we recorded a deliverytime
+                    //partitionMissCount++;
+                    partitionMissCost = partitionMissCost + lastDeliveryTime;
+                    //check for division by zero 
+                    double scaledMissCost = log2(partitionMissCost / (partitionMissCount-1)); //c in the algorithm, line 42 
 
-                //quick fix for z value calculations 
-                //(we end up counting 1 extra access.So subtract one here. We check for 0 because on the very first block access we don't count the extra 1,so Z can be calculated as 0)
-                if(maxAccessInMissInterval > 0 ){
-                    maxAccessInMissInterval -= 1;
-                }
-                if(accessPerInterval<maxAccessInMissInterval){
-                    //we can't have accesses less than single block accesses, somethings wrong
-                    std::cerr << "[TAZER] Error in Z value calculations [access: "<< accessPerInterval << " z value: "<< maxAccessInMissInterval << std::endl;
-                    raise(SIGSEGV);
-                }
-                double newZ = maxAccessInMissInterval + (maxAccessInMissInterval*1.0)/(maxAccessInMissInterval+1);
-                BPRINTF("  calculating after a miss: access:%d, Zvalue: %d, newZ: %f\n", accessPerInterval, maxAccessInMissInterval, newZ); 
-                if(Config::H_parameter == 0){
-                    double ApZp = 64*1000000000*( (double)accessPerInterval - maxAccessInMissInterval);
-                    benefitHistogram.addData(i, ((ApZp/scaledMissCost)/blocks)/i);
-                }
-                else if(Config::H_parameter == 1){
-                    double ApZp = 64*64*( (double)accessPerInterval - maxAccessInMissInterval);
-                    benefitHistogram.addData(log2(i), ((ApZp/scaledMissCost)/blocks)/log2(i));
+                    //quick fix for z value calculations 
+                    //(we end up counting 1 extra access.So subtract one here. We check for 0 because on the very first block access we don't count the extra 1,so Z can be calculated as 0)
+                    if(maxAccessInMissInterval > 0 ){
+                        maxAccessInMissInterval -= 1;
+                    }
+                    if(accessPerInterval<maxAccessInMissInterval){
+                        //we can't have accesses less than single block accesses, somethings wrong
+                        std::cerr << "[TAZER] Error in Z value calculations [access: "<< accessPerInterval << " z value: "<< maxAccessInMissInterval << std::endl;
+                        raise(SIGSEGV);
+                    }
+                    double newZ = maxAccessInMissInterval + (maxAccessInMissInterval*1.0)/(maxAccessInMissInterval+1);
+                    BPRINTF("  calculating after a miss: access:%d, Zvalue: %d, newZ: %f\n", accessPerInterval, maxAccessInMissInterval, newZ); 
+                    if(Config::H_parameter == 0){
+                        double ApZp = 64*1000000000*( (double)accessPerInterval - maxAccessInMissInterval);
+                        double utilization = ((double)accessPerInterval)*std::sqrt(averageLinearAccessDistance);
+                        //benefitHistogram.addData(blocks, ((ApZp/scaledMissCost)/blocks)/i);
+                        benefitHistogram.addData(blocks, (((utilization*64*1000000000*scaledMissCost))/i));
+                        demandCostHistogram.addData(blocks, scaledMissCost*64*1000000000/i);
+                    }
+                    else if(Config::H_parameter == 1){
+                        double ApZp = 64*64*( (double)accessPerInterval - maxAccessInMissInterval);
+                        double utilization = ((double)accessPerInterval)*std::sqrt(averageLinearAccessDistance);
+                        //benefitHistogram.addData(blocks, ((ApZp/scaledMissCost)/blocks)/log2(i));
+                        benefitHistogram.addData(blocks, (((utilization*64*64.0*scaledMissCost))/log2(i)));
+                        TPRINTF("DEBUGHIST:%d:%f:%f:%f:%f:%d:%f\n", blocks, (((utilization*64*64.0/scaledMissCost)/blocks)/log2(i)), utilization, scaledMissCost, log2(i), accessPerInterval, averageLinearAccessDistance);
+                        demandCostHistogram.addData(blocks, scaledMissCost*64*64.0/log2(i));
+                    }
+                    else{
+                        //undefined H variable
+                        std::cerr << "[TAZER] Undefined value for H parameter "<< Config::H_parameter << std::endl;
+                        raise(SIGSEGV);
+                    }
+                    
+                    //here we are guaranteed to have at least two misses, and data in the histograms, so we can call recalc marginal benefit for the partition
+                    recalc = true;
                 }
                 else{
-                    //undefined H variable
-                    std::cerr << "[TAZER] Undefined value for H parameter "<< Config::H_parameter << std::endl;
-                    raise(SIGSEGV);
+                    PPRINTF("BM: We have a second miss but no deliverytime yet! \n");
                 }
-                
-                //here we are guaranteed to have at least two misses, and data in the histograms, so we can call recalc marginal benefit for the partition
-                recalc = true;
-            }
-            else{
-                PPRINTF("BM: We have a second miss but no deliverytime yet! \n");
-            }
+                accessPerInterval = 0;
+                maxAccessInMissInterval=0;   
+            }     
+            lastMissInInterval = timestamp;
+            // only reset after Nth access
             accessPerInterval = 0;
             maxAccessInMissInterval=0;
-            //config::H_parameter holds the type of miss interval histogram logging
-            if(Config::H_parameter == 0){
-                TPRINTF("H_parameter=0: miss histogram use normal time\n");
-                missInterval.addData(i, 1);
-            }
-            else if(Config::H_parameter == 1){
-                TPRINTF("H_parameter=1: miss histogram use log time\n");
-                missInterval.addData(log2(i), 1);
-            }
-            else{
-                //undefined H variable
-                std::cerr << "[TAZER] Undefined value for H parameter "<< Config::H_parameter << std::endl;
-                raise(SIGSEGV);
-            }
-            
+            blockAccessCounter.store(1);
         }
         DPRINTF("SETTING: %lu = %lu\n", lastMissTimeStamp, timestamp);
         lastMissTimeStamp = timestamp;
-        // after a miss, reset Z value counters 
-        accessPerInterval = 0;
-        maxAccessInMissInterval=0;
-        blockAccessCounter.store(1);
+        if(! lastMissInInterval){
+            lastMissInInterval = timestamp;
+        }
+
     }
     metaLock.writerUnlock();
 }
@@ -400,82 +395,47 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         oldestPredicted=0;
     }
     else if(lastDeliveryTime && recalc) {
-        double t = ((double) time) / ((double) misses);
-        HPRINTF("calcrank::%lf\n", t);
-        double Mh;
+//        double t = ((double) time) / ((double) misses);
+        double t = (1.0*(lastAccessTimeStamp - firstAccessTimeStamp))/(partitionMissCount-1);
+
         double Bh;
-        if(Config::H_parameter == 0){
-            TPRINTF("H_parameter=0: miss histogram use normal time\n");
-            Mh = missInterval.getValue(t);
-            Bh = benefitHistogram.getValue(t);
-        }
-        else if(Config::H_parameter == 1){
-            TPRINTF("H_parameter=1: miss histogram use log time\n");
-            Mh = missInterval.getValue(log2(t));
-            Bh = benefitHistogram.getValue(log2(t));
-        }
-        else{
-            //undefined H variable
-            std::cerr << "[TAZER] Undefined value for H parameter "<< Config::H_parameter << std::endl;
-            raise(SIGSEGV);
-        }
-
-        unitBenefit = (Bh/Mh);///log2(t);
-
-        TPRINTF("baskets for histogram: %d\n", Config::Hb_parameter);
-        //Config::MC_parameter hold the miss cost type 
-        if(Config::MC_parameter == 0){
-            //use cost as is  
-            TPRINTF("MC_parameter=0: miss cost is used as is\n");
-            upperLevelMetric = Mh*(partitionMissCost/(partitionMissCount-1));
-        }
-        else if(Config::MC_parameter == 1){
-            //use cost=1
-            TPRINTF("MC_parameter=1: miss cost is used as 1\n");
-            upperLevelMetric = Mh;
-        }
-        else if(Config::MC_parameter == 2){
-            //use cost = log(cost)
-            TPRINTF("MC_parameter=2: miss cost is used as log(cost)\n");
-            upperLevelMetric = Mh*log2(partitionMissCost/(partitionMissCount-1));
-        }
-        else{
-            //undefined MC value
-            std::cerr << "[TAZER] Undefined value for MC parameter "<< Config::MC_parameter << std::endl;
-            raise(SIGSEGV);
-        }
+        double Dh;
 
         auto curBlocks = numBlocks.load();
-        if(curBlocks > prevSize){
-            unitMarginalBenefit = unitBenefit - prevUnitBenefit;
-            prevUnitBenefit = unitBenefit;
-            prevSize = curBlocks;
-        }
-        else if(prevSize > curBlocks) {
-            unitMarginalBenefit = prevUnitBenefit - unitBenefit;
-            prevUnitBenefit = unitBenefit;
-            prevSize = curBlocks;
-        }
-        else{
-            //we haven't changed the number of blocks yet, we might get a new block or reuse. we don't know yet 
-            PRINTF("prevsize and current size is the same! \n");
-        }
-        //ret = unitMarginalBenefit;
-        ret = unitMarginalBenefit; // / ((double) numBlocks.load());
-        //DPRINTF("* marginalBenefit: %lf unitMarginalBenefit: %lf\n", marginalBenefit, unitMarginalBenefit);
+        Bh = benefitHistogram.getValue(curBlocks);
+        Dh = demandCostHistogram.getValue(curBlocks);
+
+        unitBenefit = Bh; 
         
-        //////TEMPORARY CHANGE TO UPPERLEVELMETRIC  (upperlevelmetric=umb)
-        //upperLevelMetric=unitMarginalBenefit;
-        //////END TEMPORARY
+        auto Bh_1 = benefitHistogram.getValue(curBlocks-1);
+
+        TPRINTF("**Bh(%d):%f, Bh(%d):%f\n", curBlocks, Bh, curBlocks-1, Bh_1);
+        // if(curBlocks > prevSize){
+        //     unitMarginalBenefit = unitBenefit - prevUnitBenefit;
+        //     prevUnitBenefit = unitBenefit;
+        //     prevSize = curBlocks;
+        // }
+        // else if(prevSize > curBlocks) {
+        //     unitMarginalBenefit = prevUnitBenefit - unitBenefit;
+        //     prevUnitBenefit = unitBenefit;
+        //     prevSize = curBlocks;
+        // }
+        // else{
+        //     //we haven't changed the number of blocks yet, we might get a new block or reuse. we don't know yet 
+        //     PRINTF("prevsize and current size is the same! \n");
+        // }
+        unitMarginalBenefit = Bh - Bh_1;
+        upperLevelMetric = Dh; 
+        ret = unitMarginalBenefit; 
 
         if(isnan(unitMarginalBenefit)){
             PPRINTF("** nan! t: %f, misses: %d, Bh: %lf Mh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Bh, Mh , unitBenefit, unitMarginalBenefit,numBlocks.load());
-            missInterval.printBins();
+            demandCostHistogram.printBins();
             benefitHistogram.printBins();
         }
         if(isinf(unitMarginalBenefit)){
             PPRINTF("* inf! t: %f, misses: %d, Bh: %lf Mh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Bh, Mh , unitBenefit, unitMarginalBenefit,numBlocks.load());
-            missInterval.printBins();
+            demandCostHistogram.printBins();
             benefitHistogram.printBins();
         }
 
@@ -492,26 +452,6 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
     //     PPRINTF("we have blocks but no misstime yet \n");
     // }
 
-
-    //FOR DEBUG PURPOSES:
-    // oldestPredicted = lastAccessTimeStamp - (totalMissIntervals*1.0/(partitionMissCount))*(curBlocks-1);
-    
-    // auto avmiss = 1.0*(lastAccessTimeStamp - firstAccessTimeStamp)/(partitionMissCount-1);
-    // newPrediction = lastAccessTimeStamp - (avmiss*(curBlocks-1));
-
-    // uint64_t minTimeP = std::numeric_limits<uint64_t>::max();
-    // uint64_t maxTimeP = std::numeric_limits<uint64_t>::min();
-    // for(int i=0; i<currentBlocks.size(); i++) {
-    //     auto it = currentBlocks[i];
-    //     if((it)->timeStamp.load() < minTimeP){
-    //         minTimeP = (it)->timeStamp.load();
-    //     }  
-    //     if((it)->timeStamp.load() > maxTimeP){
-    //         maxTimeP = (it)->timeStamp.load();
-    //     }      
-    // }
-    // PPRINTF("Actual oldest timestamp: %lu. 1st way timestamp: %lf.  2nd way timestamp: %lf curblocks:%d, newest timestamp: %lu\n", minTimeP, oldestPredicted, newPrediction,curBlocks, maxTimeP );
-    //END DEBUG SECTION
     metaLock.writerUnlock();
     return ret;
 }
@@ -591,6 +531,22 @@ void ScalableMetaData::trackZValue(uint32_t index){
     
 }
 
+void ScalableMetaData::trackLinearAccessDistance(uint32_t index){
+    double  AaverageLinearAccessDistance, BaverageLinearAccessDistance;
+    //if this is the first access, we can't calculate the distance. we will store the current index and continue
+    if(access != 0){
+        int step = index - lastIndex;
+        double dist = std::abs(step) + 1;
+        
+        averageLinearAccessDistance = (averageLinearAccessDistance*distCount*1.0 + dist) / (distCount+1);
+        distCount += 1;
+        // BaverageLinearAccessDistance = (averageLinearAccessDistance*(access-2)*1.0 + dist) / (access-1);
+        // //first time we are here is the second access, 
+        // averagelinearaccess:0 , access:1 --> so we return first calculated distance / 1 as the average
+    }
+    lastIndex = index;
+}
+
 void ScalableMetaData::ResetStats(){
     access=0;
     accessPerInterval=0;
@@ -610,6 +566,6 @@ void ScalableMetaData::ResetStats(){
     blockAccessCounter=0;
     lastAccessedBlock=0;
     maxAccessInMissInterval=0;
-    missInterval.clearBins();
+    demandCostHistogram.clearBins();
     benefitHistogram.clearBins();
 }

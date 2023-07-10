@@ -82,6 +82,7 @@
 #include <deque>
 #include <vector>
 #include <array>
+#include <cmath>
 
 const char* const patternName[] = { "UNKNOWN", "BLOCKSTREAMING" };
 
@@ -112,6 +113,8 @@ struct ScalableMetaData {
         uint64_t access;
         uint64_t accessPerInterval;
         uint64_t lastMissTimeStamp;
+        uint64_t lastMissInInterval;
+        uint32_t missCountForInterval;
         double unitBenefit;
         double unitMarginalBenefit;
         double upperLevelMetric;
@@ -125,11 +128,14 @@ struct ScalableMetaData {
         double oldestPredicted;
         uint64_t totalMissIntervals;
         uint64_t firstAccessTimeStamp;
+        double averageLinearAccessDistance;
+        uint32_t lastIndex;
+        uint32_t distCount;
 
         std::atomic<uint64_t> numBlocks;
         
         //JS: Also for Nathan (intervalTime, fpGrowth, missInverval)
-        Histogram missInterval;
+        Histogram demandCostHistogram;
         Histogram benefitHistogram;
 
         std::deque<std::array<uint64_t, 3>> window;
@@ -150,6 +156,8 @@ struct ScalableMetaData {
             access(0),
             accessPerInterval(0),
             lastMissTimeStamp(0),
+            lastMissInInterval(0),
+            missCountForInterval(10),
             unitBenefit(0),
             prevUnitBenefit(0),
             unitMarginalBenefit(0),
@@ -160,10 +168,13 @@ struct ScalableMetaData {
             partitionMissCost(0),
             lastAccessTimeStamp(0),
             firstAccessTimeStamp(0),
+            averageLinearAccessDistance(0),
+            lastIndex(0),
+            distCount(0),
             oldestPredicted(0),
             totalMissIntervals(0),
             numBlocks(0),
-            missInterval(Config::Hb_parameter),
+            demandCostHistogram(Config::Hb_parameter),
             benefitHistogram(Config::Hb_parameter,Config::TraceHistogram),
             blockAccessCounter(0),
             lastAccessedBlock(0),
@@ -201,11 +212,14 @@ struct ScalableMetaData {
         double getUnitMarginalBenefit();
         double getUnitBenefit();
         double getUpperMetric();
-        void printHistLogs(int i){benefitHistogram.printLog(i);}
+        void printHistLogs(int i){
+            benefitHistogram.printLog(i);
+            benefitHistogram.printBins(i);}
         double getOldestPrediction(){ return oldestPredicted;}
         uint64_t getLastAccessTime(){ return lastAccessTimeStamp;}
 
         void trackZValue(uint32_t index);
+        void trackLinearAccessDistance(uint32_t index);
         void ResetStats();
     private:
         uint64_t trackAccess(uint64_t blockIndex, uint64_t readIndex);
