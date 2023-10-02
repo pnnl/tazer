@@ -94,8 +94,8 @@
 #define DPRINTF(...)
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
-//#define MeMPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
-#define MeMPRINTF(...)
+#define MeMPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
+//#define MeMPRINTF(...)
 #define BPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 //#define BPRINTF(...)
 #define StealPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
@@ -826,7 +826,7 @@ uint8_t * ScalableCache::findBlockFromCachedUMBandOldestPrediction(uint32_t allo
     //find the partition with min umb (that isn't the asking partition and has any blocks to give up)
     for(const auto &UMB : _localUMBs) {
         int ind = std::get<0>(UMB);
-        if(ind != allocateForFileIndex && _metaMap[ind]->getNumBlocks()){
+        if(ind != allocateForFileIndex && _metaMap[ind]->getNumBlocks() > 1){
             if(std::get<1>(UMB) < minUMB){
                 minUMB = std::get<1>(UMB);
                 found_min_UMB=true;
@@ -837,10 +837,11 @@ uint8_t * ScalableCache::findBlockFromCachedUMBandOldestPrediction(uint32_t allo
 
 
     uint32_t victim_u, victim_w; 
-    double victim_u_time, victim_w_time;
+    double victim_u_time, victim_w_time, victim_u_UB;
 
     victim_u=0;
     victim_u_time = std::numeric_limits<double>::max();
+    victim_u_UB = std::numeric_limits<double>::max();
 
     victim_w = 0;
     victim_w_time = std::numeric_limits<double>::max();
@@ -856,10 +857,17 @@ uint8_t * ScalableCache::findBlockFromCachedUMBandOldestPrediction(uint32_t allo
         //if UMB is within a percentage of the minimum UMB, we consider them equivalent 
         if(found_min_UMB && std::abs(cur_umb-minUMB) <= std::abs(minUMB*Config::PrivateThreshold) && _metaMap[cur_index]->getNumBlocks()>0){
             //here we find the partition that has minimum equivalent UMB and the oldest prediction 
-            if( _metaMap[cur_index]->getOldestPrediction() < victim_u_time){
+            //if( _metaMap[cur_index]->getOldestPrediction() < victim_u_time){
+            //     StealPRINTF("-New victimU: %d\n", cur_index);
+            //     victim_u = cur_index;
+            //     victim_u_time = _metaMap[cur_index]->getOldestPrediction();
+            // }
+
+            //instead of finding the oldest prediction as above, we will find the partition with smallest UnitBenefit
+            if(_metaMap[cur_index]->getUnitBenefit() < victim_u_UB){
                 StealPRINTF("-New victimU: %d\n", cur_index);
                 victim_u = cur_index;
-                victim_u_time = _metaMap[cur_index]->getOldestPrediction();
+                victim_u_UB = _metaMap[cur_index]->getUnitBenefit();
             }
         }
         //the partition with the oldest prediction
@@ -871,7 +879,8 @@ uint8_t * ScalableCache::findBlockFromCachedUMBandOldestPrediction(uint32_t allo
         }
     }
     StealPRINTF("Asking File %d, asking time: %.15lf\n",allocateForFileIndex, allocateForFileTime);
-    StealPRINTF("After loop: victim_u: %d, victim_u_time: %.15lf\n",victim_u,victim_u_time  );
+    //StealPRINTF("After loop: victim_u: %d, victim_u_time: %.15lf\n",victim_u,victim_u_time  );
+    StealPRINTF("After loop: victim_u: %d, victim_u_UB: %.15lf\n",victim_u,victim_u_UB  );
     StealPRINTF("After loop: victim_w: %d, victim_w_time: %.15lf\n",victim_w,victim_w_time  );
     uint64_t timestamp = Timer::getCurrentTime();
     auto localMisses = misses.load();

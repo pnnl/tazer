@@ -82,11 +82,12 @@
 //#define DPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 //#define PPRINTF(...)
-#define PPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define PPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 #define TPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 
 //#define BPRINTF(...) fprintf(stderr, __VA_ARGS__); fflush(stderr)
+#define EPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 #define BPRINTF(...)
 #define ZPRINTF(...) //fprintf(stderr, __VA_ARGS__); fflush(stderr)
 uint8_t * ScalableMetaData::getBlockData(uint64_t blockIndex, uint64_t fileOffset, bool &reserve, bool track) {
@@ -272,7 +273,7 @@ uint8_t * ScalableMetaData::oldestBlock(uint64_t &blockIndex, bool reuse) {
     }
 
     ZPRINTF("after oldestblock loop, minindex is: %u, total blocks: %d \n", minIndex,  currentBlocks.size());
-    PPRINTF("-Oldest block actual timestamp: %lu\n",minTime);
+    //PPRINTF("-Oldest block actual timestamp: %lu\n",minTime);
     if(minEntry != NULL){ //we found a min entry 
 
         if (minEntry->blkLock.cowardlyTryWriterLock()) {
@@ -306,7 +307,7 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
     lastAccessTimeStamp=timestamp;
     if(!firstAccessTimeStamp){
         firstAccessTimeStamp = timestamp;
-        PPRINTF("set first access timestamp\n");
+        //PPRINTF("set first access timestamp\n");
     }
     int blocks = numBlocks.load();
     if(miss) {
@@ -316,7 +317,7 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
             TPRINTF("In the if check. misses:%d mcfi:%d\n", partitionMissCount, missCountForInterval);
             if(lastMissInInterval) {
                 double i = (double)(timestamp - lastMissInInterval);
-                totalMissIntervals += i; 
+                totalMissIntervals += i;
                 if(lastDeliveryTime > 0 && blocks ){ //check to make sure we recorded a deliverytime
                     //partitionMissCount++;
                     partitionMissCost = partitionMissCost + lastDeliveryTime;
@@ -334,20 +335,50 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                         raise(SIGSEGV);
                     }
                     double newZ = maxAccessInMissInterval + (maxAccessInMissInterval*1.0)/(maxAccessInMissInterval+1);
+
+                    uint64_t F = *std::max_element(maxStep.begin(), maxStep.end());
+                    double F_star = (double)F - blocks;
+                    TPRINTF("calculating fstar-> f-blocks = %f\n", F_star);
+                    double S_star = Config::scalableCacheNumBlocks - blocks;  
+                    if(F_star < 0){
+                        F_star = 0; 
+                        TPRINTF("Fstar was negative so now F_star=%f\n", F_star);
+                    }
+                    
+                    double z_num = 2*F_star/F;
+                    //Performance Impact Score
+                    double pis;
+                    if( F_star == 0){
+                        pis = 1 - ( ((double)blocks - F) / blocks);
+                        TPRINTF("pis calculation: in first if: ");
+                    }
+                    else if ( F_star <= S_star){
+                        pis = (-1*z_num*z_num + z_num*2 + 1)*(1 + ((S_star - F_star)/S_star));
+                        TPRINTF("pis calculation: in second if: ");
+                    }
+                    else { //
+                        pis = 1 + (S_star/F_star);
+                        TPRINTF("pis calculation: in third if: ");
+                    }
+                    TPRINTF("pis:%f, blocks: %d, F_star:%f, F:%d, S_Star:%f, z_num:%f\n", pis, blocks, F_star, F, S_star, z_num);
+                    EPRINTF("pis:%f:blocks:%d:footprint:%d\n", pis,blocks,F);
                     BPRINTF("  calculating after a miss: access:%d, Zvalue: %d, newZ: %f\n", accessPerInterval, maxAccessInMissInterval, newZ); 
                     if(Config::H_parameter == 0){
                         double ApZp = 64*1000000000*( (double)accessPerInterval - maxAccessInMissInterval);
-                        double utilization = ((double)accessPerInterval)*std::sqrt(averageLinearAccessDistance);
+                        //double utilization = ((double)accessPerInterval)*std::sqrt(averageLinearAccessDistance);
                         //benefitHistogram.addData(blocks, ((ApZp/scaledMissCost)/blocks)/i);
-                        benefitHistogram.addData(blocks, (((utilization*64*1000000000*scaledMissCost))/i));
+                        //benefitHistogram.addData(blocks, (((utilization*64*1000000000*scaledMissCost))/i));
+                        benefitHistogram.addData(blocks,(64.0*1000000000*accessPerInterval*pis*scaledMissCost)/i);
                         demandCostHistogram.addData(blocks, scaledMissCost*64*1000000000/i);
                     }
                     else if(Config::H_parameter == 1){
                         double ApZp = 64*64*( (double)accessPerInterval - maxAccessInMissInterval);
-                        double utilization = ((double)accessPerInterval)*std::sqrt(averageLinearAccessDistance);
+                        //double utilization = ((double)accessPerInterval)*std::sqrt(averageLinearAccessDistance);
                         //benefitHistogram.addData(blocks, ((ApZp/scaledMissCost)/blocks)/log2(i));
-                        benefitHistogram.addData(blocks, (((utilization*64*64.0*scaledMissCost))/log2(i)));
-                        TPRINTF("DEBUGHIST:%d:%f:%f:%f:%f:%d:%f\n", blocks, (((utilization*64*64.0/scaledMissCost)/blocks)/log2(i)), utilization, scaledMissCost, log2(i), accessPerInterval, averageLinearAccessDistance);
+                        //benefitHistogram.addData(blocks, (((utilization*64*64.0*scaledMissCost))/log2(i)));
+                        
+                        benefitHistogram.addData(blocks,   (64*64.0*accessPerInterval*pis*scaledMissCost)/log2(i));
+                        TPRINTF("DEBUGHIST:%d:%f:%f:%f:%f:%d:%f:%d\n", blocks, ((64*64.0*accessPerInterval*pis*scaledMissCost)/log2(i)), pis, scaledMissCost, log2(i), accessPerInterval, averageLinearAccessDistance, F);
                         demandCostHistogram.addData(blocks, scaledMissCost*64*64.0/log2(i));
                     }
                     else{
@@ -360,7 +391,7 @@ void ScalableMetaData::updateStats(bool miss, uint64_t timestamp) {
                     recalc = true;
                 }
                 else{
-                    PPRINTF("BM: We have a second miss but no deliverytime yet! \n");
+                    PPRINTF("BM: We have a second miss but no deliverytime yet! %d %lf %d %d \n", blocks, lastDeliveryTime,access, partitionMissCount);
                 }
                 accessPerInterval = 0;
                 maxAccessInMissInterval=0;   
@@ -406,10 +437,17 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         Dh = demandCostHistogram.getValue(curBlocks);
 
         unitBenefit = Bh; 
-        
-        auto Bh_1 = benefitHistogram.getValue(curBlocks-1);
+        if(unitBenefit < 0){
+            PPRINTF("in CalcRank, we called Benefit Histogram with %d result is  %lf\n", curBlocks, unitBenefit);
+            benefitHistogram.printBins();
 
-        TPRINTF("**Bh(%d):%f, Bh(%d):%f\n", curBlocks, Bh, curBlocks-1, Bh_1);
+        }
+        
+        double range = curBlocks * 0.9;
+        int range_f = floor(range);
+        auto Bh_1 = benefitHistogram.getValue(range_f);
+
+        TPRINTF("**Bh(%d):%f, Bh(%d):%f\n", curBlocks, Bh, range_f, Bh_1);
         // if(curBlocks > prevSize){
         //     unitMarginalBenefit = unitBenefit - prevUnitBenefit;
         //     prevUnitBenefit = unitBenefit;
@@ -429,12 +467,12 @@ double ScalableMetaData::calcRank(uint64_t time, uint64_t misses) {
         ret = unitMarginalBenefit; 
 
         if(isnan(unitMarginalBenefit)){
-            PPRINTF("** nan! t: %f, misses: %d, Bh: %lf Mh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Bh, Mh , unitBenefit, unitMarginalBenefit,numBlocks.load());
+            PPRINTF("** nan! t: %f, misses: %d, Bh: %lf Dh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Bh, Dh , unitBenefit, unitMarginalBenefit,numBlocks.load());
             demandCostHistogram.printBins();
             benefitHistogram.printBins();
         }
         if(isinf(unitMarginalBenefit)){
-            PPRINTF("* inf! t: %f, misses: %d, Bh: %lf Mh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Bh, Mh , unitBenefit, unitMarginalBenefit,numBlocks.load());
+            PPRINTF("* inf! t: %f, misses: %d, Bh: %lf Dh: %lf unitBenefit: %lf unitMarginalBenefit: %lf numblocks %d \n",t, misses, Bh, Dh , unitBenefit, unitMarginalBenefit,numBlocks.load());
             demandCostHistogram.printBins();
             benefitHistogram.printBins();
         }
@@ -532,12 +570,13 @@ void ScalableMetaData::trackZValue(uint32_t index){
 }
 
 void ScalableMetaData::trackLinearAccessDistance(uint32_t index){
-    double  AaverageLinearAccessDistance, BaverageLinearAccessDistance;
     //if this is the first access, we can't calculate the distance. we will store the current index and continue
     if(access != 0){
         int step = index - lastIndex;
         double dist = std::abs(step) + 1;
-        
+        maxStep[maxStepIndex] = dist; 
+        maxStepIndex++;
+        maxStepIndex = maxStepIndex % 10 ; 
         averageLinearAccessDistance = (averageLinearAccessDistance*distCount*1.0 + dist) / (distCount+1);
         distCount += 1;
         // BaverageLinearAccessDistance = (averageLinearAccessDistance*(access-2)*1.0 + dist) / (access-1);

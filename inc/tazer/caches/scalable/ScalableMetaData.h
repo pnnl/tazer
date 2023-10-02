@@ -129,6 +129,8 @@ struct ScalableMetaData {
         uint64_t totalMissIntervals;
         uint64_t firstAccessTimeStamp;
         double averageLinearAccessDistance;
+        std::array<uint64_t, 10> maxStep;
+        uint32_t maxStepIndex;
         uint32_t lastIndex;
         uint32_t distCount;
 
@@ -157,7 +159,7 @@ struct ScalableMetaData {
             accessPerInterval(0),
             lastMissTimeStamp(0),
             lastMissInInterval(0),
-            missCountForInterval(10),
+            missCountForInterval(1),
             unitBenefit(0),
             prevUnitBenefit(0),
             unitMarginalBenefit(0),
@@ -169,6 +171,7 @@ struct ScalableMetaData {
             lastAccessTimeStamp(0),
             firstAccessTimeStamp(0),
             averageLinearAccessDistance(0),
+            maxStepIndex(0),
             lastIndex(0),
             distCount(0),
             oldestPredicted(0),
@@ -180,6 +183,7 @@ struct ScalableMetaData {
             lastAccessedBlock(0),
             maxAccessInMissInterval(0)
              {
+                maxStep = { 0 };
                 blocks = new BlockEntry[totalBlocks];
                 for(unsigned int i=0; i<totalBlocks; i++) {
                     blocks[i].data.store(NULL);
