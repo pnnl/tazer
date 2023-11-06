@@ -9,6 +9,8 @@ TAZeR (Transparent Asynchronous Zero-copy Remote I/O)
   - <https://github.com/pnnl/tazer/>
 
 
+  - [Performance Lab for EXtreme Computing and daTa](https://github.com/perflab-exact)
+
 **About**: TAZeR is a remote I/O framework that reduces effective data access latency. It was motivated by scientific workflow analytics. In these workloads inputs are large and read intensive, and include complex access patterns. Outputs are comparatively small and do not overwrite inputs, resulting in a simple data consistency model.
 
 TAZeR combines state-of-the-art techniques to lower data access latencies and increase effective data movement bandwidth:
@@ -21,7 +23,7 @@ TAZeR combines state-of-the-art techniques to lower data access latencies and in
 **Contacts**: (_firstname_._lastname_@pnnl.gov)
   - Ryan D. Friese
   - Joshua Suetterlein
-  - Nathan R. Tallent
+  - Nathan R. Tallent ([www](https://hpc.pnnl.gov/people/tallent)), ([www](https://www.pnnl.gov/people/nathan-tallent))
 
 
 **Contributors**:
