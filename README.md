@@ -23,13 +23,12 @@ TAZeR combines state-of-the-art techniques to lower data access latencies and in
 **Contacts**: (_firstname_._lastname_@pnnl.gov)
   - Ryan D. Friese
   - Joshua Suetterlein
-  - Nathan R. Tallent ([www](https://hpc.pnnl.gov/people/tallent)), ([www](https://www.pnnl.gov/people/nathan-tallent))
-
+  - Nathan R. Tallent ([www](https://nathantallent.github.io))
 
 **Contributors**:
   - Ryan D. Friese (PNNL)
   - Joshua Suetterlein (PNNL)
-  - Nathan R. Tallent (PNNL)
+  - Nathan R. Tallent ([www](https://nathantallent.github.io))
 
 
 
